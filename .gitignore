@@ -1,0 +1,47 @@
+# Dependencies
+node_modules
+dist
+build
+.nx/cache
+.nx/workspace-data
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+env
+*.egg-info
+.eggs
+.pytest_cache
+.mypy_cache
+htmlcov
+.coverage
+*.log
+
+# React Native
+apps/driver-mobile/.expo
+apps/driver-mobile/android/app/build
+apps/driver-mobile/ios/Pods
+apps/driver-mobile/ios/build
+
+# Environment
+.env
+.env.local
+.env.stage
+.env.prod
+!.env.local.example
+
+# Editor
+.DS_Store
+.idea
+.vscode
+*.swp
+*.swo
+
+# Build artifacts
+*.js.map
+coverage
