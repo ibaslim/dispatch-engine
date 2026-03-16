@@ -1,6 +1,25 @@
 version: "3.9"
 
 services:
+  # ── Init (generates .env.local before anything starts) ───────────────────
+
+  init:
+    image: alpine:3.19
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        if [ ! -f /workspace/.env.local ]; then
+          cp /workspace/.env.local.example /workspace/.env.local
+          JWT_SECRET=$$(cat /dev/urandom | tr -dc 'a-f0-9' | head -c 64)
+          sed -i "s|changeme-generate-a-secure-random-string|$$JWT_SECRET|" /workspace/.env.local
+          echo "✅ Created .env.local with auto-generated JWT_SECRET_KEY"
+        else
+          echo "✅ .env.local already exists – skipping."
+        fi
+    volumes:
+      - ../../:/workspace
+
   # ── Data stores ─────────────────────────────────────────────────────────────
 
   postgres:
@@ -64,9 +83,14 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/2
       MAIL_HOST: mailpit
       MAIL_PORT: 1025
+      PLATFORM_ADMIN_EMAIL: admin@dispatch.local
+      PLATFORM_ADMIN_PASSWORD: Admin123!
+      PLATFORM_ADMIN_NAME: Platform Admin
     ports:
       - "8000:8000"
     depends_on:
+      init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -74,7 +98,11 @@ services:
     volumes:
       - ../../apps/api:/app
     command: >
-      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      sh -c "
+        pip install -r requirements.txt &&
+        alembic upgrade head &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      "
 
   celery-worker:
     build:
@@ -89,14 +117,23 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/2
       MAIL_HOST: mailpit
       MAIL_PORT: 1025
+      PLATFORM_ADMIN_EMAIL: admin@dispatch.local
+      PLATFORM_ADMIN_PASSWORD: Admin123!
+      PLATFORM_ADMIN_NAME: Platform Admin
     depends_on:
+      init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
       - ../../apps/api:/app
-    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+    command: >
+      sh -c "
+        pip install -r requirements.txt &&
+        celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+      "
 
   # ── Web apps ─────────────────────────────────────────────────────────────
 
@@ -113,7 +150,9 @@ services:
     command: >
       sh -c "npm install && npx nx serve dispatcher-web --host 0.0.0.0 --port 4200"
     depends_on:
-      - api
+      init:
+        condition: service_completed_successfully
+      api: {}
 
   tracking-web:
     image: node:20-alpine
@@ -128,9 +167,12 @@ services:
     command: >
       sh -c "npm install && npx nx serve tracking-web --host 0.0.0.0 --port 4300"
     depends_on:
-      - api
+      init:
+        condition: service_completed_successfully
+      api: {}
 
 volumes:
   postgres_data:
   redis_data:
   mailpit_data:
+
