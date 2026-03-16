@@ -1,0 +1,59 @@
+{
+  "name": "dispatcher-web",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "prefix": "app",
+  "sourceRoot": "apps/dispatcher-web/src",
+  "tags": ["scope:dispatcher", "type:app"],
+  "targets": {
+    "build": {
+      "executor": "@angular-devkit/build-angular:application",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/apps/dispatcher-web",
+        "index": "apps/dispatcher-web/src/index.html",
+        "browser": "apps/dispatcher-web/src/main.ts",
+        "polyfills": ["zone.js"],
+        "tsConfig": "apps/dispatcher-web/tsconfig.app.json",
+        "assets": ["apps/dispatcher-web/src/favicon.ico", "apps/dispatcher-web/src/assets"],
+        "styles": ["apps/dispatcher-web/src/styles.css"],
+        "scripts": []
+      },
+      "configurations": {
+        "production": {
+          "budgets": [{"type": "initial", "maximumWarning": "500kb", "maximumError": "1mb"}],
+          "outputHashing": "all"
+        },
+        "development": {
+          "optimization": false,
+          "extractLicenses": false,
+          "sourceMap": true
+        }
+      },
+      "defaultConfiguration": "production"
+    },
+    "serve": {
+      "executor": "@angular-devkit/build-angular:dev-server",
+      "configurations": {
+        "production": {"buildTarget": "dispatcher-web:build:production"},
+        "development": {"buildTarget": "dispatcher-web:build:development"}
+      },
+      "defaultConfiguration": "development",
+      "options": {"port": 4200}
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "outputs": ["{options.outputFile}"],
+      "options": {
+        "lintFilePatterns": ["apps/dispatcher-web/**/*.ts", "apps/dispatcher-web/**/*.html"]
+      }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": {
+        "jestConfig": "apps/dispatcher-web/jest.config.ts"
+      }
+    }
+  }
+}
