@@ -1,0 +1,136 @@
+version: "3.9"
+
+services:
+  # ── Data stores ─────────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dispatch
+      POSTGRES_PASSWORD: dispatch
+      POSTGRES_DB: dispatch_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dispatch -d dispatch_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Mail (local/stage only) ───────────────────────────────────────────────
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+    environment:
+      MP_MAX_MESSAGES: 1000
+      MP_DATA_FILE: /data/mailpit.db
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    volumes:
+      - mailpit_data:/data
+
+  # ── API & workers ─────────────────────────────────────────────────────────
+
+  api:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: ../../.env.local
+    environment:
+      DATABASE_URL: postgresql+asyncpg://dispatch:dispatch@postgres:5432/dispatch_dev
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../../apps/api:/app
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  celery-worker:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: ../../.env.local
+    environment:
+      DATABASE_URL: postgresql+asyncpg://dispatch:dispatch@postgres:5432/dispatch_dev
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../../apps/api:/app
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+
+  # ── Web apps ─────────────────────────────────────────────────────────────
+
+  dispatcher-web:
+    image: node:20-alpine
+    working_dir: /workspace
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+    ports:
+      - "4200:4200"
+    volumes:
+      - ../../:/workspace
+    command: >
+      sh -c "npm install && npx nx serve dispatcher-web --host 0.0.0.0 --port 4200"
+    depends_on:
+      - api
+
+  tracking-web:
+    image: node:20-alpine
+    working_dir: /workspace
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+    ports:
+      - "4300:4300"
+    volumes:
+      - ../../:/workspace
+    command: >
+      sh -c "npm install && npx nx serve tracking-web --host 0.0.0.0 --port 4300"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:
+  mailpit_data:
