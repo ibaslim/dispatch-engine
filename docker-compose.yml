@@ -1,0 +1,7 @@
+# Root-level convenience wrapper
+# Usage: docker compose up
+#
+# This file extends the main compose file so you don't need to remember the path.
+
+include:
+  - infra/docker/docker-compose.yml

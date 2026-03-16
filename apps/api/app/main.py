@@ -4,11 +4,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.api.routers import auth, platform, invitations, stores, drivers, tracking, ws
+from app.db.seed import seed_platform_admin
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    # Startup
+    # Startup – auto-seed admin on first boot
+    await seed_platform_admin()
     yield
     # Shutdown
 
