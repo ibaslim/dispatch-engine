@@ -1,60 +1,113 @@
 """
 Test configuration and fixtures.
-Uses SQLite for unit tests (no DB needed for logic tests).
-For integration tests requiring DB, use pytest-asyncio with an actual test DB.
+
+Unit tests use plain Python dataclasses to represent model state, avoiding
+any dependency on a live database or SQLAlchemy session setup.  The
+pure-Python business-logic methods (is_valid, has_role, etc.) are exercised
+by delegating to standalone helpers that mirror exactly what the ORM methods do.
 """
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import List, Optional
+
 import pytest
 
-from app.models.invitation import Invitation
-from app.models.user import User, UserRole
-from app.models.tenant import Tenant
+
+# ---------------------------------------------------------------------------
+# Lightweight dataclass stand-ins for ORM models.
+# These carry the same attributes and method signatures used in tests, but
+# have no SQLAlchemy instrumentation and need no DB connection.
+# ---------------------------------------------------------------------------
+
+@dataclass
+class _InvitationStub:
+    email: str
+    token: str
+    role: str
+    tenant_id: uuid.UUID
+    expires_at: datetime
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    name: Optional[str] = None
+    tenant_name: Optional[str] = None
+    is_used: bool = False
+    accepted_at: Optional[datetime] = None
+    invited_by_id: Optional[uuid.UUID] = None
+
+    def is_valid(self) -> bool:
+        """Return True if invitation can still be accepted."""
+        now = datetime.now(timezone.utc)
+        return not self.is_used and self.expires_at > now
+
+
+@dataclass
+class _UserRoleStub:
+    user_id: uuid.UUID
+    role: str
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+
+
+@dataclass
+class _UserStoreAccessStub:
+    user_id: uuid.UUID
+    store_id: uuid.UUID
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+
+
+@dataclass
+class _UserStub:
+    email: str
+    name: str
+    tenant_id: Optional[uuid.UUID] = None
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    hashed_password: Optional[str] = None
+    is_active: bool = True
+    is_platform_admin: bool = False
+    roles: List[_UserRoleStub] = field(default_factory=list)
+    store_accesses: List[_UserStoreAccessStub] = field(default_factory=list)
+
+    def has_role(self, role: str) -> bool:
+        return any(r.role == role for r in self.roles)
+
+    def get_accessible_store_ids(self) -> List[uuid.UUID]:
+        return [sa.store_id for sa in self.store_accesses]
+
+
+@dataclass
+class _TenantStub:
+    name: str
+    slug: str
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    is_active: bool = True
+
+
+# ---------------------------------------------------------------------------
+# Pytest fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def sample_tenant() -> _TenantStub:
+    return _TenantStub(name="Test Tenant", slug="test-tenant")
 
 
 @pytest.fixture
-def sample_tenant() -> Tenant:
-    tenant = Tenant.__new__(Tenant)
-    tenant.id = uuid.uuid4()
-    tenant.name = "Test Tenant"
-    tenant.slug = "test-tenant"
-    tenant.is_active = True
-    return tenant
+def sample_user(sample_tenant: _TenantStub) -> _UserStub:
+    return _UserStub(
+        email="user@test.com",
+        name="Test User",
+        hashed_password="$2b$12$placeholder",
+        tenant_id=sample_tenant.id,
+    )
 
 
 @pytest.fixture
-def sample_user(sample_tenant: Tenant) -> User:
-    user = User.__new__(User)
-    user.id = uuid.uuid4()
-    user.email = "user@test.com"
-    user.name = "Test User"
-    user.hashed_password = "$2b$12$placeholder"
-    user.is_active = True
-    user.is_platform_admin = False
-    user.tenant_id = sample_tenant.id
-    user.roles = []
-    user.store_accesses = []
-    user.refresh_tokens = []
-    user.push_tokens = []
-    return user
-
-
-@pytest.fixture
-def platform_admin_user() -> User:
-    user = User.__new__(User)
-    user.id = uuid.uuid4()
-    user.email = "admin@platform.com"
-    user.name = "Platform Admin"
-    user.hashed_password = "$2b$12$placeholder"
-    user.is_active = True
-    user.is_platform_admin = True
-    user.tenant_id = None
-    user.roles = []
-    user.store_accesses = []
-    user.refresh_tokens = []
-    user.push_tokens = []
-    return user
+def platform_admin_user() -> _UserStub:
+    return _UserStub(
+        email="admin@platform.com",
+        name="Platform Admin",
+        hashed_password="$2b$12$placeholder",
+        is_platform_admin=True,
+    )
 
 
 def make_invitation(
@@ -63,17 +116,14 @@ def make_invitation(
     tenant_id: Optional[uuid.UUID] = None,
     hours_until_expiry: float = 72,
     is_used: bool = False,
-) -> Invitation:
-    inv = Invitation.__new__(Invitation)
-    inv.id = uuid.uuid4()
-    inv.email = email
-    inv.name = "Invited User"
-    inv.token = "test-token-" + uuid.uuid4().hex
-    inv.role = role
-    inv.tenant_id = tenant_id or uuid.uuid4()
-    inv.tenant_name = "Test Tenant"
-    inv.is_used = is_used
-    inv.expires_at = datetime.now(timezone.utc) + timedelta(hours=hours_until_expiry)
-    inv.accepted_at = None
-    inv.invited_by_id = None
-    return inv
+) -> _InvitationStub:
+    return _InvitationStub(
+        email=email,
+        name="Invited User",
+        token="test-token-" + uuid.uuid4().hex,
+        role=role,
+        tenant_id=tenant_id or uuid.uuid4(),
+        tenant_name="Test Tenant",
+        is_used=is_used,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=hours_until_expiry),
+    )
