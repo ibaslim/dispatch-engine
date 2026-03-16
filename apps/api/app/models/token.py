@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, TYPE_CHECKING
 
 from sqlalchemy import String, Boolean, ForeignKey, DateTime
@@ -29,7 +29,6 @@ class RefreshToken(Base, UUIDMixin, TimestampMixin):
     user: Mapped["User"] = relationship("User", back_populates="refresh_tokens")
 
     def is_valid(self) -> bool:
-        from datetime import timezone
         return not self.is_revoked and self.expires_at > datetime.now(timezone.utc)
 
 

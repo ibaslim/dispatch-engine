@@ -1,6 +1,6 @@
 import uuid
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import String, Boolean, ForeignKey, DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -38,7 +38,6 @@ class Invitation(Base, UUIDMixin, TimestampMixin):
 
     def is_valid(self) -> bool:
         """Return True if invitation can still be accepted."""
-        from datetime import timezone
         now = datetime.now(timezone.utc)
         return not self.is_used and self.expires_at > now
 
