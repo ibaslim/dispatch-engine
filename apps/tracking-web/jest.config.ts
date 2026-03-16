@@ -1,7 +1,7 @@
 export default {
   displayName: 'tracking-web',
   preset: '../../jest.preset.js',
-  setupFilesAfterFramework: ['<rootDir>/src/test-setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/src/test-setup.ts'],
   coverageDirectory: '../../coverage/apps/tracking-web',
   transform: {
     '^.+\\.(ts|mjs|js|html)$': [

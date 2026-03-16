@@ -1,7 +1,7 @@
 export default {
   displayName: 'dispatcher-web',
   preset: '../../jest.preset.js',
-  setupFilesAfterFramework: ['<rootDir>/src/test-setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/src/test-setup.ts'],
   coverageDirectory: '../../coverage/apps/dispatcher-web',
   transform: {
     '^.+\\.(ts|mjs|js|html)$': [

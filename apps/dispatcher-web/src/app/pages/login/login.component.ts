@@ -21,9 +21,11 @@ import { AuthService } from '../../core/auth/auth.service';
         </div>
 
         <form class="mt-8 space-y-6" (ngSubmit)="onSubmit()">
-          <div v-if="errorMessage()" class="rounded-md bg-red-50 p-4">
-            <p class="text-sm text-red-800">{{ errorMessage() }}</p>
-          </div>
+          @if (errorMessage()) {
+            <div class="rounded-md bg-red-50 p-4">
+              <p class="text-sm text-red-800">{{ errorMessage() }}</p>
+            </div>
+          }
 
           <div class="space-y-4">
             <div>
