@@ -2,7 +2,7 @@ from pydantic import BaseModel, EmailStr
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str  # plain str — login is a DB lookup, strict domain validation is unnecessary
     password: str
 
 

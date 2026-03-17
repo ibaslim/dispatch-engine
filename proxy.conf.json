@@ -1,0 +1,13 @@
+{
+  "/api": {
+    "target": "http://api:8000",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "info"
+  },
+  "/openapi.json": {
+    "target": "http://api:8000",
+    "secure": false,
+    "changeOrigin": true
+  }
+}

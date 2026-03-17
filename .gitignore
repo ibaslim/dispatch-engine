@@ -4,6 +4,7 @@ dist
 build
 .nx/cache
 .nx/workspace-data
+.angular/
 
 # Python
 __pycache__

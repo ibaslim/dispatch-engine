@@ -17,8 +17,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Create role enum
-    op.execute("CREATE TYPE role_enum AS ENUM ('platform_admin','tenant_admin','central_dispatcher','store_dispatcher','driver')")
+    role_enum = postgresql.ENUM(
+        "platform_admin",
+        "tenant_admin",
+        "central_dispatcher",
+        "store_dispatcher",
+        "driver",
+        name="role_enum",
+        create_type=False,
+    )
+    role_enum.create(op.get_bind(), checkfirst=True)
 
     # tenants
     op.create_table(
@@ -66,7 +74,7 @@ def upgrade() -> None:
         "user_roles",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("role", sa.Enum("platform_admin","tenant_admin","central_dispatcher","store_dispatcher","driver", name="role_enum"), nullable=False),
+        sa.Column("role", role_enum, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
@@ -142,4 +150,4 @@ def downgrade() -> None:
     op.drop_table("users")
     op.drop_table("stores")
     op.drop_table("tenants")
-    op.execute("DROP TYPE IF EXISTS role_enum")
+    postgresql.ENUM(name="role_enum").drop(op.get_bind(), checkfirst=True)
