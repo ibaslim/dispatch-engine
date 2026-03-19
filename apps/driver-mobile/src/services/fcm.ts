@@ -11,7 +11,7 @@
  */
 
 import messaging from '@react-native-firebase/messaging';
-import { fetchWithAuth } from './api';
+import { postWithAuth } from './api';
 
 /**
  * Request notification permission and register FCM token with backend.
@@ -35,9 +35,9 @@ export async function registerFcmToken(): Promise<void> {
   }
 
   try {
-    await fetchWithAuth('/api/v1/drivers/me/push-token', {
-      method: 'POST',
-      body: JSON.stringify({ token: fcmToken, platform: getPlatform() }),
+    await postWithAuth('/api/v1/drivers/me/push-token', {
+      token: fcmToken,
+      platform: getPlatform(),
     });
     console.log('[FCM] Push token registered');
   } catch (err) {

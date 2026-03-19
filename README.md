@@ -6,15 +6,15 @@ A multi-tenant delivery dispatch system built as an Nx monorepo.
 
 | Layer | Technology |
 |---|---|
-| Dispatcher portal | Angular 17 + Tailwind CSS |
-| Public tracking | Angular 17 + Tailwind CSS |
-| Driver mobile | React Native (Expo) + NativeWind |
+| Dispatcher portal | Angular 19 + Tailwind CSS |
+| Public tracking | Angular 19 + Tailwind CSS |
+| Driver mobile | React Native (Expo 51) + NativeWind |
 | Backend API | FastAPI (Python 3.12) |
 | Database | PostgreSQL 16 + Alembic migrations |
 | Cache / Queue | Redis + Celery |
 | Email (local) | Mailpit |
 | Push notifications | Firebase Cloud Messaging (FCM) |
-| Monorepo | Nx 18 |
+| Monorepo | Nx 20 |
 
 ## Repository Structure
 
@@ -43,28 +43,56 @@ A multi-tenant delivery dispatch system built as an Nx monorepo.
 
 ### Prerequisites
 
-Only **Docker + Docker Compose** are required for the one-command setup below.
+For backend and web development, only **Docker + Docker Compose** are required.
 
-### One-Command Setup (Recommended)
+For mobile development, you also need **Node.js 20+** on the host machine because Expo cannot run inside Docker.
+
+### Recommended Local Setup
 
 ```bash
 git clone https://github.com/ibaslim/dispatch-engine.git
 cd dispatch-engine
-docker compose up
+docker compose up -d
 ```
 
-That's it. Open http://localhost:4200 and log in with the default admin credentials.
+This is the default development path for the repo.
+
+Open:
+
+- http://localhost:4200 for the dispatcher portal
+- http://localhost:4300 for the tracking app
+- http://localhost:8000/docs for Swagger
 
 **What happens automatically:**
 
 1. `.env.local` is generated with a random `JWT_SECRET_KEY`
 2. PostgreSQL, Redis, and Mailpit start
-3. Database migrations run
-4. Platform admin is seeded (`admin@dispatch.local` / `Admin123!`)
-5. FastAPI API starts on port 8000
-6. Celery worker starts
-7. Angular dispatcher-web starts on port 4200
-8. Angular tracking-web starts on port 4300
+3. API dependencies are synced inside Docker when `requirements.txt` changes
+4. Database migrations run automatically
+5. Platform admin is seeded on first boot (`admin@dispatch.local` / `Admin123!`)
+6. FastAPI API starts on port 8000 with reload enabled
+7. Celery worker starts
+8. Workspace Node dependencies are synced inside Docker when `package-lock.json` changes
+9. Angular dispatcher-web starts on port 4200
+10. Angular tracking-web starts on port 4300
+
+### Recommended Development Model
+
+- Docker owns Postgres, Redis, Mailpit, FastAPI, Celery, and both Angular dev servers.
+- Your editor on the host edits the bind-mounted source tree directly.
+- React Native runs on the host, but it consumes the same shared TypeScript libraries from `libs/shared/*`.
+
+This keeps the common path simple:
+
+1. `docker compose up -d`
+2. Edit API or Angular code immediately
+3. Start Expo on the host only when you need the mobile app
+
+### One-time setup per developer
+
+- Backend + web: no manual dependency installation is required on the host when using Docker.
+- Mobile: each developer must run `npm install` in `apps/driver-mobile` at least once on their machine.
+- If mobile dependencies change (`apps/driver-mobile/package.json`), run `npm install` again in `apps/driver-mobile`.
 
 ### Service URLs
 
@@ -85,72 +113,42 @@ That's it. Open http://localhost:4200 and log in with the default admin credenti
 
 ---
 
-## Manual / Granular Setup
-
-For developers who want to run services individually without Docker for all layers.
-
-### Prerequisites
-
-| Tool | Version |
-|---|---|
-| Node.js | ≥ 20 |
-| Python | ≥ 3.12 |
-| Docker + Docker Compose | Latest (for infra services) |
-
-### 1. Clone and configure environment
+## Daily Commands
 
 ```bash
-git clone https://github.com/ibaslim/dispatch-engine.git
-cd dispatch-engine
-cp .env.local.example .env.local
-# Edit .env.local and set JWT_SECRET_KEY to a secure random string:
-#   openssl rand -hex 32
+docker compose up -d             # Start the full local stack
+docker compose logs -f api       # Follow API logs
+docker compose logs -f           # Follow all service logs
+docker compose restart api       # Re-run API startup, dependency sync, and migrations
+docker compose restart celery-worker
+docker compose restart dispatcher-web tracking-web
+docker compose down              # Stop all services
+docker compose down -v           # Stop services and reset local volumes
 ```
 
-### 2. Start infrastructure services
+### Host-only flows
+
+Use these when you need tools that must run outside Docker:
 
 ```bash
-docker compose -f infra/docker/docker-compose.yml up -d postgres redis mailpit
+# Mobile app (host only)
+cd apps/driver-mobile
+cp .env.example .env
+npm install                    # one-time per developer, then again when package.json changes
+npx expo start
 ```
 
-This spins up PostgreSQL, Redis, and Mailpit (email UI at http://localhost:8025).
-
-### 3. Install Node dependencies
-
 ```bash
-npm install
-```
-
-### 4. Set up and start the Python API
-
-```bash
+# Optional: run the API directly on the host
+docker compose up -d postgres redis mailpit
 cd apps/api
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
 cp ../../.env.local .env
 alembic upgrade head
 uvicorn app.main:app --reload
-```
-
-> API: http://localhost:8000 | Swagger: http://localhost:8000/docs
-> The platform admin (`admin@dispatch.local` / `Admin123!`) is seeded automatically on first boot.
-
-### 5. Start web apps (separate terminals)
-
-```bash
-# Dispatcher portal (http://localhost:4200)
-npx nx serve dispatcher-web
-
-# Tracking web (http://localhost:4300)
-npx nx serve tracking-web
-```
-
-### 6. Start Celery worker (optional — required for emails)
-
-```bash
-cd apps/api
-source .venv/bin/activate
-celery -A app.workers.celery_app worker --loglevel=info
 ```
 
 ---
@@ -162,38 +160,43 @@ celery -A app.workers.celery_app worker --loglevel=info
 | Edit Python file (`.py`) | ✅ Instant | None — uvicorn `--reload` |
 | Edit Angular file (`.ts`/`.html`/`.css`) | ✅ Instant | None — Nx HMR |
 | Edit shared lib (`libs/shared/*`) | ✅ Instant | None — Nx watches workspace |
-| Create new Alembic migration | ⚠️ On restart | `docker compose restart api` |
-| Add new pip package (`requirements.txt`) | ⚠️ On restart | `docker compose restart api` |
-| Add new npm package (`package.json`) | ⚠️ On restart | `docker compose restart dispatcher-web` |
-| Change `docker-compose.yml` | 🔄 Rebuild | `docker compose up --build` |
+| Edit React Native file (`.ts`/`.tsx`) | ✅ Instant after Expo starts | Run Expo on the host |
+| Create new Alembic migration | ⚠️ Manual command | `docker compose exec api alembic revision --autogenerate -m "..."` |
+| Add new pip package (`requirements.txt`) | ⚠️ Restart API services | `docker compose restart api celery-worker` |
+| Add new root npm package (`package.json`) | ⚠️ Restart web services | `docker compose restart dispatcher-web tracking-web` |
+| Change Docker config | 🔄 Recreate services | `docker compose up -d --build` |
 
 ---
 
 ## Driver Mobile App (React Native)
 
-React Native / Expo **cannot run inside Docker** — it needs simulator/emulator access, USB device connections, and the Metro bundler on the host machine. Run it directly:
+React Native / Expo runs on the host machine, but it now shares the same `libs/shared/*` TypeScript libraries as the web apps.
+
+### Start the mobile app
 
 ```bash
 cd apps/driver-mobile
+cp .env.example .env
 npm install
 npx expo start
 ```
 
-Requirements: a Firebase project configured with `google-services.json` (Android) and `GoogleService-Info.plist` (iOS).
+Set `EXPO_PUBLIC_API_BASE_URL` in `apps/driver-mobile/.env` to the API address reachable from the simulator or device:
 
----
+| Environment | Value |
+|---|---|
+| Android emulator | `http://10.0.2.2:8000` |
+| iOS simulator | `http://localhost:8000` |
+| Physical device | `http://<your-machine-LAN-IP>:8000` |
 
-## Useful Docker Commands
+Shared imports already work in mobile:
 
-```bash
-docker compose up              # Start everything
-docker compose up -d           # Start in background
-docker compose down            # Stop all services
-docker compose down -v         # Stop + remove volumes (fresh start)
-docker compose restart api     # Restart API (picks up new migrations/deps)
-docker compose logs -f api     # Follow API logs
-docker compose logs -f         # Follow all logs
+```ts
+import type { LoginResponse } from '@dispatch/shared/contracts';
+import { DispatchApiClient } from '@dispatch/shared/api-client';
 ```
+
+Requirements: a Firebase project configured with `google-services.json` (Android) and `GoogleService-Info.plist` (iOS).
 
 ---
 
@@ -299,7 +302,7 @@ See `.env.local.example` for the full list. Key variables:
 |---|---|---|
 | `DATABASE_URL` | PostgreSQL async URL | `postgresql+asyncpg://dispatch:dispatch@localhost:5432/dispatch_dev` |
 | `REDIS_URL` | Redis connection URL | `redis://localhost:6379/0` |
-| `JWT_SECRET_KEY` | Secret for signing JWTs — auto-generated by Docker init service | `changeme-…` |
+| `JWT_SECRET_KEY` | Secret for signing JWTs — auto-generated by the Docker startup flow | `changeme-…` |
 | `DISPATCHER_WEB_BASE_URL` | Used for invitation links | `http://localhost:4200` |
 | `MAIL_HOST` / `MAIL_PORT` | SMTP settings (Mailpit locally) | `localhost` / `1025` |
 | `PLATFORM_ADMIN_EMAIL` | Email for the auto-seeded admin | `admin@dispatch.local` |
@@ -322,7 +325,7 @@ Three libraries in `libs/shared/` carry TypeScript types across all frontend app
 
 The import aliases are declared in `tsconfig.base.json` → `compilerOptions.paths`. Every tsconfig that extends the base file (all Angular apps) automatically resolves them.
 
-> **React Native note:** `apps/driver-mobile/tsconfig.json` extends `expo/tsconfig.base`, not the workspace base, so the `@dispatch/shared/*` aliases are not present by default. See [Adding aliases to driver-mobile](#adding-the-path-aliases-to-driver-mobile) below.
+`apps/driver-mobile` is wired for the same aliases through its own tsconfig, Babel, and Metro config, so web and mobile can import the same shared contracts and client code.
 
 ---
 
@@ -458,63 +461,20 @@ import { DispatchApiClient }   from '@dispatch/shared/api-client';
 
 #### `apps/driver-mobile` (React Native / Expo)
 
-##### Adding the path aliases to driver-mobile
+The mobile app is already configured to consume `@dispatch/shared/*` imports directly.
 
-`apps/driver-mobile/tsconfig.json` extends `expo/tsconfig.base`. Add the `@dispatch/shared/*` paths manually:
+Files involved:
 
-```jsonc
-// apps/driver-mobile/tsconfig.json
-{
-  "extends": "expo/tsconfig.base",
-  "compilerOptions": {
-    "strict": true,
-    "baseUrl": "../..",        // <-- workspace root
-    "paths": {
-      "@/*": ["apps/driver-mobile/src/*"],
-      "@dispatch/shared/domain":     ["libs/shared/domain/src/index.ts"],
-      "@dispatch/shared/contracts":  ["libs/shared/contracts/src/index.ts"],
-      "@dispatch/shared/api-client": ["libs/shared/api-client/src/index.ts"]
-    },
-    "jsx": "react-native"
-  }
-}
-```
-
-Metro (the React Native bundler) also needs to resolve the aliases. Add a `resolver.extraNodeModules` entry or use `babel-plugin-module-resolver` in `apps/driver-mobile/babel.config.js`:
-
-```js
-// apps/driver-mobile/babel.config.js
-module.exports = function (api) {
-  api.cache(true);
-  return {
-    presets: ['babel-preset-expo'],
-    plugins: [
-      ['module-resolver', {
-        root: ['../..'],           // workspace root
-        alias: {
-          '@dispatch/shared/domain':     '../../libs/shared/domain/src/index.ts',
-          '@dispatch/shared/contracts':  '../../libs/shared/contracts/src/index.ts',
-          '@dispatch/shared/api-client': '../../libs/shared/api-client/src/index.ts',
-        },
-      }],
-    ],
-  };
-};
-```
-
-Install the resolver plugin once if it is not already present:
-
-```bash
-cd apps/driver-mobile
-npm install --save-dev babel-plugin-module-resolver
-```
+- `apps/driver-mobile/tsconfig.json`
+- `apps/driver-mobile/babel.config.js`
+- `apps/driver-mobile/metro.config.js`
 
 ##### Using a custom `TokenStorage` for React Native
 
 `LocalTokenStorage` uses `localStorage` — unavailable in React Native. Provide a `SecureStore`-backed implementation instead:
 
 ```ts
-// apps/driver-mobile/src/services/secure-token-storage.ts
+// apps/driver-mobile/src/services/secureTokenStorage.ts
 import * as SecureStore from 'expo-secure-store';
 import type { TokenStorage } from '@dispatch/shared/api-client';
 
@@ -543,10 +503,10 @@ Then instantiate the shared client with your storage:
 
 ```ts
 import { DispatchApiClient } from '@dispatch/shared/api-client';
-import { SecureTokenStorage }  from './services/secure-token-storage';
+import { SecureTokenStorage } from './services/secureTokenStorage';
 
 export const api = new DispatchApiClient({
-  baseUrl: process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000',
+  baseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8000',
   tokenStorage: new SecureTokenStorage(),
 });
 ```
@@ -587,6 +547,66 @@ This opens a browser view showing every `import` edge between projects. Use it t
 
 ---
 
+## Feature Development Workflow
+
+This is the intended flow for new features.
+
+### 1. Add or change the backend API
+
+1. Start the stack with `docker compose up -d`.
+2. Edit models, schemas, services, and routers under `apps/api/app/`.
+3. If the database schema changes, generate and apply a migration:
+
+  ```bash
+  docker compose exec api alembic revision --autogenerate -m "add <feature>"
+  docker compose exec api alembic upgrade head
+  ```
+
+4. The API reloads automatically.
+
+### 2. Add or change shared TypeScript contracts
+
+1. Update `libs/shared/contracts/src/index.ts` for request and response DTOs.
+2. Update `libs/shared/domain/src/` for shared enums.
+3. If you prefer generated contracts, run:
+
+  ```bash
+  docker compose exec dispatcher-web npx nx run shared-contracts:generate
+  ```
+
+### 3. Build the Angular side
+
+1. Add components, routes, and services in `apps/dispatcher-web` or `apps/tracking-web`.
+2. Import shared DTOs directly from `@dispatch/shared/contracts`.
+3. HMR picks up the changes automatically while Docker is running.
+
+Optional generator commands:
+
+```bash
+docker compose exec dispatcher-web npx nx g @angular/core:component pages/<name>/<name> --project=dispatcher-web
+docker compose exec tracking-web npx nx g @angular/core:component pages/<name>/<name> --project=tracking-web
+```
+
+### 4. Build the mobile side
+
+1. Keep `docker compose up -d` running for backend services.
+2. In a host terminal, run Expo from `apps/driver-mobile`.
+3. Import DTOs and helpers from `@dispatch/shared/*` directly.
+4. Expo reloads mobile changes automatically.
+
+### 5. Validate before opening a PR
+
+```bash
+docker compose exec api pytest tests/ -v
+docker compose exec dispatcher-web npx nx lint dispatcher-web
+docker compose exec tracking-web npx nx lint tracking-web
+docker compose exec dispatcher-web npx nx test shared-domain
+docker compose exec dispatcher-web npx nx test shared-api-client
+cd apps/driver-mobile && npm run lint && npm test
+```
+
+---
+
 ## Contributing
 
 ### Branching
@@ -610,16 +630,15 @@ The backend is a **FastAPI / Python 3.12** application using SQLAlchemy (async),
 #### 1. Start the dev environment
 
 ```bash
-docker compose up
+docker compose up -d
 ```
 
-That single command handles everything automatically via bind-mounted volumes:
+That is the recommended path. The API container now owns the startup workflow:
 
 | Step | What happens |
 |------|-------------|
-| `init` service | Generates `.env.local` with a random `JWT_SECRET_KEY` if it doesn't exist |
-| `api` service | Copies `.env.local` → `apps/api/.env`, runs `pip install -r requirements.txt`, runs `alembic upgrade head`, starts uvicorn with `--reload` |
-| `celery-worker` service | Copies `.env.local` → `apps/api/.env`, runs `pip install`, starts the Celery worker |
+| `api` service | Generates `.env.local` if needed, syncs Python deps when `requirements.txt` changes, applies migrations, starts uvicorn with `--reload` |
+| `celery-worker` service | Reuses the same env and dependency sync, then starts the Celery worker |
 
 **Hot-reload is on by default.** Because `apps/api/` is bind-mounted into the container, any `.py` file you save on the host is immediately picked up by uvicorn's file watcher — no restart needed.
 
@@ -717,15 +736,14 @@ The dispatcher portal is an **Angular 19** single-page application in the Nx mon
 #### 1. Start the dev environment
 
 ```bash
-docker compose up
+docker compose up -d
 ```
 
-Docker handles everything automatically:
+Docker handles the standard path automatically:
 
 | Step | What happens |
 |------|-------------|
-| `node-deps` service | Runs `npm ci` once against the bind-mounted workspace |
-| `dispatcher-web` service | Runs `npx nx serve dispatcher-web` on port 4200 after `node-deps` completes |
+| `dispatcher-web` service | Syncs workspace Node deps when `package-lock.json` changes, then runs `npx nx serve dispatcher-web` on port 4200 |
 
 **Hot-reload (HMR) is on by default.** The entire repo root is bind-mounted into the container, so any `.ts`, `.html`, or `.css` file you save on the host is reflected in the browser immediately — no restart needed.
 
@@ -801,15 +819,14 @@ The public tracking portal is identical in tech stack to `dispatcher-web` (Angul
 #### 1. Start the dev environment
 
 ```bash
-docker compose up
+docker compose up -d
 ```
 
-Docker handles everything automatically:
+Docker handles the standard path automatically:
 
 | Step | What happens |
 |------|-------------|
-| `node-deps` service | Runs `npm ci` once against the bind-mounted workspace |
-| `tracking-web` service | Runs `npx nx serve tracking-web` on port 4300 after `node-deps` completes |
+| `tracking-web` service | Syncs workspace Node deps when `package-lock.json` changes, then runs `npx nx serve tracking-web` on port 4300 |
 
 **Hot-reload (HMR) is on by default.** Any `.ts`, `.html`, or `.css` save on the host reflects in the browser immediately.
 
@@ -850,7 +867,7 @@ All other conventions (API calls via relative URLs, shared contracts, no hardcod
 
 ### Contributing to `apps/driver-mobile`
 
-The driver app is a **React Native / Expo 51** project using NativeWind (Tailwind for RN), Expo Router, and React Native Firebase for push notifications.
+The driver app is a **React Native / Expo 51** project using NativeWind and React Native Firebase for push notifications.
 
 > React Native **cannot run inside Docker**. You must run it on the host machine with a simulator, emulator, or physical device.
 
@@ -859,7 +876,7 @@ The driver app is a **React Native / Expo 51** project using NativeWind (Tailwin
 | Tool | Version | Notes |
 |------|---------|-------|
 | Node.js | ≥ 20 | Host machine |
-| Expo CLI | Latest | `npm install -g expo-cli` |
+| Expo CLI | Bundled via project | Use `npx expo start` from `apps/driver-mobile` |
 | Android Studio | Latest | For Android emulator |
 | Xcode | Latest | macOS only — for iOS simulator |
 | Firebase project | — | For push notifications (see step 4) |
@@ -867,12 +884,12 @@ The driver app is a **React Native / Expo 51** project using NativeWind (Tailwin
 #### 2. Set up and start the dev server
 
 ```bash
-# Start the full backend stack (API, DB, Redis, Mailpit, web apps)
+# Start the backend and web stack first
 docker compose up -d
 
-# In a separate terminal
+# In a separate host terminal
 cd apps/driver-mobile
-npm install
+npm install   # one-time per developer, then again when package.json changes
 npx expo start
 ```
 
@@ -889,7 +906,7 @@ The mobile app must know where the API lives. Copy and edit the example env file
 cp apps/driver-mobile/.env.example apps/driver-mobile/.env
 ```
 
-Set `API_BASE_URL` to the API address reachable from the device/emulator. The Docker API is exposed on the host network, so:
+Set `EXPO_PUBLIC_API_BASE_URL` to the API address reachable from the device/emulator. The Docker API is exposed on the host network, so:
 
 | Environment | Value |
 |---|---|
@@ -920,11 +937,12 @@ The app uses React Native Firebase for FCM push notifications. To enable them:
 #### 6. Adding a new screen
 
 1. Create `src/screens/<ScreenName>.tsx`.
-2. Register it in the Expo Router config in `App.tsx` (or the relevant `_layout.tsx` if using file-based routing).
+2. Register it in `App.tsx`.
 3. If the screen calls a new API endpoint, add the DTO type to `libs/shared/contracts/src/` and regenerate contracts:
    ```bash
    npx nx run shared-contracts:generate
    ```
+4. Import shared DTOs, enums, or the shared API client directly from `@dispatch/shared/*`.
 
 #### 7. Linting and tests
 

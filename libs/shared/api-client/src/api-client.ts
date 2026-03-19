@@ -85,6 +85,14 @@ export class DispatchApiClient {
     return this.get<TrackingResponse>(`/api/v1/tracking/${token}`, false);
   }
 
+  async getPath<T>(path: string, auth = true): Promise<T> {
+    return this.get<T>(path, auth);
+  }
+
+  async postPath<T = void>(path: string, body: unknown, auth = true): Promise<T> {
+    return this.post<T>(path, body, auth);
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   private async get<T>(path: string, auth = true): Promise<T> {
