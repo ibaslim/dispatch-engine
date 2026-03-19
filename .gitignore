@@ -5,6 +5,7 @@ build
 .nx/cache
 .nx/workspace-data
 .angular/
+.cache/
 
 # Python
 __pycache__

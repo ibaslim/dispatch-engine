@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "start": "expo start",
+    "start": "NODE_OPTIONS=--dns-result-order=ipv4first expo start",
+    "start:offline": "NODE_OPTIONS=--dns-result-order=ipv4first expo start --offline",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "lint": "eslint src --ext .ts,.tsx",
@@ -33,7 +34,7 @@
     "jest-expo": "~51.0.0",
     "prettier": "^3.2.5",
     "tailwindcss": "3.3.5",
-    "typescript": "~5.5.0"
+    "typescript": "~5.3.3"
   },
   "jest": {
     "preset": "jest-expo",

@@ -8,6 +8,7 @@ import type {
   StoreResponse,
   CreateStoreRequest,
   TrackingResponse,
+  PostResponse,
 } from '@dispatch/shared/contracts';
 import { LocalTokenStorage, type TokenStorage } from './token-storage';
 
@@ -83,6 +84,10 @@ export class DispatchApiClient {
 
   async getTracking(token: string): Promise<TrackingResponse> {
     return this.get<TrackingResponse>(`/api/v1/tracking/${token}`, false);
+  }
+
+  async getPosts(limit = 20): Promise<PostResponse[]> {
+    return this.get<PostResponse[]>(`/api/v1/posts?limit=${limit}`, false);
   }
 
   async getPath<T>(path: string, auth = true): Promise<T> {

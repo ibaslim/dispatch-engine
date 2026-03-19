@@ -4,10 +4,12 @@ set -eu
 ROOT_DIR=$(cd "$(dirname "$0")/../.." && pwd)
 LOCK_FILE="$ROOT_DIR/package-lock.json"
 NODE_MODULES_DIR="$ROOT_DIR/node_modules"
-STAMP_FILE="$NODE_MODULES_DIR/.package-lock.sha256"
-LOCK_DIR="$NODE_MODULES_DIR/.install-lock"
+CACHE_DIR="$ROOT_DIR/.cache/dev"
+STAMP_FILE="$CACHE_DIR/package-lock.sha256"
+LOCK_DIR="$CACHE_DIR/install-node-deps.lock"
 
 mkdir -p "$NODE_MODULES_DIR"
+mkdir -p "$CACHE_DIR"
 
 while ! mkdir "$LOCK_DIR" 2>/dev/null; do
   echo "[node] Waiting for another dependency install to finish..."
@@ -15,7 +17,7 @@ while ! mkdir "$LOCK_DIR" 2>/dev/null; do
 done
 
 cleanup() {
-  rmdir "$LOCK_DIR"
+  rmdir "$LOCK_DIR" 2>/dev/null || true
 }
 
 trap cleanup EXIT INT TERM

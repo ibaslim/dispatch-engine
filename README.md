@@ -224,6 +224,7 @@ Requirements: a Firebase project configured with `google-services.json` (Android
 | POST | `/api/v1/invitations/accept` | Public | Accept invitation & set password |
 | GET | `/api/v1/stores` | Bearer | List stores (tenant-scoped) |
 | POST | `/api/v1/stores` | Tenant Admin | Create store |
+| GET | `/api/v1/posts` | Public | List published posts |
 | GET | `/api/v1/tracking/{token}` | Public | Get delivery tracking info |
 | GET | `/api/v1/ws` | Bearer (WS) | WebSocket for real-time updates |
 
@@ -596,6 +597,8 @@ docker compose exec tracking-web npx nx g @angular/core:component pages/<name>/<
 
 ### 5. Validate before opening a PR
 
+Tests are required for every new feature. Do not open a PR with feature code only.
+
 ```bash
 docker compose exec api pytest tests/ -v
 docker compose exec dispatcher-web npx nx lint dispatcher-web
@@ -604,6 +607,136 @@ docker compose exec dispatcher-web npx nx test shared-domain
 docker compose exec dispatcher-web npx nx test shared-api-client
 cd apps/driver-mobile && npm run lint && npm test
 ```
+
+Minimum expectation for a new feature:
+
+1. Add or update API unit tests.
+2. Add or update frontend tests where behavior changed.
+3. Ensure shared library tests pass if contracts or shared client changed.
+
+### 6. How To Add Unit Tests
+
+#### Backend API (`apps/api`)
+
+1. Create a test file under `apps/api/tests/` using `test_<feature>.py` naming.
+2. Keep unit tests isolated from external services when possible (use stubs/fakes for DB session behavior).
+3. Test behavior, not framework internals:
+  - filtering/sorting rules
+  - validation paths
+  - edge cases (empty results, invalid inputs, limits)
+4. Run backend tests:
+
+```bash
+docker compose exec api pytest tests/ -v
+docker compose exec api pytest tests/test_<feature>.py -v
+```
+
+#### Frontend Unit Tests (`dispatcher-web`, `tracking-web`)
+
+1. Place spec files next to components/services as `*.spec.ts`.
+2. For API-backed components, use `HttpTestingController` from `@angular/common/http/testing`.
+3. Assert both request behavior and rendered/UI state.
+4. Run frontend tests:
+
+```bash
+docker compose exec dispatcher-web npx nx test dispatcher-web
+docker compose exec tracking-web npx nx test tracking-web --passWithNoTests
+
+# Single spec file
+docker compose exec dispatcher-web npx nx test dispatcher-web --testPathPattern=<file>.spec.ts
+```
+
+#### Shared Libraries
+
+If the feature changes shared contracts or shared API client, run:
+
+```bash
+docker compose exec dispatcher-web npx nx test shared-domain
+docker compose exec dispatcher-web npx nx test shared-api-client
+```
+
+### Fullstack Example: `posts` Feature
+
+This repository includes a reference implementation of a small fullstack feature (`posts`) that touches API, shared contracts, web, and mobile.
+
+Use it as the template for future features.
+
+#### Backend (API)
+
+Files:
+
+- `apps/api/app/models/post.py`
+- `apps/api/app/schemas/post.py`
+- `apps/api/app/services/post_service.py`
+- `apps/api/app/api/routers/posts.py`
+- `apps/api/alembic/versions/0002_posts.py`
+
+Behavior:
+
+- `GET /api/v1/posts?limit=20` returns published posts ordered by newest first.
+- Migration `0002` creates the `posts` table and inserts sample rows for local development.
+- Unit tests live in `apps/api/tests/test_posts.py`.
+
+#### Shared TypeScript contracts
+
+Files:
+
+- `libs/shared/contracts/src/index.ts`
+- `libs/shared/api-client/src/api-client.ts`
+
+Behavior:
+
+- `PostResponse` is defined once in shared contracts.
+- Shared API client exposes `getPosts(limit?: number)`.
+
+#### Dispatcher web
+
+Files:
+
+- `apps/dispatcher-web/src/app/pages/posts/posts.component.ts`
+- `apps/dispatcher-web/src/app/pages/posts/posts.component.spec.ts`
+- `apps/dispatcher-web/src/app/app.routes.ts`
+- `apps/dispatcher-web/src/app/pages/dashboard/dashboard.component.ts`
+
+Behavior:
+
+- New authenticated route: `/posts`
+- Dashboard links to posts listing.
+- Unit test verifies API fetch and render behavior for the posts component.
+
+#### Tracking web
+
+Files:
+
+- `apps/tracking-web/src/app/pages/posts/posts.component.ts`
+- `apps/tracking-web/src/app/app.routes.ts`
+
+Behavior:
+
+- Public route: `/posts`
+- Root path redirects to `/posts`
+
+#### Driver mobile
+
+Files:
+
+- `apps/driver-mobile/src/screens/JobsScreen.tsx`
+- `apps/driver-mobile/src/services/api.ts`
+
+Behavior:
+
+- Jobs screen now loads and displays latest posts from `/api/v1/posts`.
+- Uses shared `PostResponse` type from `@dispatch/shared/contracts`.
+
+#### Reproduce this flow for a new feature
+
+1. Add DB model and migration.
+2. Add schema, service, and router endpoint.
+3. Add shared contract interface.
+4. Optionally add a shared API client method.
+5. Add UI screens/pages in dispatcher-web, tracking-web, and driver-mobile.
+6. Add tests for backend/shared/frontend changes.
+7. Validate with lint/tests and include feature docs in README.
 
 ---
 

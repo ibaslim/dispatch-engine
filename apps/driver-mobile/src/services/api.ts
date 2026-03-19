@@ -24,3 +24,7 @@ export function fetchWithAuth<T>(path: string): Promise<T> {
 export function postWithAuth<T = void>(path: string, body: unknown): Promise<T> {
   return apiClient.postPath<T>(path, body);
 }
+
+export function fetchPublic<T>(path: string): Promise<T> {
+  return apiClient.getPath<T>(path, false);
+}

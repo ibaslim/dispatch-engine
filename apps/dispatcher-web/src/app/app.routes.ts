@@ -36,6 +36,12 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'posts',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/posts/posts.component').then((m) => m.PostsComponent),
+  },
+  {
     path: '**',
     redirectTo: '/dashboard',
   },

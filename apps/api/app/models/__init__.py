@@ -3,6 +3,7 @@ from app.models.store import Store
 from app.models.user import User, UserRole, UserStoreAccess
 from app.models.invitation import Invitation
 from app.models.token import RefreshToken, PushToken
+from app.models.post import Post
 
 __all__ = [
     "Tenant",
@@ -13,4 +14,5 @@ __all__ = [
     "Invitation",
     "RefreshToken",
     "PushToken",
+    "Post",
 ]
