@@ -5,12 +5,27 @@
     "types": [],
     "baseUrl": "../..",
     "paths": {
-      "@dispatch/shared/domain": ["libs/shared/domain/src/index.ts"],
-      "@dispatch/shared/contracts": ["libs/shared/contracts/src/index.ts"],
-      "@dispatch/shared/api-client": ["libs/shared/api-client/src/index.ts"]
-    }
+      "@dispatch/shared/domain": [
+        "libs/shared/domain/src/index.ts"
+      ],
+      "@dispatch/shared/contracts": [
+        "libs/shared/contracts/src/index.ts"
+      ],
+      "@dispatch/shared/api-client": [
+        "libs/shared/api-client/src/index.ts"
+      ]
+    },
+    "moduleResolution": "bundler"
   },
-  "files": ["src/main.ts"],
-  "include": ["src/**/*.ts", "src/**/*.d.ts"],
-  "exclude": ["src/**/*.spec.ts", "src/test-setup.ts"]
+  "files": [
+    "src/main.ts"
+  ],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts"
+  ],
+  "exclude": [
+    "src/**/*.spec.ts",
+    "src/test-setup.ts"
+  ]
 }

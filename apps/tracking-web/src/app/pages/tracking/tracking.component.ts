@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { ActivatedRoute } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
@@ -8,7 +8,7 @@ import type { TrackingResponse } from '@dispatch/shared/contracts';
 @Component({
   selector: 'app-tracking',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   template: `
     <div class="min-h-screen bg-gray-50">
       <header class="bg-white shadow-sm">
