@@ -11,9 +11,17 @@ LOCK_DIR="$CACHE_DIR/install-node-deps.lock"
 mkdir -p "$NODE_MODULES_DIR"
 mkdir -p "$CACHE_DIR"
 
+WAIT_SECS=0
+MAX_WAIT=300
 while ! mkdir "$LOCK_DIR" 2>/dev/null; do
   echo "[node] Waiting for another dependency install to finish..."
   sleep 2
+  WAIT_SECS=$((WAIT_SECS + 2))
+  if [ "$WAIT_SECS" -ge "$MAX_WAIT" ]; then
+    echo "[node] Install lock held for over ${MAX_WAIT}s — assuming stale lock from crashed container. Clearing it."
+    rm -rf "$LOCK_DIR"
+    WAIT_SECS=0
+  fi
 done
 
 cleanup() {

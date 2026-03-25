@@ -840,6 +840,69 @@ Behavior:
 
 ---
 
+## Troubleshooting
+
+### Web containers stuck printing "Waiting for another dependency install to finish..."
+
+**Cause A — stale lock from a previous container crash.**
+The container startup script uses a lock directory (`/.cache/dev/install-node-deps.lock`) to serialise `npm ci` when multiple containers start simultaneously. If a container crashed mid-install, the lock is never cleaned up.
+
+Fix:
+```bash
+rm -rf .cache/dev/install-node-deps.lock
+docker compose restart dispatcher-web tracking-web
+```
+
+The lock script now auto-detects a stale lock after 5 minutes, so this should no longer be permanent. But the one-liner above clears it immediately.
+
+**Cause B — `package-lock.json` was regenerated with the wrong Node version.**
+Web containers run `node:20-alpine` (npm 10). If anyone runs `npm install` on the host with Node 22+ / npm 11+, the lockfile format changes and `npm ci` inside the container fails with a "packages not in sync" error.
+
+Fix: always regenerate the lockfile using the same Node version as the containers:
+```bash
+docker run --rm -v "$PWD":/workspace -w /workspace node:20-alpine sh -lc 'npm install'
+```
+
+Then commit the updated lockfile.
+
+**Prevention**: the repo root `package.json` has `"engines": {"node": "20.x", "npm": "10.x"}` and a `.nvmrc` pinned to `20`. When working on the host, switch to Node 20 first:
+```bash
+nvm use   # reads .nvmrc automatically
+```
+
+---
+
+### Login returns 500 / API health endpoint fails
+
+This is almost always Postgres in a crash loop. Check the Postgres logs:
+```bash
+docker compose logs --tail=20 postgres
+```
+
+The most common cause is **disk full** — the line to look for is:
+```
+PANIC: could not write to file "pg_logical/replorigin_checkpoint.tmp": No space left on device
+```
+
+Fix: free disk space, then restart Postgres.
+```bash
+# Check disk usage
+df -h /
+
+# Safe to remove — Docker build cache is always rebuildable
+docker builder prune -f
+
+# Optional: remove images not used by any running container (~8 GB typically)
+docker image prune -a
+
+# Then restart the database (and API to reconnect)
+docker compose restart postgres api
+```
+
+**Prevention**: Docker build cache grows unboundedly. Run `docker builder prune -f` periodically, especially after `docker compose up -d --build`.
+
+---
+
 ## Contributing
 
 ### Branching
