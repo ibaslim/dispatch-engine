@@ -10,15 +10,27 @@
     "importHelpers": true,
     "target": "ES2022",
     "module": "ES2022",
-    "lib": ["ES2022", "dom"],
+    "lib": [
+      "ES2022",
+      "dom"
+    ],
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@dispatch/shared/domain": ["libs/shared/domain/src/index.ts"],
-      "@dispatch/shared/contracts": ["libs/shared/contracts/src/index.ts"],
-      "@dispatch/shared/api-client": ["libs/shared/api-client/src/index.ts"]
+      "@dispatch/shared/api-client": [
+        "libs/shared/api-client/src/index.ts"
+      ],
+      "@dispatch/shared/contracts": [
+        "libs/shared/contracts/src/index.ts"
+      ],
+      "@dispatch/shared/domain": [
+        "libs/shared/domain/src/index.ts"
+      ]
     }
   },
-  "exclude": ["node_modules", "tmp"]
+  "exclude": [
+    "node_modules",
+    "tmp"
+  ]
 }

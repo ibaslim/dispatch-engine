@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api.routers import auth, platform, invitations, stores, drivers, tracking, ws
+from app.api.routers import auth, platform, invitations, stores, drivers, tracking, ws, posts
 from app.db.seed import seed_platform_admin
 
 
@@ -36,6 +36,7 @@ def create_app() -> FastAPI:
     application.include_router(platform.router, prefix="/api/v1/platform", tags=["platform"])
     application.include_router(invitations.router, prefix="/api/v1/invitations", tags=["invitations"])
     application.include_router(stores.router, prefix="/api/v1/stores", tags=["stores"])
+    application.include_router(posts.router, prefix="/api/v1/posts", tags=["posts"])
     application.include_router(drivers.router, prefix="/api/v1/drivers", tags=["drivers"])
     application.include_router(tracking.router, prefix="/api/v1/tracking", tags=["tracking"])
     application.include_router(ws.router, prefix="/api/v1", tags=["websocket"])

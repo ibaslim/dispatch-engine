@@ -66,3 +66,12 @@ export interface TrackingResponse {
   estimated_arrival: string | null;
   last_location: { lat: number; lng: number } | null;
 }
+
+export interface PostResponse {
+  id: string;
+  title: string;
+  summary: string;
+  content: string;
+  is_published: boolean;
+  created_at: string;
+}

@@ -1,12 +1,12 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [RouterLink],
   template: `
     <div class="min-h-screen bg-gray-50">
       <header class="bg-white shadow-sm">
@@ -19,6 +19,12 @@ import { AuthService } from '../../core/auth/auth.service';
                 Platform Admin
               </a>
             }
+            <a
+              routerLink="/posts"
+              class="text-sm font-medium text-primary-600 hover:text-primary-500"
+            >
+              Posts
+            </a>
             <span class="text-sm text-gray-500">
               {{ auth.currentUser()?.name ?? auth.currentUser()?.email }}
             </span>
@@ -49,6 +55,11 @@ import { AuthService } from '../../core/auth/auth.service';
         </div>
         <p class="mt-8 text-center text-gray-400 text-sm">
           Dashboard content coming soon &ndash; auth scaffold complete.
+        </p>
+        <p class="mt-2 text-center text-sm">
+          <a routerLink="/posts" class="text-primary-600 hover:text-primary-500">
+            Open posts listing demo
+          </a>
         </p>
       </main>
     </div>

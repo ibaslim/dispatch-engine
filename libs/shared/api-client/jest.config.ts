@@ -1,4 +1,4 @@
-export default {
+module.exports = {
   displayName: 'shared-api-client',
   preset: '../../../jest.preset.js',
   testEnvironment: 'node',

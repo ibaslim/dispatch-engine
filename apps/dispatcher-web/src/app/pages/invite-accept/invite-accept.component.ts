@@ -1,5 +1,5 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
@@ -9,7 +9,7 @@ import type { AcceptInvitationRequest, LoginResponse } from '@dispatch/shared/co
 @Component({
   selector: 'app-invite-accept',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   template: `
     <div class="min-h-screen flex items-center justify-center bg-gray-50">
       <div class="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-md">

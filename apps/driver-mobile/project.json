@@ -8,7 +8,14 @@
     "start": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "expo start",
+        "command": "npm run start",
+        "cwd": "apps/driver-mobile"
+      }
+    },
+    "start-offline": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run start:offline",
         "cwd": "apps/driver-mobile"
       }
     },
