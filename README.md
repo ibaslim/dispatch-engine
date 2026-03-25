@@ -6,15 +6,15 @@ A multi-tenant delivery dispatch system built as an Nx monorepo.
 
 | Layer | Technology |
 |---|---|
-| Dispatcher portal | Angular 19 + Tailwind CSS |
-| Public tracking | Angular 19 + Tailwind CSS |
-| Driver mobile | React Native (Expo 51) + NativeWind |
+| Dispatcher portal | Angular 21 + Tailwind CSS |
+| Public tracking | Angular 21 + Tailwind CSS |
+| Driver mobile | React Native (Expo 55) + NativeWind |
 | Backend API | FastAPI (Python 3.12) |
 | Database | PostgreSQL 16 + Alembic migrations |
 | Cache / Queue | Redis + Celery |
 | Email (local) | Mailpit |
 | Push notifications | Firebase Cloud Messaging (FCM) |
-| Monorepo | Nx 20 |
+| Monorepo | Nx 22 |
 
 ## Repository Structure
 
@@ -111,6 +111,106 @@ This keeps the common path simple:
 | Email | `admin@dispatch.local` |
 | Password | `Admin123!` |
 
+## App-by-App Development Start
+
+Use this section when onboarding a new contributor. It is the shortest path to start each app without blockers.
+
+### 1) API (`apps/api`)
+
+```bash
+# from repo root
+docker compose up -d
+docker compose exec api pytest tests/ -v
+```
+
+Working state:
+
+- API docs open at `http://localhost:8000/docs`
+- posts endpoint returns data at `http://localhost:8000/api/v1/posts?limit=2`
+
+### 2) Dispatcher Web (`apps/dispatcher-web`)
+
+```bash
+# from repo root
+docker compose up -d
+docker compose exec dispatcher-web npx nx test dispatcher-web --testPathPattern=posts.component.spec.ts
+```
+
+Working state:
+
+- app loads at `http://localhost:4200`
+- authenticated posts page is reachable at `/posts`
+
+### 3) Tracking Web (`apps/tracking-web`)
+
+```bash
+# from repo root
+docker compose up -d
+docker compose exec tracking-web npx nx test tracking-web --passWithNoTests
+```
+
+Working state:
+
+- app loads at `http://localhost:4300`
+- public posts page is reachable at `/posts`
+
+### 4) Driver Mobile (`apps/driver-mobile`)
+
+```bash
+# backend still runs in Docker
+docker compose up -d
+
+# in a second terminal
+cd apps/driver-mobile
+cp .env.example .env
+npm install
+npm run lint
+npm test -- --passWithNoTests
+npm run start
+```
+
+If Expo network reachability is flaky:
+
+```bash
+cd apps/driver-mobile
+npm run start:offline
+```
+
+Set `EXPO_PUBLIC_API_BASE_URL` in `apps/driver-mobile/.env` to a reachable API URL:
+
+| Environment | Value |
+|---|---|
+| Android emulator | `http://10.0.2.2:8000` |
+| iOS simulator | `http://localhost:8000` |
+| Physical device | `http://<your-machine-LAN-IP>:8000` |
+
+## Posts Feature End-to-End Check
+
+Use this exact checklist to verify the reference `posts` feature across all apps.
+
+### API
+
+```bash
+docker compose exec api pytest tests/test_posts.py -v
+curl -sS "http://localhost:8000/api/v1/posts?limit=2"
+```
+
+### Dispatcher Web
+
+```bash
+docker compose exec dispatcher-web npx nx test dispatcher-web --testPathPattern=posts.component.spec.ts
+```
+
+Open `http://localhost:4200/posts` after login.
+
+### Tracking Web
+
+Open `http://localhost:4300/posts`.
+
+### Driver Mobile
+
+Posts are shown in `JobsScreen` under the "Latest Posts" section, loaded from `/api/v1/posts?limit=5`.
+
 ---
 
 ## Daily Commands
@@ -135,7 +235,7 @@ Use these when you need tools that must run outside Docker:
 cd apps/driver-mobile
 cp .env.example .env
 npm install                    # one-time per developer, then again when package.json changes
-npx expo start
+npm run start
 ```
 
 ```bash
@@ -178,7 +278,7 @@ React Native / Expo runs on the host machine, but it now shares the same `libs/s
 cd apps/driver-mobile
 cp .env.example .env
 npm install
-npx expo start
+npm run start
 ```
 
 Set `EXPO_PUBLIC_API_BASE_URL` in `apps/driver-mobile/.env` to the API address reachable from the simulator or device:
@@ -272,7 +372,7 @@ docker compose exec api pytest tests/ -v
 cd apps/api && source .venv/bin/activate && pytest tests/ -v
 ```
 
-Expected: 13 unit tests for invitation validity and tenant scoping (no database required).
+Expected: 16 unit tests total, including invitation, tenant-scoping, and posts service tests.
 
 **TypeScript tests:**
 
@@ -864,7 +964,7 @@ Tests use `pytest-asyncio` in `auto` mode and run entirely in-process — no liv
 
 ### Contributing to `apps/dispatcher-web`
 
-The dispatcher portal is an **Angular 19** single-page application in the Nx monorepo with Tailwind CSS.
+The dispatcher portal is an **Angular 21** single-page application in the Nx monorepo with Tailwind CSS.
 
 #### 1. Start the dev environment
 
@@ -947,7 +1047,7 @@ docker compose restart dispatcher-web
 
 ### Contributing to `apps/tracking-web`
 
-The public tracking portal is identical in tech stack to `dispatcher-web` (Angular 19 + Tailwind, same Nx project structure) but has no authentication — it serves public delivery tracking pages.
+The public tracking portal is identical in tech stack to `dispatcher-web` (Angular 21 + Tailwind, same Nx project structure) but has no authentication — it serves public delivery tracking pages.
 
 #### 1. Start the dev environment
 
@@ -1000,7 +1100,7 @@ All other conventions (API calls via relative URLs, shared contracts, no hardcod
 
 ### Contributing to `apps/driver-mobile`
 
-The driver app is a **React Native / Expo 51** project using NativeWind and React Native Firebase for push notifications.
+The driver app is a **React Native / Expo 55** project using NativeWind and React Native Firebase for push notifications.
 
 > React Native **cannot run inside Docker**. You must run it on the host machine with a simulator, emulator, or physical device.
 
@@ -1009,7 +1109,7 @@ The driver app is a **React Native / Expo 51** project using NativeWind and Reac
 | Tool | Version | Notes |
 |------|---------|-------|
 | Node.js | ≥ 20 | Host machine |
-| Expo CLI | Bundled via project | Use `npx expo start` from `apps/driver-mobile` |
+| Expo CLI | Bundled via project | Use `npm run start` from `apps/driver-mobile` |
 | Android Studio | Latest | For Android emulator |
 | Xcode | Latest | macOS only — for iOS simulator |
 | Firebase project | — | For push notifications (see step 4) |
@@ -1023,13 +1123,20 @@ docker compose up -d
 # In a separate host terminal
 cd apps/driver-mobile
 npm install   # one-time per developer, then again when package.json changes
-npx expo start
+npm run start
 ```
 
 Then press:
 - `a` — open Android emulator
 - `i` — open iOS simulator (macOS only)
 - Scan the QR code with the **Expo Go** app on a physical device
+
+If Expo endpoint reachability is flaky on your network, use:
+
+```bash
+cd apps/driver-mobile
+npm run start:offline
+```
 
 #### 3. Configuring the API URL
 
@@ -1121,7 +1228,7 @@ Before opening a pull request, verify the following for the app(s) you changed:
 
 | Check | Command |
 |---|---|
-| API tests pass | `cd apps/api && pytest tests/ -v` |
+| API tests pass | `docker compose exec api pytest tests/ -v` |
 | API linted | `cd apps/api && python -m mypy app` (optional but encouraged) |
 | Alembic migration included | `alembic upgrade head` succeeds on a clean DB |
 | Angular app lints clean | `npx nx lint dispatcher-web` / `npx nx lint tracking-web` |

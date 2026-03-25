@@ -11,14 +11,29 @@
  */
 
 import messaging from '@react-native-firebase/messaging';
+import { Platform } from 'react-native';
 import { postWithAuth } from './api';
+
+function getMessagingInstance() {
+  try {
+    return messaging();
+  } catch (err) {
+    console.warn('[FCM] Messaging module is unavailable. Skipping push setup.', err);
+    return null;
+  }
+}
 
 /**
  * Request notification permission and register FCM token with backend.
  * Call this after successful login.
  */
 export async function registerFcmToken(): Promise<void> {
-  const authStatus = await messaging().requestPermission();
+  const messagingInstance = getMessagingInstance();
+  if (!messagingInstance) {
+    return;
+  }
+
+  const authStatus = await messagingInstance.requestPermission();
   const enabled =
     authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
     authStatus === messaging.AuthorizationStatus.PROVISIONAL;
@@ -28,7 +43,7 @@ export async function registerFcmToken(): Promise<void> {
     return;
   }
 
-  const fcmToken = await messaging().getToken();
+  const fcmToken = await messagingInstance.getToken();
   if (!fcmToken) {
     console.warn('[FCM] Could not get FCM token');
     return;
@@ -52,7 +67,14 @@ export async function registerFcmToken(): Promise<void> {
 export function subscribeForegroundMessages(
   onMessage: (title: string, body: string) => void
 ): () => void {
-  return messaging().onMessage(async (remoteMessage) => {
+  const messagingInstance = getMessagingInstance();
+  if (!messagingInstance) {
+    return () => {
+      // No-op when messaging is unavailable.
+    };
+  }
+
+  return messagingInstance.onMessage(async (remoteMessage) => {
     const title = remoteMessage.notification?.title ?? 'New notification';
     const body = remoteMessage.notification?.body ?? '';
     onMessage(title, body);
@@ -64,12 +86,16 @@ export function subscribeForegroundMessages(
  * Register once at app root.
  */
 export function setupBackgroundHandler(): void {
-  messaging().setBackgroundMessageHandler(async (remoteMessage) => {
+  const messagingInstance = getMessagingInstance();
+  if (!messagingInstance) {
+    return;
+  }
+
+  messagingInstance.setBackgroundMessageHandler(async (remoteMessage) => {
     console.log('[FCM] Background message:', remoteMessage);
   });
 }
 
 function getPlatform(): 'android' | 'ios' {
-  const { Platform } = require('react-native') as { Platform: { OS: string } };
   return Platform.OS === 'ios' ? 'ios' : 'android';
 }
