@@ -45,7 +45,13 @@ A multi-tenant delivery dispatch system built as an Nx monorepo.
 
 For backend and web development, only **Docker + Docker Compose** are required.
 
-For mobile development, you also need **Node.js 20+** on the host machine because Expo cannot run inside Docker.
+For mobile development, you also need **Node.js 20.x** on the host machine because Expo cannot run inside Docker.
+
+If you plan to run any host-side workspace commands from the repo root, use the pinned Node version first:
+
+```bash
+nvm use
+```
 
 ### Recommended Local Setup
 
@@ -91,6 +97,7 @@ This keeps the common path simple:
 ### One-time setup per developer
 
 - Backend + web: no manual dependency installation is required on the host when using Docker.
+- Repo root: avoid running `npm install` on the host unless you are on Node 20.x / npm 10.x. The web containers use `node:20-alpine`, and a lockfile generated with a newer npm can break `npm ci` inside Docker.
 - Mobile: each developer must run `npm install` in `apps/driver-mobile` at least once on their machine.
 - If mobile dependencies change (`apps/driver-mobile/package.json`), run `npm install` again in `apps/driver-mobile`.
 
@@ -845,7 +852,7 @@ Behavior:
 ### Web containers stuck printing "Waiting for another dependency install to finish..."
 
 **Cause A — stale lock from a previous container crash.**
-The container startup script uses a lock directory (`/.cache/dev/install-node-deps.lock`) to serialise `npm ci` when multiple containers start simultaneously. If a container crashed mid-install, the lock is never cleaned up.
+The container startup script uses a lock directory (`.cache/dev/install-node-deps.lock`) to serialise `npm ci` when multiple containers start simultaneously. If a container crashed mid-install, the lock is never cleaned up.
 
 Fix:
 ```bash
@@ -1247,7 +1254,37 @@ The app uses React Native Firebase for FCM push notifications. To enable them:
    ```
 4. Import shared DTOs, enums, or the shared API client directly from `@dispatch/shared/*`.
 
-#### 7. Linting and tests
+#### 7. Implementing a new feature in driver-mobile
+
+Use this sequence for any new React Native feature:
+
+1. Keep the backend running with `docker compose up -d`.
+2. If the feature needs new API data, add or update the backend endpoint first under `apps/api/app/`.
+3. Add or update shared DTOs in `libs/shared/contracts/src/index.ts` and shared enums in `libs/shared/domain/src/`.
+4. If the shared API client should expose the endpoint, add the method in `libs/shared/api-client/src/api-client.ts`.
+5. In `apps/driver-mobile`, add the screen under `src/screens/` or extend an existing one.
+6. Put fetch logic and device-specific helpers in `src/services/` so screens stay focused on rendering and interactions.
+7. Import types and helpers from `@dispatch/shared/*` instead of duplicating request or response shapes locally.
+8. Verify the API base URL in `apps/driver-mobile/.env` matches the simulator or device you are using.
+9. Run Expo and confirm the feature works on the target device or emulator.
+
+Recommended validation loop:
+
+```bash
+docker compose up -d
+cd apps/driver-mobile
+npm run lint
+npm test
+npm run start
+```
+
+For feature work that changes both API and mobile, validate the backend tests too:
+
+```bash
+docker compose exec api pytest tests/ -v
+```
+
+#### 8. Linting and tests
 
 ```bash
 cd apps/driver-mobile
