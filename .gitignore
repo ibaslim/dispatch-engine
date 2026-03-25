@@ -5,6 +5,7 @@ build
 .nx/cache
 .nx/workspace-data
 .angular/
+.cache/
 
 # Python
 __pycache__
@@ -46,3 +47,8 @@ apps/driver-mobile/ios/build
 # Build artifacts
 *.js.map
 coverage
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md
+
+.claude/worktrees
+.claude/settings.local.json

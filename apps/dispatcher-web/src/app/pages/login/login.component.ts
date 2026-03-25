@@ -1,5 +1,5 @@
 import { Component, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
@@ -7,7 +7,7 @@ import { AuthService } from '../../core/auth/auth.service';
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink],
   template: `
     <div class="min-h-screen flex items-center justify-center bg-gray-50">
       <div class="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-md">

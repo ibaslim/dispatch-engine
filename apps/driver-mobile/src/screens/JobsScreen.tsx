@@ -9,7 +9,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { fetchWithAuth, logout } from '../services/api';
+import type { PostResponse } from '@dispatch/shared/contracts';
+import { fetchPublic, fetchWithAuth, logout } from '../services/api';
 import { subscribeForegroundMessages } from '../services/fcm';
 
 interface Job {
@@ -26,6 +27,7 @@ interface Props {
 
 export function JobsScreen({ onLogout }: Props) {
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [posts, setPosts] = useState<PostResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -45,14 +47,25 @@ export function JobsScreen({ onLogout }: Props) {
     }
   }, [onLogout]);
 
+  const loadPosts = useCallback(async () => {
+    try {
+      const data = await fetchPublic<PostResponse[]>('/api/v1/posts?limit=5');
+      setPosts(data);
+    } catch {
+      // Keep jobs usable even if posts fail.
+      setPosts([]);
+    }
+  }, []);
+
   useEffect(() => {
     loadJobs();
+    loadPosts();
     const unsubscribe = subscribeForegroundMessages((title, body) => {
       Alert.alert(title, body);
       loadJobs();
     });
     return unsubscribe;
-  }, [loadJobs]);
+  }, [loadJobs, loadPosts]);
 
   async function handleLogout() {
     await logout();
@@ -85,8 +98,27 @@ export function JobsScreen({ onLogout }: Props) {
             onRefresh={() => {
               setIsRefreshing(true);
               loadJobs();
+              loadPosts();
             }}
           />
+        }
+        ListHeaderComponent={
+          <View className="mx-4 mt-4 mb-2">
+            <Text className="text-base font-semibold text-gray-900">Latest Posts</Text>
+            {posts.length === 0 ? (
+              <Text className="text-sm text-gray-400 mt-2">No posts available.</Text>
+            ) : (
+              <View className="mt-2 gap-2">
+                {posts.map((post) => (
+                  <View key={post.id} className="bg-white rounded-xl p-4 shadow-sm">
+                    <Text className="font-semibold text-gray-900">{post.title}</Text>
+                    <Text className="text-xs text-gray-500 mt-1">{post.summary}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            <Text className="text-base font-semibold text-gray-900 mt-5">My Jobs</Text>
+          </View>
         }
         ListEmptyComponent={
           <View className="flex-1 items-center justify-center py-20">
