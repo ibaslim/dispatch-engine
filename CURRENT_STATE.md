@@ -9,6 +9,8 @@ Use it for live status, known issues, and verification outcomes.
 
 ## Overall Status
 - Backend + web Docker development flow: stable
+- Angular/Nx upgrade: complete and verified on current workspace baseline
+- Backend dependency upgrade: complete and validated in Docker
 - Fullstack `posts` reference feature: implemented and running
 - Shared TypeScript contract/client usage: improved and in use across API + web + mobile
 - Mobile runtime flow: partially stable (network/environment dependent)
@@ -18,15 +20,20 @@ Use it for live status, known issues, and verification outcomes.
 - API starts healthy and exposes OpenAPI at `http://localhost:8000/openapi.json`.
 - Posts endpoint returns seeded data at `/api/v1/posts`.
 - Dispatcher web and tracking web serve in Docker (`4200`, `4300`).
+- Angular `21.1.6` and Nx `22.6.0` are installed and validated for dispatcher-web.
+- Updated FastAPI stack installs cleanly in the API container, including test dependencies.
 - Fresh-clone simulation was validated by:
   - `docker compose down -v --remove-orphans`
   - cleanup of generated local artifacts
   - `docker compose up -d --build`
 
 ## Major Improvements Completed
+- Angular/Nx workspace upgraded to Angular `21.1.6` and Nx `22.6.0`.
+- API runtime and test dependency pins refreshed to current stable versions.
 - Infra startup moved to dedicated scripts under `infra/scripts/`.
 - Compose build made resilient to Docker Hub timeout risk via configurable Python base image.
 - API Docker build hardened with pip retries/timeouts.
+- Python dependency sync now installs both runtime and dev requirements in the API container.
 - Node dependency sync stamp moved to `.cache/dev` to avoid lock race/noise.
 - `.cache/` added to `.gitignore` to avoid tracking runtime artifacts.
 - End-to-end posts feature added across:
@@ -37,6 +44,7 @@ Use it for live status, known issues, and verification outcomes.
 - Test guidance in `README.md` expanded with explicit backend/frontend/shared commands.
 
 ## Verified Tests (Current)
+- Full backend API test suite passes in Docker (`docker compose exec api pytest tests/ -v`).
 - Backend posts unit tests pass (`apps/api/tests/test_posts.py`).
 - Dispatcher posts component unit test passes (`posts.component.spec.ts`).
 - Tracking web test target runs with `--passWithNoTests`.
