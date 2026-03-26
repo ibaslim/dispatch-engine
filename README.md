@@ -96,10 +96,34 @@ This keeps the common path simple:
 
 ### One-time setup per developer
 
-- Backend + web: no manual dependency installation is required on the host when using Docker.
-- Repo root: avoid running `npm install` on the host unless you are on Node 20.x / npm 10.x. The web containers use `node:20-alpine`, and a lockfile generated with a newer npm can break `npm ci` inside Docker.
+- Backend + web runtime: no host-side install is required if you only want to run the stack through Docker.
+- Backend + web editor support in VS Code: run `nvm use && npm ci` at the repo root if you want host-side TypeScript/Angular IntelliSense, imports, and warnings to resolve correctly.
+- Repo root: avoid running `npm install` on the host unless you are on Node 20.x / npm 10.x. Use `npm ci` instead. The web containers use `node:20-alpine`, and a lockfile generated with a newer npm can break `npm ci` inside Docker.
 - Mobile: each developer must run `npm install` in `apps/driver-mobile` at least once on their machine.
 - If mobile dependencies change (`apps/driver-mobile/package.json`), run `npm install` again in `apps/driver-mobile`.
+
+### VS Code TypeScript Troubleshooting
+
+If a contributor sees errors like:
+
+- `This syntax requires an imported helper but module 'tslib' cannot be found`
+- `Cannot find module '@angular/core' or its corresponding type declarations`
+- `Cannot find module '@angular/router' or its corresponding type declarations`
+
+the usual cause is that the app is running in Docker, but VS Code is analyzing the repo on the host and cannot see a host-side `node_modules` directory.
+
+Fix options:
+
+1. Preferred on the host:
+
+```bash
+nvm use
+npm ci
+```
+
+2. Or open the repo in a dev container / remote container so the editor uses the container filesystem.
+
+After installing host dependencies, run `TypeScript: Select TypeScript Version` in VS Code and choose the workspace version if prompted.
 
 ### Service URLs
 
