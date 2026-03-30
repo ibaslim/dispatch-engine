@@ -1,0 +1,20 @@
+<button [type]="type" (click)="handleClick()" [title]="title || ''" [attr.aria-label]="ariaLabel || null" [ngClass]="
+    variant === 'primary'
+      ? 'px-4 py-2 bg-[#FFD150] text-black rounded-md hover:bg-yellow-600 transition duration-200 inline-flex items-center gap-2 ' + extraClasses
+      : variant === 'secondary'
+      ? 'px-3 py-2 rounded-md text-sm font-medium hover:text-[#91D06C] transition duration-200 inline-flex items-center gap-2 ' + extraClasses
+      : 'p-2 rounded-md hover:bg-gray-700 transition duration-200 inline-flex items-center gap-2 ' + extraClasses
+  ">
+    <!-- If icon input exists -->
+    <ng-container *ngIf="icon">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path [attr.d]="icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+        </svg>
+    </ng-container>
+
+    <!-- If label exists -->
+    <span *ngIf="label">{{ label }}</span>
+
+    <!-- Custom projected content -->
+    <ng-content></ng-content>
+</button>

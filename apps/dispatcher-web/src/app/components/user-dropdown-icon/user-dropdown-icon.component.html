@@ -1,0 +1,33 @@
+<div class="relative z-50">
+    <!-- Avatar Button -->
+    <app-button variant="icon" (onClick)="toggleDropdown()"
+        extraClasses="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-700 transition duration-200"
+        [ariaLabel]="'User menu'">
+
+        <div class="w-8 h-8 bg-teal-500 rounded-full flex items-center justify-center font-semibold text-white text-xs">
+            {{ initials }}
+        </div>
+    </app-button>
+
+    <!-- Dropdown Menu -->
+    <div *ngIf="isOpen" class="absolute right-0 mt-2 w-48 bg-white text-gray-900 rounded-lg shadow-lg py-2 z-[60]">
+        <div class="px-4 py-2 border-b border-gray-200">
+            <p class="font-semibold text-sm">{{ userName }}</p>
+            <p class="text-xs text-gray-500">{{ userEmail }}</p>
+        </div>
+
+        <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-100 transition duration-200">Profile</a>
+        <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-100 transition duration-200">Settings</a>
+        <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-100 transition duration-200">Help & Support</a>
+
+        <hr class="my-2" />
+
+        <!-- Sign Out Button -->
+        <app-button variant="icon" label="Sign out" (onClick)="handleLogout()"
+            extraClasses="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 transition duration-200 justify-start">
+        </app-button>
+    </div>
+</div>
+
+<!-- Click outside to close dropdown -->
+<div *ngIf="isOpen" (click)="closeDropdown()" class="fixed inset-0 z-40"></div>
