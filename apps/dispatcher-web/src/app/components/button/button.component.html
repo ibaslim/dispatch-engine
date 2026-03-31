@@ -1,20 +1,34 @@
-<button [type]="type" (click)="handleClick()" [title]="title || ''" [attr.aria-label]="ariaLabel || null" [ngClass]="
-    variant === 'primary'
-      ? 'px-4 py-2 bg-[#FFD150] text-black rounded-md hover:bg-yellow-600 transition duration-200 inline-flex items-center gap-2 ' + extraClasses
-      : variant === 'secondary'
-      ? 'px-3 py-2 rounded-md text-sm font-medium hover:text-[#91D06C] transition duration-200 inline-flex items-center gap-2 ' + extraClasses
-      : 'p-2 rounded-md hover:bg-gray-700 transition duration-200 inline-flex items-center gap-2 ' + extraClasses
-  ">
-    <!-- If icon input exists -->
-    <ng-container *ngIf="icon">
+<button (click)="onButtonClick()" [type]="type" [disabled]="disabled || loading" [class]="getButtonClasses()"
+    [attr.aria-label]="ariaLabel">
+    <!-- Icon Button -->
+    <ng-container *ngIf="isIconButton() && icon">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path [attr.d]="icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
         </svg>
     </ng-container>
 
-    <!-- If label exists -->
-    <span *ngIf="label">{{ label }}</span>
+    <!-- Icon button with custom content -->
+    <ng-container *ngIf="isIconButton() && !icon">
+        <ng-content></ng-content>
+    </ng-container>
 
-    <!-- Custom projected content -->
-    <ng-content></ng-content>
+    <!-- Text Button with Loading -->
+    <ng-container *ngIf="!isIconButton()">
+        <span *ngIf="!loading" class="flex items-center gap-3">
+            <svg *ngIf="leadingIcon" [class]="leadingIconClass" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+                fill="currentColor">
+                <path [attr.d]="leadingIcon"></path>
+            </svg>
+            <span>{{ label }}</span>
+        </span>
+        <span *ngIf="loading" class="flex items-center gap-2">
+            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                </path>
+            </svg>
+            Loading...
+        </span>
+    </ng-container>
 </button>

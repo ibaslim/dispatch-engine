@@ -1,10 +1,11 @@
-<nav class="bg-gray-900 text-white shadow-lg sticky top-0 z-50">
+<nav class="bg-[#1E201E] text-white shadow-lg sticky top-0 z-50">
     <div class="w-full px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between items-center h-16">
 
             <!-- Logo and App Name -->
             <div class="flex items-center space-x-3">
-                <div class="flex-shrink-0 w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+                <div
+                    class="flex-shrink-0 w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
                     D
                 </div>
                 <div class="hidden md:flex flex-col">
@@ -14,26 +15,82 @@
             </div>
 
             <!-- Right Side Actions -->
-            <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-4 relative">
 
                 <!-- Desktop Navigation Menu -->
                 <div class="hidden md:flex space-x-1">
                     <a *ngFor="let item of navItems" [routerLink]="item.route" routerLinkActive="bg-blue-600"
                         [routerLinkActiveOptions]="{ exact: false }"
-                        class="px-3 py-2 rounded-md text-sm font-medium hover:text-[#91D06C] transition duration-200">
+                        class="px-3 py-2 rounded-md text-sm font-medium hover:bg-[#3C3D37] hover:text-white transition duration-200">
                         {{ item.label }}
                     </a>
                 </div>
 
                 <!-- Notification Button -->
-                <app-button variant="icon" [icon]="notificationIcon" (onClick)="showNotification()"
-                    extraClasses="p-2 rounded-md hover:bg-gray-700 transition duration-200" title="Notifications">
+                <app-button variant="icon" [icon]="isNotificationsOn ? notificationIconOn : notificationIconOff"
+                    (onClick)="toggleNotifications()"
+                    [ariaLabel]="isNotificationsOn ? 'Notifications on' : 'Notifications off'">
                 </app-button>
 
                 <!-- Help Button -->
-                <app-button variant="icon" [icon]="helpIcon" (onClick)="showHelp()"
-                    extraClasses="p-2 rounded-md hover:bg-gray-700 transition duration-200" title="Help">
-                </app-button>
+                <div class="relative">
+                    <app-button variant="icon" ariaLabel="Help" (onClick)="toggleHelpMenu()">
+                        <svg class="w-5 h-5 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+                            fill="currentColor">
+                            <path
+                                d="M140,180a12,12,0,1,1-12-12A12,12,0,0,1,140,180ZM128,72c-22.06,0-40,16.15-40,36v4a8,8,0,0,0,16,0v-4c0-11,10.77-20,24-20s24,9,24,20-10.77,20-24,20a8,8,0,0,0-8,8v8a8,8,0,0,0,16,0v-.72c18.24-3.35,32-17.9,32-35.28C168,88.15,150.06,72,128,72Zm104,56A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z" />
+                        </svg>
+                    </app-button>
+
+                    <!-- Help Dropdown -->
+                    <div *ngIf="isHelpOpen"
+                        class="absolute right-0 mt-2 w-56 bg-[#0f1115] text-white rounded-lg shadow-lg py-2 z-50 border border-gray-700">
+
+                        <a href="#" (click)="$event.preventDefault()"
+                            class="flex items-center gap-2 px-4 py-2 text-sm hover:bg-[#3C3D37]">
+                            <!-- FAQ icon -->
+                            <svg class="w-4 h-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+                                fill="currentColor">
+                                <path
+                                    d="M140,180a12,12,0,1,1-12-12A12,12,0,0,1,140,180ZM128,72c-22.06,0-40,16.15-40,36v4a8,8,0,0,0,16,0v-4c0-11,10.77-20,24-20s24,9,24,20-10.77,20-24,20a8,8,0,0,0-8,8v8a8,8,0,0,0,16,0v-.72c18.24-3.35,32-17.9,32-35.28C168,88.15,150.06,72,128,72Zm104,56A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z" />
+                            </svg>
+                            <span>Frequently Asked Questions</span>
+                        </a>
+
+                        <a href="#" (click)="$event.preventDefault()"
+                            class="flex items-center gap-2 px-4 py-2 text-sm hover:bg-[#3C3D37]">
+                            <!-- Video tutorials icon -->
+                            <svg class="w-4 h-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+                                fill="currentColor">
+                                <path
+                                    d="M251.77,73a8,8,0,0,0-8.21.39L208,97.05V72a16,16,0,0,0-16-16H32A16,16,0,0,0,16,72V184a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V159l35.56,23.71A8,8,0,0,0,248,184a8,8,0,0,0,8-8V80A8,8,0,0,0,251.77,73ZM192,184H32V72H192V184Zm48-22.95-32-21.33V116.28L240,95Z" />
+                            </svg>
+                            <span>Video tutorials</span>
+                        </a>
+
+                        <a href="#" (click)="$event.preventDefault()"
+                            class="flex items-center gap-2 px-4 py-2 text-sm hover:bg-[#3C3D37]">
+                            <!-- Call Us icon -->
+                            <svg class="w-4 h-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+                                fill="currentColor">
+                                <path
+                                    d="M222.37,158.46l-47.11-21.11-.13-.06a16,16,0,0,0-15.17,1.4,8.12,8.12,0,0,0-.75.56L134.87,160c-15.42-7.49-31.34-23.29-38.83-38.51l20.78-24.71c.2-.25.39-.5.57-.77a16,16,0,0,0,1.32-15.06l0-.12L97.54,33.64a16,16,0,0,0-16.62-9.52A56.26,56.26,0,0,0,32,80c0,79.4,64.6,144,144,144a56.26,56.26,0,0,0,55.88-48.92A16,16,0,0,0,222.37,158.46ZM176,208A128.14,128.14,0,0,1,48,80,40.2,40.2,0,0,1,82.87,40a.61.61,0,0,0,0,.12l21,47L83.2,111.86a6.13,6.13,0,0,0-.57.77,16,16,0,0,0-1,15.7c9.06,18.53,27.73,37.06,46.46,46.11a16,16,0,0,0,15.75-1.14,8.44,8.44,0,0,0,.74-.56L168.89,152l47,21.05h0s.08,0,.11,0A40.21,40.21,0,0,1,176,208Z" />
+                            </svg>
+                            <span>Call Us</span>
+                        </a>
+
+                        <a href="#" (click)="$event.preventDefault()"
+                            class="flex items-center gap-2 px-4 py-2 text-sm hover:bg-[#3C3D37]">
+                            <!-- Send Feedback icon -->
+                            <svg class="w-4 h-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+                                fill="currentColor">
+                                <path
+                                    d="M248,120a48.05,48.05,0,0,0-48-48H160.2c-2.91-.17-53.62-3.74-101.91-44.24A16,16,0,0,0,32,40V200a16,16,0,0,0,26.29,12.25c37.77-31.68,77-40.76,93.71-43.3v31.72A16,16,0,0,0,159.12,214l11,7.33A16,16,0,0,0,194.5,212l11.77-44.36A48.07,48.07,0,0,0,248,120ZM48,199.93V40h0c42.81,35.91,86.63,45,104,47.24v65.48C134.65,155,90.84,164.07,48,199.93Zm131,8,0,.11-11-7.33V168h21.6ZM200,152H168V88h32a32,32,0,1,1,0,64Z" />
+                            </svg>
+                            <span>Send Feedback</span>
+                        </a>
+                    </div>
+                </div>
 
                 <!-- Upgrade Button -->
                 <app-button variant="primary" label="Upgrade" (onClick)="upgradePlan()" extraClasses="hidden lg:block">
@@ -44,23 +101,7 @@
                     (logout)="logout()">
                 </user-dropdown-icon>
 
-                <!-- Mobile Menu Toggle -->
-                <app-button variant="icon" [icon]="menuIcon" (onClick)="toggleMobileMenu()"
-                    extraClasses="md:hidden p-2 rounded-md hover:bg-gray-700 transition duration-200"
-                    ariaLabel="Toggle menu">
-                </app-button>
-
             </div>
-        </div>
-
-        <!-- Mobile Menu -->
-        <div *ngIf="isMobileMenuOpen" class="md:hidden pb-4">
-            <a *ngFor="let item of navItems" [routerLink]="item.route" routerLinkActive="bg-blue-600"
-                [routerLinkActiveOptions]="{ exact: false }"
-                class="block px-3 py-2 rounded-md text-base font-medium hover:bg-gray-700 transition duration-200"
-                (click)="onNavItemClick()">
-                {{ item.label }}
-            </a>
         </div>
     </div>
 </nav>

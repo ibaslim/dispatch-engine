@@ -24,12 +24,13 @@
     "@angular/platform-browser": "21.1.6",
     "@angular/platform-browser-dynamic": "21.1.6",
     "@angular/router": "21.1.6",
-    "rxjs": "~7.8.0",
-    "tslib": "^2.3.0",
-    "zone.js": "0.16.1",
+    "@phosphor-icons/core": "^2.1.1",
     "@react-native-community/cli": "~18.0.0",
     "@react-native-community/cli-platform-android": "~18.0.0",
-    "@react-native-community/cli-platform-ios": "~18.0.0"
+    "@react-native-community/cli-platform-ios": "~18.0.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "zone.js": "0.16.1"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "21.1.5",
@@ -49,15 +50,15 @@
     "autoprefixer": "^10.4.0",
     "eslint": "~8.48.0",
     "jest": "30.3.0",
-    "jest-preset-angular": "16.0.0",
     "jest-environment-jsdom": "30.3.0",
+    "jest-preset-angular": "16.0.0",
+    "jest-util": "30.3.0",
     "nx": "22.6.0",
     "openapi-typescript": "^6.7.0",
     "postcss": "^8.4.5",
     "tailwindcss": "^3.4.0",
     "ts-jest": "29.4.6",
     "ts-node": "^10.9.1",
-    "typescript": "~5.9.3",
-    "jest-util": "30.3.0"
+    "typescript": "~5.9.3"
   }
 }

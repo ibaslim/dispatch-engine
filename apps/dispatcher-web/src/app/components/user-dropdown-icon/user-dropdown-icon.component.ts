@@ -1,11 +1,12 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { ButtonComponent } from '../button/button.component';
 
 @Component({
-  selector: 'app-user-dropdown-icon',
-  imports: [CommonModule],
-  templateUrl: './user-dropdown-icon.component.html',
-  styleUrl: './user-dropdown-icon.component.css'
+  selector: 'user-dropdown-icon',
+  standalone: true,
+  imports: [CommonModule, ButtonComponent],
+  templateUrl: './user-dropdown-icon.component.html'
 })
 export class UserDropdownIconComponent {
   @Input() userName: string = 'User';

@@ -1,31 +1,151 @@
-<div class="relative z-50">
-    <!-- Avatar Button -->
-    <app-button variant="icon" (onClick)="toggleDropdown()"
-        extraClasses="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-700 transition duration-200"
-        [ariaLabel]="'User menu'">
-
-        <div class="w-8 h-8 bg-teal-500 rounded-full flex items-center justify-center font-semibold text-white text-xs">
-            {{ initials }}
-        </div>
+<div class="relative inline-flex">
+    <!-- Profile Button -->
+    <app-button variant="icon" ariaLabel="User menu"
+        [extraClasses]="'w-10 h-10 p-0 rounded-full bg-[#32C896] flex items-center justify-center'"
+        (onClick)="toggleDropdown()">
+        <span class="font-semibold text-white text-xs">{{ initials }}</span>
     </app-button>
 
+    <!-- Small black circle with down arrow (bottom-right) -->
+    <span class="absolute -bottom-1 -right-1 w-4 h-4 bg-black rounded-full flex items-center justify-center">
+        <svg class="w-2.5 h-2.5 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"
+            aria-hidden="true">
+            <path
+                d="M216.49,104.49l-80,80a12,12,0,0,1-17,0l-80-80a12,12,0,1,1,17-17L128,159l71.51-71.52a12,12,0,0,1,17,17Z" />
+        </svg>
+    </span>
+
     <!-- Dropdown Menu -->
-    <div *ngIf="isOpen" class="absolute right-0 mt-2 w-48 bg-white text-gray-900 rounded-lg shadow-lg py-2 z-[60]">
-        <div class="px-4 py-2 border-b border-gray-200">
-            <p class="font-semibold text-sm">{{ userName }}</p>
-            <p class="text-xs text-gray-500">{{ userEmail }}</p>
+    <div *ngIf="isOpen" (click)="$event.stopPropagation()"
+        class="absolute right-0 mt-12 w-72 bg-[#141414] text-white rounded-lg shadow-2xl border border-[#242424] z-50">
+        <!-- User Info Header -->
+        <div class="flex items-center gap-3 px-4 py-3">
+            <div class="w-9 h-9 rounded-full bg-[#32C896] flex items-center justify-center text-xs font-semibold">
+                {{ initials }}
+            </div>
+            <div class="flex-1">
+                <p class="font-semibold text-sm">{{ userName }}</p>
+                <p class="text-xs text-gray-400">{{ userName }}</p>
+            </div>
+            <!-- Check icon -->
+            <div class="w-5 h-5 rounded-full bg-[#32C896] flex items-center justify-center">
+                <svg class="w-3 h-3 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+                    fill="currentColor" aria-hidden="true">
+                    <path
+                        d="M229.66,98.34l-96,96a8,8,0,0,1-11.32,0l-48-48a8,8,0,0,1,11.32-11.32L128,177.37l90.34-90.35a8,8,0,0,1,11.32,11.32Z" />
+                </svg>
+            </div>
         </div>
 
-        <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-100 transition duration-200">Profile</a>
-        <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-100 transition duration-200">Settings</a>
-        <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-100 transition duration-200">Help & Support</a>
+        <!-- White divider between header and primary -->
+        <hr class="border-white/20" />
 
-        <hr class="my-2" />
+        <!-- Primary Menu Items -->
+        <div class="py-2">
+            <a href="#" (click)="$event.preventDefault()"
+                class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-[#3C3D37] transition">
+                <!-- user icon -->
+                <svg class="w-4 h-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+                    fill="currentColor">
+                    <path
+                        d="M128,136a56,56,0,1,0-56-56A56.06,56.06,0,0,0,128,136Zm0-96a40,40,0,1,1-40,40A40,40,0,0,1,128,40Zm0,112c-44.11,0-80,28.65-80,64a8,8,0,0,0,16,0c0-26.47,28.77-48,64-48s64,21.53,64,48a8,8,0,0,0,16,0C208,180.65,172.11,152,128,152Z" />
+                </svg>
+                My Account
+            </a>
 
-        <!-- Sign Out Button -->
-        <app-button variant="icon" label="Sign out" (onClick)="handleLogout()"
-            extraClasses="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 transition duration-200 justify-start">
-        </app-button>
+            <a href="#" (click)="$event.preventDefault()"
+                class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-[#3C3D37] transition">
+                <!-- settings icon -->
+                <svg class="w-4 h-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+                    fill="currentColor">
+                    <path
+                        d="M232,136V120l-22.44-7.48a80.2,80.2,0,0,0-5.83-14l10.86-21.7L203.32,64.4l-21.7,10.86a80.2,80.2,0,0,0-14-5.83L160,48H96L88.41,69.43a80.2,80.2,0,0,0-14,5.83L52.72,64.4,41.41,75.71l10.86,21.7a80.2,80.2,0,0,0-5.83,14L24,120v16l22.44,7.48a80.2,80.2,0,0,0,5.83,14L41.41,179.29,52.72,190.6l21.7-10.86a80.2,80.2,0,0,0,14,5.83L96,208h64l7.59-21.43a80.2,80.2,0,0,0,14-5.83l21.7,10.86,11.31-11.31-10.86-21.7a80.2,80.2,0,0,0,5.83-14ZM128,168a40,40,0,1,1,40-40A40,40,0,0,1,128,168Z" />
+                </svg>
+                Settings
+            </a>
+
+            <a href="#" (click)="$event.preventDefault()"
+                class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-[#3C3D37] transition">
+                <!-- form icon -->
+                <svg class="w-4 h-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+                    fill="currentColor">
+                    <path
+                        d="M200,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V40A16,16,0,0,0,200,24Zm0,192H56V40H200ZM80,80h96a8,8,0,0,1,0,16H80a8,8,0,0,1,0-16Zm0,40h96a8,8,0,0,1,0,16H80a8,8,0,0,1,0-16Zm0,40h56a8,8,0,0,1,0,16H80a8,8,0,0,1,0-16Z" />
+                </svg>
+                Online Order Forms
+            </a>
+
+            <!-- Log Out (works) -->
+            <app-button type="button" variant="ghost" ariaLabel="Log out" label="Log Out"
+                [leadingIcon]="'M120,216a8,8,0,0,1-8,8H48a16,16,0,0,1-16-16V48A16,16,0,0,1,48,32h64a8,8,0,0,1,0,16H48V208h64A8,8,0,0,1,120,216Zm109.66-93.66-40-40a8,8,0,0,0-11.32,11.32L204.69,120H112a8,8,0,0,0,0,16h92.69l-26.35,26.34a8,8,0,0,0,11.32,11.32l40-40A8,8,0,0,0,229.66,122.34Z'"
+                [leadingIconClass]="'w-4 h-4 text-gray-300'"
+                [extraClasses]="'w-full flex items-center gap-3 px-4 py-2 text-sm text-white hover:bg-[#3C3D37] transition text-left justify-start'"
+                (onClick)="handleLogout(); $event.stopPropagation()"></app-button>
+        </div>
+
+        <!-- White divider between primary and secondary -->
+        <hr class="border-white/20" />
+
+        <!-- Secondary Menu Items -->
+        <div class="py-2">
+            <a href="#" (click)="$event.preventDefault()"
+                class="flex items-center justify-between px-4 py-2 text-sm hover:bg-[#3C3D37] transition">
+                <span class="flex items-center gap-3">
+                    <!-- language icon -->
+                    <svg class="w-4 h-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+                        fill="currentColor">
+                        <path
+                            d="M214.26,199.31l-56-160A8,8,0,0,0,150.78,32H105.22a8,8,0,0,0-7.54,5.31l-56,160a8,8,0,1,0,15.08,5.3L69.6,168h116.8l12.84,36.61a8,8,0,0,0,15.08-5.3ZM75.2,152,100.8,80h54.4l25.6,72Z" />
+                    </svg>
+                    Language: English
+                </span>
+                <!-- chevron -->
+                <svg class="w-4 h-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+                    fill="currentColor">
+                    <path d="M96,48l80,80-80,80a8,8,0,0,1-11.31-11.32L153.37,128,84.69,59.31A8,8,0,0,1,96,48Z" />
+                </svg>
+            </a>
+
+            <a href="#" (click)="$event.preventDefault()"
+                class="flex items-center justify-between px-4 py-2 text-sm hover:bg-[#3C3D37] transition">
+                <span class="flex items-center gap-3">
+                    <!-- moon icon -->
+                    <svg class="w-4 h-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+                        fill="currentColor">
+                        <path
+                            d="M236.37,139.4A96.07,96.07,0,0,1,116.6,19.63a8,8,0,0,0-9.56,9.56A96.07,96.07,0,0,0,227.81,149a8,8,0,0,0,9.56-9.56ZM128,200a80,80,0,0,1-61.2-132.26A112.06,112.06,0,0,0,188.26,189.2,79.5,79.5,0,0,1,128,200Z" />
+                    </svg>
+                    Display: Dark
+                </span>
+                <!-- chevron -->
+                <svg class="w-4 h-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+                    fill="currentColor">
+                    <path d="M96,48l80,80-80,80a8,8,0,0,1-11.31-11.32L153.37,128,84.69,59.31A8,8,0,0,1,96,48Z" />
+                </svg>
+            </a>
+
+            <a href="#" (click)="$event.preventDefault()"
+                class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-[#3C3D37] transition">
+                <!-- gift icon -->
+                <svg class="w-4 h-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+                    fill="currentColor">
+                    <path
+                        d="M208,80H176a32,32,0,1,0-48-28.32A32,32,0,1,0,80,80H48A16,16,0,0,0,32,96v24a16,16,0,0,0,16,16h8v80a16,16,0,0,0,16,16h112a16,16,0,0,0,16-16V136h8a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80Zm-88-8a16,16,0,1,1,16-16A16,16,0,0,1,120,72Zm48-32a16,16,0,1,1-16,16A16,16,0,0,1,168,40ZM48,96H208v24H48Zm24,120V136h48v80Zm64,0V136h48v80Z" />
+                </svg>
+                Refer & Earn
+            </a>
+
+            <a href="#" (click)="$event.preventDefault()"
+                class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-[#3C3D37] transition">
+                <!-- download icon -->
+                <svg class="w-4 h-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+                    fill="currentColor">
+                    <path
+                        d="M128,16a8,8,0,0,1,8,8V144l35.31-35.31a8,8,0,0,1,11.32,11.32l-48,48a8,8,0,0,1-11.32,0l-48-48a8,8,0,0,1,11.32-11.32L120,144V24A8,8,0,0,1,128,16Zm88,160a8,8,0,0,1,8,8v24a16,16,0,0,1-16,16H48a16,16,0,0,1-16-16V184a8,8,0,0,1,16,0v24H208V184A8,8,0,0,1,216,176Z" />
+                </svg>
+                Download the app
+            </a>
+        </div>
     </div>
 </div>
 
