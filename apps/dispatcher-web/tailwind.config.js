@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: 'class',
   content: [
     './apps/dispatcher-web/src/**/*.{html,ts}',
   ],

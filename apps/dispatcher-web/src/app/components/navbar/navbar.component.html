@@ -92,6 +92,11 @@
                     </div>
                 </div>
 
+                <!-- Theme Toggle Button -->
+                <app-button variant="icon" [icon]="isDarkTheme ? sunIcon : moonIcon" (onClick)="toggleTheme()"
+                    [ariaLabel]="isDarkTheme ? 'Switch to light mode' : 'Switch to dark mode'">
+                </app-button>
+
                 <!-- Upgrade Button -->
                 <app-button variant="primary" label="Upgrade" (onClick)="upgradePlan()" extraClasses="hidden lg:block">
                 </app-button>

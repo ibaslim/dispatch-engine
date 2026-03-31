@@ -17,8 +17,8 @@ export class NavbarComponent implements OnInit, OnDestroy {
 
   isMobileMenuOpen = false;
   isHelpOpen = false;
+  isDarkTheme = false;
 
-  // NEW: notification toggle
   isNotificationsOn = true;
   private notificationAudio = new Audio('assets/sounds/notify.mp3');
 
@@ -38,9 +38,12 @@ export class NavbarComponent implements OnInit, OnDestroy {
   notificationIconOn = "M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9";
   notificationIconOff = "M13.73 21a2 2 0 01-3.46 0M18.63 13A17.888 17.888 0 0118 8a6 6 0 00-9.33-5M2 2l20 20M4.27 4.27A2 2 0 006 6v4.159c0 .538-.214 1.055-.595 1.436L4 13h5m3 0h5";
   menuIcon = "M4 6h16M4 12h16M4 18h16";
+  moonIcon = "M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z";
+  sunIcon = "M12 3v2m0 14v2m9-9h-2M5 12H3m15.364-6.364l-1.414 1.414M7.05 16.95l-1.414 1.414m0-11.314L7.05 7.05m11.314 11.314l-1.414-1.414M12 8a4 4 0 100 8 4 4 0 000-8z";
 
   ngOnInit(): void {
     this.auth.loadCurrentUser();
+    this.isDarkTheme = document.documentElement.classList.contains('dark');
   }
 
   ngOnDestroy(): void {
@@ -77,6 +80,16 @@ export class NavbarComponent implements OnInit, OnDestroy {
       this.notificationAudio.play().catch(() => {
         // ignore autoplay errors
       });
+    }
+  }
+
+  toggleTheme(): void {
+    this.isDarkTheme = !this.isDarkTheme;
+
+    if (this.isDarkTheme) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
     }
   }
 

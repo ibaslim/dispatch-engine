@@ -52,4 +52,8 @@ export class ButtonComponent {
   isIconButton(): boolean {
     return this.variant === 'icon';
   }
+
+  isFilledIcon(): boolean {
+    return this.icon.startsWith('M228') || this.icon.startsWith('M120');
+  }
 }

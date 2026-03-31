@@ -2,9 +2,16 @@
     [attr.aria-label]="ariaLabel">
     <!-- Icon Button -->
     <ng-container *ngIf="isIconButton() && icon">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path [attr.d]="icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+        <svg *ngIf="isFilledIcon(); else strokeIcon" class="w-5 h-5 text-gray-300" xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 256 256" fill="currentColor">
+            <path [attr.d]="icon"></path>
         </svg>
+
+        <ng-template #strokeIcon>
+            <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path [attr.d]="icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+            </svg>
+        </ng-template>
     </ng-container>
 
     <!-- Icon button with custom content -->
