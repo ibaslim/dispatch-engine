@@ -1,0 +1,45 @@
+<app-page title=""
+    containerClass="w-full px-4 py-6 sm:px-6 lg:px-8 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]"
+    contentClass="w-full h-[calc(100vh-6rem)] flex flex-col gap-3">
+    <!-- Header row aligned to columns -->
+    <div
+        class="grid grid-cols-1 lg:grid-cols-[280px_1fr_380px] text-sm font-medium text-gray-700 dark:text-gray-300 px-2">
+        <span>Assigned orders by driver</span>
+        <span></span>
+        <span class="text-left">New Orders</span>
+    </div>
+
+    <!-- Split layout (full height) -->
+    <div
+        class="grid grid-cols-1 lg:grid-cols-[280px_1fr_380px] gap-0 border border-gray-200 dark:border-[#2a2d2a] rounded-md overflow-hidden flex-1">
+        <!-- Left column -->
+        <div
+            class="bg-gray-50 dark:bg-[#151a18] border-r border-gray-200 dark:border-[#2a2d2a] flex flex-col items-center justify-center p-6 text-center">
+            <div class="w-16 h-16 mb-4 bg-white dark:bg-[#1f2421] rounded-xl shadow">
+                <svg class="w-16 h-16 text-gray-300 dark:text-gray-500" viewBox="0 0 256 256" fill="currentColor">
+                    <path d="M32 64h192v16H32zm0 40h192v16H32zm0 40h128v16H32z"></path>
+                </svg>
+            </div>
+            <p class="text-sm text-gray-500 dark:text-gray-400">No driver available</p>
+        </div>
+
+        <!-- Middle column -->
+        <div class="bg-white dark:bg-[#1E201E]"></div>
+
+        <!-- Right column -->
+        <div
+            class="bg-white dark:bg-[#1E201E] border-l border-gray-200 dark:border-[#2a2d2a] flex flex-col items-center justify-center text-center p-6">
+            <div class="w-20 h-20 rounded-full bg-gray-100 dark:bg-[#16221d] flex items-center justify-center mb-4">
+                <svg class="w-10 h-10 text-gray-300 dark:text-gray-500" viewBox="0 0 256 256" fill="currentColor">
+                    <path
+                        d="M32 48h160a16 16 0 0116 16v96a16 16 0 01-16 16H32a16 16 0 01-16-16V64a16 16 0 0116-16zm16 32v16h128V80zm0 32v16h80v-16z">
+                    </path>
+                </svg>
+            </div>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">There is no order to dispatch</p>
+            <app-button variant="icon" ariaLabel="Add new order" [icon]="'M12 5v14M5 12h14'"
+                [extraClasses]="'w-13 h-13 rounded-md bg-[#2ecc8a] text-white hover:bg-[#27b87b] flex items-center justify-center'">
+            </app-button>
+        </div>
+    </div>
+</app-page>

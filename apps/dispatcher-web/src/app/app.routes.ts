@@ -4,7 +4,7 @@ import { authGuard } from './core/auth/auth.guard';
 export const routes: Routes = [
   {
     path: '',
-    redirectTo: '/dashboard',
+    redirectTo: '/orders',
     pathMatch: 'full',
   },
   {
@@ -20,11 +20,11 @@ export const routes: Routes = [
       ),
   },
   {
-    path: 'dashboard',
+    path: 'orders',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./pages/dashboard/dashboard.component').then(
-        (m) => m.DashboardComponent
+      import('./pages/orders/orders.component').then(
+        (m) => m.OrdersComponent
       ),
   },
   {
@@ -42,7 +42,23 @@ export const routes: Routes = [
       import('./pages/posts/posts.component').then((m) => m.PostsComponent),
   },
   {
+    path: 'dispatch',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/dispatch/dispatch.component').then(
+        (m) => m.DispatchComponent
+      ),
+  },
+  {
+    path: 'drivers',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/drivers/drivers.component').then(
+        (m) => m.DriversComponent
+      ),
+  },
+  {
     path: '**',
-    redirectTo: '/dashboard',
+    redirectTo: '/orders',
   },
 ];
