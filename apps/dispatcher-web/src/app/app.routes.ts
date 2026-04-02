@@ -28,20 +28,6 @@ export const routes: Routes = [
       ),
   },
   {
-    path: 'platform-admin',
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import('./pages/platform-admin/platform-admin.component').then(
-        (m) => m.PlatformAdminComponent
-      ),
-  },
-  {
-    path: 'posts',
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import('./pages/posts/posts.component').then((m) => m.PostsComponent),
-  },
-  {
     path: 'dispatch',
     canActivate: [authGuard],
     loadComponent: () =>
@@ -55,6 +41,22 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./pages/drivers/drivers.component').then(
         (m) => m.DriversComponent
+      ),
+  },
+  {
+    path: 'reviews',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/reviews/reviews.component').then(
+        (m) => m.ReviewsComponent
+      ),
+  },
+  {
+    path: 'reports',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/reports/reports.component').then(
+        (m) => m.ReportsComponent
       ),
   },
   {
