@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { TableColumn } from '../../models/table.model';
 import { CommonModule } from '@angular/common';
 
@@ -16,6 +16,13 @@ export class TableComponent {
 
   // optional custom column widths
   @Input() columnTemplate = '';
+
+  // action button click
+  @Output() actionClick = new EventEmitter<any>();
+
+  onActionClick(row: any): void {
+    this.actionClick.emit(row);
+  }
 
   getInitials(name: string): string {
     if (!name) return '';

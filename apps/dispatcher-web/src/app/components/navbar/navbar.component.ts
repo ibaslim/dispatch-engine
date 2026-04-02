@@ -28,8 +28,7 @@ export class NavbarComponent implements OnInit, OnDestroy {
     { label: 'Drivers', route: '/drivers' },
     { label: 'Map', route: '/map' },
     { label: 'Reviews', route: '/reviews' },
-    { label: 'Reports', route: '/reports' },
-    { label: 'Integrations', route: '/integrations' }
+    { label: 'Reports', route: '/reports' }
   ];
 
   appName = 'Dispatch Engine';
@@ -91,9 +90,5 @@ export class NavbarComponent implements OnInit, OnDestroy {
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }
-
-  upgradePlan(): void {
-    console.log('Upgrade clicked');
   }
 }

@@ -15,12 +15,12 @@
 
     <div
         class="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-[#2a2d2a] pb-2 mt-2">
-        <button *ngFor="let tab of tabs" class="pb-2" [class.text-gray-900]="activeTab === tab"
-            [class.dark:text-gray-100]="activeTab === tab" [class.border-b-2]="activeTab === tab"
-            [class.border-[#3ddc97]]="activeTab === tab">
-            {{ tab }}
-        </button>
+        <app-button *ngFor="let tab of tabs" variant="tab" [label]="tab" (onClick)="setActiveTab(tab)" [extraClasses]="activeTab === tab 
+            ? 'text-[#3ddc97] border-b-2 border-[#3ddc97]' 
+            : 'text-gray-500'">
+        </app-button>
     </div>
 
-    <app-table [columns]="columns" [rows]="rows"></app-table>
+    <app-table [columns]="columns" [rows]="rows" [emptyTitle]="emptyTitle" [emptySubtitle]="emptySubtitle">
+    </app-table>
 </app-page>
