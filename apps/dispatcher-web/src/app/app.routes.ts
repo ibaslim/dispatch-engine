@@ -68,6 +68,14 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'settings',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/setting/setting.component').then(
+        (m) => m.SettingComponent
+      ),
+  },
+  {
     path: '**',
     redirectTo: '/orders',
   },

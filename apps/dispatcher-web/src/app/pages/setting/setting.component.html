@@ -1,0 +1,120 @@
+<app-page title="Settings"
+    containerClass="w-full px-6 py-6 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]"
+    contentClass="w-full">
+
+    <div class="flex gap-8">
+        <!-- Sidebar -->
+        <aside class="w-72 border-r border-gray-200 dark:border-[#2a2d2a] pr-4">
+            <nav class="space-y-1 text-sm">
+                <button *ngFor="let item of navItems" (click)="activeItem = item.key"
+                    class="w-full flex items-center justify-between px-3 py-2 rounded-md transition" [ngClass]="activeItem === item.key
+          ? 'bg-emerald-100 text-gray-900'
+          : 'text-gray-400 hover:text-gray-200'">
+                    <span class="flex items-center gap-2">
+                        <i class="ph" [ngClass]="item.icon"></i>
+                        {{ item.label }}
+                    </span>
+                    <span *ngIf="item.badge"
+                        class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500 text-black font-medium">
+                        {{ item.badge }}
+                    </span>
+                </button>
+            </nav>
+        </aside>
+
+        <!-- Content -->
+        <main class="flex-1">
+            <h1 class="text-2xl font-semibold mb-6">Business settings</h1>
+
+            <!-- Business details -->
+            <section class="border-b border-gray-200 dark:border-[#2a2d2a] pb-8 mb-8">
+                <h3 class="text-lg font-semibold">Business details</h3>
+                <p class="text-xs text-gray-500 mb-6">Set your business details</p>
+
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-gray-500">Business name</p>
+                            <p class="text-sm">Central Courier Services</p>
+                        </div>
+                        <button
+                            class="p-2 rounded-md border border-gray-300 dark:border-[#2a2d2a] hover:bg-gray-100 dark:hover:bg-[#2a2d2a]">
+                            <i class="ph ph-pencil-simple text-sm"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-gray-500">Business logo</p>
+                            <img src="assets/logo.png" class="w-14 h-14 rounded-md mt-2" alt="logo">
+                        </div>
+                        <button
+                            class="p-2 rounded-md border border-gray-300 dark:border-[#2a2d2a] hover:bg-gray-100 dark:hover:bg-[#2a2d2a]">
+                            <i class="ph ph-pencil-simple text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Business type details -->
+            <section class="border-b border-gray-200 dark:border-[#2a2d2a] pb-8 mb-8">
+                <h3 class="text-lg font-semibold">Business type details</h3>
+                <p class="text-xs text-gray-500 mb-6">Set your business type details</p>
+
+                <div class="space-y-4">
+                    <div>
+                        <p class="text-sm font-medium mb-2">Business type</p>
+                        <p class="text-xs text-gray-400 max-w-2xl">
+                            If you are a delivery only business like Pizza shop where pick up is always from the same
+                            place, please choose the business type delivery only. Otherwise keep it pick up and
+                            delivery.
+                        </p>
+                    </div>
+
+                    <div class="flex gap-3">
+                        <button
+                            class="flex items-center gap-2 px-4 py-3 rounded-lg border border-gray-300 dark:border-[#2a2d2a] text-sm">
+                            <i class="ph ph-storefront"></i>
+                            Merchant
+                        </button>
+                        <button
+                            class="flex items-center gap-2 px-4 py-3 rounded-lg border border-emerald-500 text-sm text-emerald-400">
+                            <i class="ph ph-truck"></i>
+                            Delivery company
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Service times -->
+            <section class="pb-8">
+                <h3 class="text-lg font-semibold">Service times</h3>
+                <p class="text-xs text-gray-500 mb-6">Set your service times</p>
+
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm">Maximum time allowed for delivery (on-demand)</p>
+                            <p class="text-xs text-gray-400 mt-1">180 Minutes</p>
+                        </div>
+                        <button
+                            class="p-2 rounded-md border border-gray-300 dark:border-[#2a2d2a] hover:bg-gray-100 dark:hover:bg-[#2a2d2a]">
+                            <i class="ph ph-pencil-simple text-sm"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm">Order preparation time</p>
+                            <p class="text-xs text-gray-400 mt-1">30 Minutes</p>
+                        </div>
+                        <button
+                            class="p-2 rounded-md border border-gray-300 dark:border-[#2a2d2a] hover:bg-gray-100 dark:hover:bg-[#2a2d2a]">
+                            <i class="ph ph-pencil-simple text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+</app-page>
