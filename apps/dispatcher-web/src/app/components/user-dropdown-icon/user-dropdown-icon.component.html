@@ -69,22 +69,51 @@
 
         <!-- Secondary Menu Items -->
         <div class="py-2">
-            <a href="#" (click)="$event.preventDefault()" class="flex items-center justify-between px-4 py-2 text-sm transition
-                       text-gray-800 hover:bg-gray-100
-                       dark:text-white dark:hover:bg-[#3C3D37]">
-                <span class="flex items-center gap-3">
+            <!-- Language row -->
+            <div class="relative">
+                <!-- Translate icon (left) -->
+                <span class="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none">
                     <i class="ph ph-translate text-base text-gray-500 dark:text-gray-300"></i>
-                    Language: English
                 </span>
-                <i class="ph ph-caret-right text-sm text-gray-400"></i>
-            </a>
 
-            <a href="#" (click)="$event.preventDefault()" class="flex items-center gap-3 px-4 py-2 text-sm transition
-                       text-gray-800 hover:bg-gray-100
-                       dark:text-white dark:hover:bg-[#3C3D37]">
-                <i class="ph ph-gift text-base text-gray-500 dark:text-gray-300"></i>
-                Refer & Earn
-            </a>
+                <app-button variant="ghost" ariaLabel="Language menu" [label]="'Language: ' + activeLanguage"
+                    [extraClasses]="'w-full flex items-center justify-between pl-10 pr-4 py-2 text-sm transition text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-[#3C3D37] text-left justify-start'"
+                    (onClick)="isLanguageOpen = true">
+                </app-button>
+
+                <!-- Caret right -->
+                <span class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <i class="ph ph-caret-right text-sm text-gray-400"></i>
+                </span>
+            </div>
+
+            <!-- Language Submenu -->
+            <div *ngIf="isLanguageOpen" class="absolute right-0 top-0 mt-0 w-72 rounded-lg shadow-2xl border z-50
+           bg-white text-gray-900 border-gray-200
+           dark:bg-[#141414] dark:text-white dark:border-[#242424]">
+
+                <!-- Header -->
+                <div class="flex items-center gap-2 px-4 py-3 text-sm font-medium">
+                    <app-button variant="icon" ariaLabel="Back"
+                        [extraClasses]="'w-7 h-7 p-0 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#3C3D37] flex items-center justify-center'"
+                        (onClick)="isLanguageOpen = false">
+                        <i class="ph ph-caret-left text-base"></i>
+                    </app-button>
+                    Choose your language
+                </div>
+
+                <hr class="border-gray-200 dark:border-white/20" />
+
+                <!-- Language List -->
+                <div class="py-2">
+                    <app-button *ngFor="let lang of languages" variant="ghost" [label]="lang"
+                        [leadingIcon]="lang === activeLanguage ? 'M229.66,98.34l-96,96a8,8,0,0,1-11.32,0l-48-48a8,8,0,0,1,11.32-11.32L128,177.37l90.34-90.35a8,8,0,0,1,11.32,11.32Z' : ''"
+                        [leadingIconClass]="'w-4 h-4 text-emerald-500'"
+                        [extraClasses]="'w-full flex items-center gap-3 px-4 py-2 text-sm transition text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-[#3C3D37] text-left justify-start' + (lang === activeLanguage ? ' bg-gray-100 dark:bg-[#2a2d2a]' : '')"
+                        (onClick)="setLanguage(lang)">
+                    </app-button>
+                </div>
+            </div>
 
             <a href="#" (click)="$event.preventDefault()" class="flex items-center gap-3 px-4 py-2 text-sm transition
                        text-gray-800 hover:bg-gray-100

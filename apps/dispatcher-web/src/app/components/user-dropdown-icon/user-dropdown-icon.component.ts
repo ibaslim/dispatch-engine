@@ -15,6 +15,26 @@ export class UserDropdownIconComponent {
   @Output() logout = new EventEmitter<void>();
 
   isOpen = false;
+  isLanguageOpen = false;
+
+  languages = [
+    'English',
+    'Español',
+    'Français',
+    'Italiano',
+    'Português',
+    'Türkçe',
+    'Русский',
+    'Deutsch',
+    'Română'
+  ];
+
+  activeLanguage = 'English';
+
+  setLanguage(lang: string) {
+    this.activeLanguage = lang;
+    this.isLanguageOpen = false;
+  }
 
   toggleDropdown(): void {
     this.isOpen = !this.isOpen;

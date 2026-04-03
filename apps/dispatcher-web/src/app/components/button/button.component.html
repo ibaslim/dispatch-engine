@@ -1,7 +1,7 @@
 <button (click)="onButtonClick()" [type]="type" [disabled]="disabled || loading" [class]="getButtonClasses()"
     [attr.aria-label]="ariaLabel">
     <!-- Icon Button -->
-    <ng-container *ngIf="isIconButton() && icon">
+    <ng-container *ngIf="isIconButton() && icon?.length">
         <svg *ngIf="isFilledIcon(); else strokeIcon" class="w-5 h-5 text-gray-700 dark:text-gray-200"
             xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor">
             <path [attr.d]="icon"></path>
@@ -15,7 +15,7 @@
     </ng-container>
 
     <!-- Icon button with custom content -->
-    <ng-container *ngIf="isIconButton() && !icon">
+    <ng-container *ngIf="isIconButton() && !icon?.length">
         <ng-content></ng-content>
     </ng-container>
 

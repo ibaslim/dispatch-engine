@@ -30,26 +30,21 @@
             <div class="flex items-center justify-between">
                 <p class="text-sm">Payment calculation delivery order form</p>
                 <div class="flex items-center gap-2">
-                    <button class="bg-[#0f7f5c] text-white hover:bg-[#0d6f51] px-4 py-2 rounded-md text-sm">
-                        Open Link
-                    </button>
+                    <app-button variant="ghost" ariaLabel="Open Link" label="Open Link"
+                        [extraClasses]="'bg-[#0f7f5c] text-white hover:bg-[#0d6f51] px-4 py-2 rounded-md text-sm'">
+                    </app-button>
 
-                    <button
-                        class="border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-4 py-2 rounded-md text-sm flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-[#2a2d2a]">
-                        <i class="ph ph-copy text-base"></i>
-                        Copy Link
-                    </button>
+                    <app-button variant="ghost" ariaLabel="Copy Link" label="Copy Link"
+                        [extraClasses]="'border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-4 py-2 rounded-md text-sm flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-[#2a2d2a]'">
+                    </app-button>
 
-                    <button
-                        class="border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-3 py-2 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-[#2a2d2a] flex items-center">
-                        <i class="ph ph-qr-code text-base"></i>
-                    </button>
+                    <app-button variant="ghost" ariaLabel="QR Code" label=""
+                        [extraClasses]="'border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-3 py-2 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-[#2a2d2a] flex items-center'">
+                    </app-button>
 
-                    <button
-                        class="border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-4 py-2 rounded-md text-sm flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-[#2a2d2a]">
-                        <i class="ph ph-share-network text-base"></i>
-                        Share
-                    </button>
+                    <app-button variant="ghost" ariaLabel="Share" label="Share"
+                        [extraClasses]="'border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-4 py-2 rounded-md text-sm flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-[#2a2d2a]'">
+                    </app-button>
                 </div>
             </div>
         </section>
@@ -63,26 +58,21 @@
             <div *ngFor="let item of section.items" class="flex items-center justify-between">
                 <p class="text-sm">{{ item.name }}</p>
                 <div class="flex items-center gap-2">
-                    <button class="bg-[#0f7f5c] text-white hover:bg-[#0d6f51] px-4 py-2 rounded-md text-sm">
-                        Open Link
-                    </button>
+                    <app-button variant="ghost" ariaLabel="Open Link" label="Open Link"
+                        [extraClasses]="'bg-[#0f7f5c] text-white hover:bg-[#0d6f51] px-4 py-2 rounded-md text-sm'">
+                    </app-button>
 
-                    <button
-                        class="border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-4 py-2 rounded-md text-sm flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-[#2a2d2a]">
-                        <i class="ph ph-copy text-base"></i>
-                        Copy Link
-                    </button>
+                    <app-button variant="ghost" ariaLabel="Copy Link" label="Copy Link"
+                        [extraClasses]="'border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-4 py-2 rounded-md text-sm flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-[#2a2d2a]'">
+                    </app-button>
 
-                    <button
-                        class="border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-3 py-2 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-[#2a2d2a] flex items-center">
-                        <i class="ph ph-qr-code text-base"></i>
-                    </button>
+                    <app-button variant="ghost" ariaLabel="QR Code" label=""
+                        [extraClasses]="'border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-3 py-2 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-[#2a2d2a] flex items-center'">
+                    </app-button>
 
-                    <button
-                        class="border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-4 py-2 rounded-md text-sm flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-[#2a2d2a]">
-                        <i class="ph ph-share-network text-base"></i>
-                        Share
-                    </button>
+                    <app-button variant="ghost" ariaLabel="Share" label="Share"
+                        [extraClasses]="'border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-4 py-2 rounded-md text-sm flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-[#2a2d2a]'">
+                    </app-button>
                 </div>
             </div>
 
