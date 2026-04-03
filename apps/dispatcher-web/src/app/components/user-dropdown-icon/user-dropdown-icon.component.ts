@@ -1,11 +1,12 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { ButtonComponent } from '../button/button.component';
+import { RouterModule } from '@angular/router';
 
 @Component({
   selector: 'user-dropdown-icon',
   standalone: true,
-  imports: [CommonModule, ButtonComponent],
+  imports: [CommonModule, ButtonComponent, RouterModule],
   templateUrl: './user-dropdown-icon.component.html'
 })
 export class UserDropdownIconComponent {

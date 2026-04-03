@@ -14,8 +14,7 @@ import { HistoryOrder } from '../../models/orders/history-orders.model';
 @Component({
   selector: 'app-orders',
   imports: [CommonModule, PageComponent, TableComponent, SearchBarComponent, ButtonComponent],
-  templateUrl: './orders.component.html',
-  styleUrl: './orders.component.css'
+  templateUrl: './orders.component.html'
 })
 export class OrdersComponent {
   tabs = ['Current', 'Scheduled', 'Completed', 'Incomplete', 'History'];

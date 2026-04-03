@@ -1,0 +1,223 @@
+<app-page title="Account Details"
+    containerClass="w-full px-6 py-6 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]"
+    contentClass="w-full">
+
+    <!-- Tabs -->
+    <div
+        class="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-[#2a2d2a] pb-2 mt-2 mb-8">
+        <app-button *ngFor="let tab of accountTabs" variant="tab" [label]="tab" (onClick)="setActiveTab(tab)"
+            [extraClasses]="activeTab === tab
+        ? 'text-[#3ddc97] border-b-2 border-[#3ddc97]'
+        : 'text-gray-500'">
+        </app-button>
+    </div>
+
+    <!-- Account Tab -->
+    <ng-container *ngIf="activeTab === 'Account'">
+        <!-- Profile Card -->
+        <div class="max-w-3xl mx-auto mb-12">
+            <h3 class="text-lg font-semibold mb-4">Profile</h3>
+            <div class="rounded-xl border border-gray-300 dark:border-[#2a2d2a] bg-white dark:bg-[#1E201E]">
+                <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
+                    <div>
+                        <p class="text-xs text-gray-500">Account owner name</p>
+                        <p class="text-sm">{{ profile.ownerName }}</p>
+                    </div>
+                    <app-button label="Change" variant="ghost"
+                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'">
+                    </app-button>
+                </div>
+
+                <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
+                    <div>
+                        <p class="text-xs text-gray-500">Phone number</p>
+                        <p class="text-sm">{{ profile.phone }}</p>
+                    </div>
+                    <app-button label="Change" variant="ghost"
+                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'">
+                    </app-button>
+                </div>
+
+                <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
+                    <div>
+                        <p class="text-xs text-gray-500">Email</p>
+                        <p class="text-sm">{{ profile.email }}</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
+                    <div>
+                        <p class="text-xs text-gray-500">API Key</p>
+                        <p class="text-sm">
+                            {{ showApiKey ? profile.apiKey : '********' }}
+                        </p>
+                    </div>
+                    <app-button [label]="showApiKey ? 'Hide' : 'Show'" variant="ghost"
+                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'"
+                        (onClick)="showApiKey = !showApiKey">
+                    </app-button>
+                </div>
+
+                <div class="flex items-center justify-between px-5 py-4">
+                    <div>
+                        <p class="text-xs text-gray-500">Password</p>
+                        <p class="text-sm">{{ profile.password }}</p>
+                    </div>
+                    <app-button label="Change" variant="ghost"
+                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'">
+                    </app-button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Billing Card -->
+        <div class="max-w-3xl mx-auto">
+            <h3 class="text-lg font-semibold mb-1">Billing contact details</h3>
+            <p class="text-xs text-gray-500 mb-4">Billing contact details</p>
+
+            <div class="rounded-xl border border-gray-300 dark:border-[#2a2d2a] bg-white dark:bg-[#1E201E]">
+                <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
+                    <div>
+                        <p class="text-xs text-gray-500">Company name</p>
+                        <p class="text-sm">{{ billing.companyName }}</p>
+                    </div>
+                    <app-button label="Change" variant="ghost"
+                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'">
+                    </app-button>
+                </div>
+
+                <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
+                    <div>
+                        <p class="text-xs text-gray-500">Email</p>
+                        <p class="text-sm">{{ billing.email }}</p>
+                    </div>
+                    <app-button label="Change" variant="ghost"
+                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'">
+                    </app-button>
+                </div>
+
+                <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
+                    <div>
+                        <p class="text-xs text-gray-500">Billing address</p>
+                        <p class="text-sm">{{ billing.address }}</p>
+                    </div>
+                    <app-button label="Change" variant="ghost"
+                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'">
+                    </app-button>
+                </div>
+
+                <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
+                    <div>
+                        <p class="text-xs text-gray-500">Contact Name</p>
+                        <p class="text-sm">{{ billing.contactName }}</p>
+                    </div>
+                    <app-button label="Change" variant="ghost"
+                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'">
+                    </app-button>
+                </div>
+
+                <div class="flex items-center justify-between px-5 py-4">
+                    <div>
+                        <p class="text-xs text-gray-500">Contact Phone</p>
+                        <p class="text-sm">{{ billing.contactPhone }}</p>
+                    </div>
+                    <app-button label="Change" variant="ghost"
+                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'">
+                    </app-button>
+                </div>
+            </div>
+        </div>
+    </ng-container>
+
+    <!-- Billing & Usage Tab -->
+    <ng-container *ngIf="activeTab === 'Billing & Usage'">
+        <div class="max-w-3xl mx-auto space-y-14">
+            <!-- Payment Method -->
+            <section class="space-y-6">
+                <div class="flex items-start justify-between gap-6">
+                    <div class="space-y-2">
+                        <h3 class="text-lg font-semibold">Payment Method</h3>
+                        <p class="text-xs text-gray-500">Pay with the method of payment you prefer</p>
+                    </div>
+                    <app-button label="Add payment method" variant="ghost"
+                        [extraClasses]="'border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2.5 rounded-md text-xs flex items-center gap-2'">
+                        <i class="ph ph-plus text-sm"></i>
+                    </app-button>
+                </div>
+
+                <div
+                    class="border border-gray-300 dark:border-[#2a2d2a] rounded-lg px-5 py-4 text-sm text-gray-600 dark:text-gray-300 bg-white dark:bg-[#1E201E] flex items-center gap-3">
+                    <i class="ph ph-info text-base"></i>
+                    No payment method have been added
+                </div>
+            </section>
+
+            <!-- Buy Credits -->
+            <section class="space-y-6">
+                <div class="flex items-start justify-between gap-6">
+                    <div class="space-y-2">
+                        <h3 class="text-lg font-semibold">Buy Credits</h3>
+                        <p class="text-xs text-gray-500">Buy Shipday credits to use towards your charges</p>
+                    </div>
+                    <app-button label="Buy credits" variant="ghost"
+                        [extraClasses]="'border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2.5 rounded-md text-xs flex items-center gap-2'">
+                        <i class="ph ph-currency-circle-dollar text-sm"></i>
+                    </app-button>
+                </div>
+
+                <div
+                    class="border border-gray-300 dark:border-[#2a2d2a] rounded-lg px-5 py-4 bg-white dark:bg-[#1E201E]">
+                    <div class="flex items-center justify-between">
+                        <div class="space-y-2">
+                            <p class="text-xs text-gray-500">Credit Balance</p>
+                            <p class="text-lg font-semibold">$0</p>
+                        </div>
+                        <button
+                            class="text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white transition flex items-center gap-2">
+                            <i class="ph ph-clock-counter-clockwise text-sm"></i>
+                            Transaction History
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Usage -->
+            <section class="space-y-4">
+                <h3 class="text-lg font-semibold">Usage</h3>
+                <div
+                    class="border border-gray-300 dark:border-[#2a2d2a] rounded-lg overflow-hidden bg-white dark:bg-[#1E201E]">
+                    <div
+                        class="grid grid-cols-6 text-xs text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-[#2a2d2a] px-5 py-3.5">
+                        <div>Month</div>
+                        <div>Billed Orders</div>
+                        <div>Plan</div>
+                        <div>Cost (in USD)</div>
+                        <div>Invoice</div>
+                        <div>Report</div>
+                    </div>
+
+                    <div *ngFor="let row of usageRows"
+                        class="grid grid-cols-6 px-5 py-3.5 text-sm border-b border-gray-200 dark:border-[#2a2d2a] last:border-b-0">
+                        <div>{{ row.month }}</div>
+                        <div>{{ row.billedOrders }}</div>
+                        <div>{{ row.plan }}</div>
+                        <div>{{ row.cost }}</div>
+                        <div class="text-gray-500">
+                            <i *ngIf="row.invoice" class="ph ph-download-simple"></i>
+                        </div>
+                        <div class="text-gray-500">
+                            <i *ngIf="row.report" class="ph ph-file-text"></i>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Receipts -->
+            <section class="space-y-4">
+                <h3 class="text-lg font-semibold">Receipts</h3>
+                <div class="border border-gray-300 dark:border-[#2a2d2a] rounded-lg h-4 bg-white dark:bg-[#1E201E]">
+                </div>
+            </section>
+        </div>
+    </ng-container>
+</app-page>

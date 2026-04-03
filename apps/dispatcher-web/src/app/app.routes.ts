@@ -60,6 +60,14 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'my-account',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/my-account/my-account.component').then(
+        (m) => m.MyAccountComponent
+      ),
+  },
+  {
     path: '**',
     redirectTo: '/orders',
   },
