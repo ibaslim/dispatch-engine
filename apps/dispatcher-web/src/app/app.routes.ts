@@ -76,6 +76,14 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'online-order-forms',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/online-order-forms/online-order-forms.component').then(
+        (m) => m.OnlineOrderFormsComponent
+      ),
+  },
+  {
     path: '**',
     redirectTo: '/orders',
   },
