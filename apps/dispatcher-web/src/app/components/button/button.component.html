@@ -22,6 +22,7 @@
     <!-- Text Button with Loading -->
     <ng-container *ngIf="!isIconButton()">
         <span *ngIf="!loading" class="flex items-center gap-3">
+            <ng-content select="[data-icon]"></ng-content>
             <svg *ngIf="leadingIcon" [class]="leadingIconClass" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
                 fill="currentColor">
                 <path [attr.d]="leadingIcon"></path>

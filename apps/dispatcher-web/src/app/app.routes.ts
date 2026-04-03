@@ -84,6 +84,14 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'map',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/map/map.component').then(
+        (m) => m.MapComponent
+      ),
+  },
+  {
     path: '**',
     redirectTo: '/orders',
   },
