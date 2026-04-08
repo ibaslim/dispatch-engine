@@ -1,12 +1,14 @@
+import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { NewOrderFormValue } from '../../models/new-order-form/new-order-form.model';
-import { CommonModule } from '@angular/common';
 import { BaseInputComponent } from '../base-input/base-input.component';
+import { PaymentMethodComponent } from '../payment-method/payment-method.component';
 import { TextareaComponent } from '../textarea/textarea.component';
 
 @Component({
   selector: 'app-other-order-details',
-  imports: [CommonModule, BaseInputComponent, TextareaComponent],
+  standalone: true,
+  imports: [CommonModule, BaseInputComponent, TextareaComponent, PaymentMethodComponent],
   templateUrl: './other-order-details.component.html'
 })
 export class OtherOrderDetailsComponent {

@@ -15,6 +15,7 @@ export class BaseInputComponent {
   @Input() showLabel = true;
 
   @Input() type: 'text' | 'number' | 'email' | 'date' | 'time' = 'text';
+  @Input() hasSuffix = false;
 
   @Output() valueChange = new EventEmitter<string>();
 

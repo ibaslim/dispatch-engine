@@ -1,7 +1,6 @@
 <app-page title="Orders" titleClass="text-2xl font-semibold text-gray-900 dark:text-gray-100"
     containerClass="w-full px-4 py-8 sm:px-6 lg:px-8 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]"
     contentClass="w-full space-y-6">
-
     <div page-actions class="flex items-center gap-2">
         <app-search-bar></app-search-bar>
 
@@ -17,13 +16,12 @@
     <div
         class="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-[#2a2d2a] pb-2 mt-2">
         <app-button *ngFor="let tab of tabs" variant="tab" [label]="tab" (onClick)="setActiveTab(tab)" [extraClasses]="activeTab === tab
-          ? 'text-[#3ddc97] border-b-2 border-[#3ddc97]'
-          : 'text-gray-500'">
+        ? 'text-[#3ddc97] border-b-2 border-[#3ddc97]'
+        : 'text-gray-500'">
         </app-button>
     </div>
 
-    <app-table [columns]="columns" [rows]="rows" [emptyTitle]="emptyTitle" [emptySubtitle]="emptySubtitle">
-    </app-table>
+    <app-table [columns]="columns" [rows]="rows" [emptyTitle]="emptyTitle" [emptySubtitle]="emptySubtitle"></app-table>
 
     <!-- New Order Modal -->
     <app-popup [open]="isNewOrderOpen" title="New Order" (close)="closeNewOrder()">
@@ -38,5 +36,4 @@
                 [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-6 py-2 rounded-md text-sm'"></app-button>
         </div>
     </app-popup>
-
 </app-page>

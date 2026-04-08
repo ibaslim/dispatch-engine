@@ -32,13 +32,17 @@
 
             <div class="rounded-md border border-gray-200 dark:border-[#2a2d2a] px-4 py-3">
                 <p class="text-xs text-gray-500">Subtotal (C$):</p>
-                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ money(value.subtotal) }}</p>
+                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {{ money(value.subtotal) }}
+                </p>
             </div>
         </div>
 
         <div class="rounded-md border border-gray-200 dark:border-[#2a2d2a] px-4 py-3">
             <p class="text-xs text-gray-500">Tax (C$):</p>
-            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ money(value.taxAmount) }}</p>
+            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                {{ money(value.taxAmount) }}
+            </p>
         </div>
 
         <app-base-input label="Delivery Fees (C$)" placeholder="Enter delivery fees" [value]="value.deliveryFees"
@@ -52,13 +56,16 @@
 
         <div class="rounded-md border border-gray-200 dark:border-[#2a2d2a] px-4 py-3">
             <p class="text-xs text-gray-500">Total (C$):</p>
-            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ money(value.total) }}</p>
+            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                {{ money(value.total) }}
+            </p>
         </div>
 
         <app-textarea label="Delivery Instruction" placeholder="Enter delivery instructions"
             [value]="value.instructions" (valueChange)="patch({ instructions: $event })"></app-textarea>
 
-        <app-base-input label="Payment Method" placeholder="" [value]="value.paymentMethod"
-            (valueChange)="patch({ paymentMethod: $event })"></app-base-input>
+        <!-- UPDATED: use reusable payment method component (dropdown + credit card fields) -->
+        <app-payment-method [required]="true" [value]="value.payment"
+            (valueChange)="patch({ payment: $event })"></app-payment-method>
     </div>
 </section>

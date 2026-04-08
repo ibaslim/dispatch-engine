@@ -54,18 +54,17 @@ export class NewOrderFormComponent {
         itemName: '',
         itemPrice: 0,
         itemQty: 0,
-
         taxRate: 0,
         deliveryFees: 0,
         deliveryTips: 0,
         discount: 0,
-
         subtotal: 0,
         taxAmount: 0,
         total: 0,
-
         instructions: '',
-        paymentMethod: ''
+        payment: {
+          method: 'cash_on_delivery'
+        }
       }
     };
   }
