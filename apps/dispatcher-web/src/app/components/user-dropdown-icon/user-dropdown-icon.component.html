@@ -1,0 +1,128 @@
+<div class="relative inline-flex">
+    <!-- Profile Button -->
+    <app-button variant="icon" ariaLabel="User menu"
+        [extraClasses]="'w-10 h-10 p-0 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white flex items-center justify-center transition'"
+        (onClick)="toggleDropdown()">
+        <span class="font-semibold text-white text-xs">{{ initials }}</span>
+    </app-button>
+
+    <!-- Small circle with down arrow -->
+    <span
+        class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center bg-gray-900 text-white dark:bg-black">
+        <i class="ph ph-caret-down text-[10px]"></i>
+    </span>
+
+    <!-- Dropdown Menu -->
+    <div *ngIf="isOpen" (click)="$event.stopPropagation()" class="absolute right-0 mt-12 w-72 rounded-lg shadow-2xl border z-50
+               bg-white text-gray-900 border-gray-200
+               dark:bg-[#141414] dark:text-white dark:border-[#242424]">
+
+        <!-- User Info Header -->
+        <div class="flex items-center gap-3 px-4 py-3">
+            <div
+                class="w-9 h-9 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-semibold">
+                {{ initials }}
+            </div>
+            <div class="flex-1">
+                <p class="font-semibold text-sm">{{ userName }}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ userName }}</p>
+            </div>
+            <div class="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center">
+                <i class="ph ph-check text-xs"></i>
+            </div>
+        </div>
+
+        <hr class="border-gray-200 dark:border-white/20" />
+
+        <!-- Primary Menu Items -->
+        <div class="py-2">
+            <a routerLink="/my-account" (click)="closeDropdown()" class="flex items-center gap-3 px-4 py-2 text-sm transition
+                       text-gray-800 hover:bg-gray-100
+                       dark:text-white dark:hover:bg-[#3C3D37]">
+                <i class="ph ph-user text-base text-gray-500 dark:text-gray-300"></i>
+                My Account
+            </a>
+
+            <a routerLink="/settings" (click)="closeDropdown()" class="flex items-center gap-3 px-4 py-2 text-sm transition
+                       text-gray-800 hover:bg-gray-100
+                       dark:text-white dark:hover:bg-[#3C3D37]">
+                <i class="ph ph-gear text-base text-gray-500 dark:text-gray-300"></i>
+                Settings
+            </a>
+
+            <a routerLink="/online-order-forms" (click)="closeDropdown()" class="flex items-center gap-3 px-4 py-2 text-sm transition
+                       text-gray-800 hover:bg-gray-100
+                       dark:text-white dark:hover:bg-[#3C3D37]">
+                <i class="ph ph-clipboard-text text-base text-gray-500 dark:text-gray-300"></i>
+                Online Order Forms
+            </a>
+
+            <app-button type="button" variant="ghost" ariaLabel="Log out" label="Log Out"
+                [leadingIcon]="'M120,216a8,8,0,0,1-8,8H48a16,16,0,0,1-16-16V48A16,16,0,0,1,48,32h64a8,8,0,0,1,0,16H48V208h64A8,8,0,0,1,120,216Zm109.66-93.66-40-40a8,8,0,0,0-11.32,11.32L204.69,120H112a8,8,0,0,0,0,16h92.69l-26.35,26.34a8,8,0,0,0,11.32,11.32l40-40A8,8,0,0,0,229.66,122.34Z'"
+                [leadingIconClass]="'w-4 h-4 text-gray-500 dark:text-gray-300'"
+                [extraClasses]="'w-full flex items-center gap-3 px-4 py-2 text-sm bg-transparent text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-[#3C3D37] transition text-left justify-start rounded-none appearance-none border-0 shadow-none focus:outline-none'"
+                (onClick)="handleLogout(); $event.stopPropagation()">
+            </app-button>
+        </div>
+
+        <hr class="border-gray-200 dark:border-white/20" />
+
+        <!-- Secondary Menu Items -->
+        <div class="py-2">
+            <!-- Language row -->
+            <div class="relative">
+                <!-- Translate icon (left) -->
+                <span class="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <i class="ph ph-translate text-base text-gray-500 dark:text-gray-300"></i>
+                </span>
+
+                <app-button variant="ghost" ariaLabel="Language menu" [label]="'Language: ' + activeLanguage"
+                    [extraClasses]="'w-full flex items-center justify-between pl-10 pr-4 py-2 text-sm transition text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-[#3C3D37] text-left justify-start'"
+                    (onClick)="isLanguageOpen = true">
+                </app-button>
+
+                <!-- Caret right -->
+                <span class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <i class="ph ph-caret-right text-sm text-gray-400"></i>
+                </span>
+            </div>
+
+            <!-- Language Submenu -->
+            <div *ngIf="isLanguageOpen" class="absolute right-0 top-0 mt-0 w-72 rounded-lg shadow-2xl border z-50
+           bg-white text-gray-900 border-gray-200
+           dark:bg-[#141414] dark:text-white dark:border-[#242424]">
+
+                <!-- Header -->
+                <div class="flex items-center gap-2 px-4 py-3 text-sm font-medium">
+                    <app-button variant="icon" ariaLabel="Back"
+                        [extraClasses]="'w-7 h-7 p-0 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#3C3D37] flex items-center justify-center'"
+                        (onClick)="isLanguageOpen = false">
+                        <i class="ph ph-caret-left text-base"></i>
+                    </app-button>
+                    Choose your language
+                </div>
+
+                <hr class="border-gray-200 dark:border-white/20" />
+
+                <!-- Language List -->
+                <div class="py-2">
+                    <app-button *ngFor="let lang of languages" variant="ghost" [label]="lang"
+                        [leadingIcon]="lang === activeLanguage ? 'M229.66,98.34l-96,96a8,8,0,0,1-11.32,0l-48-48a8,8,0,0,1,11.32-11.32L128,177.37l90.34-90.35a8,8,0,0,1,11.32,11.32Z' : ''"
+                        [leadingIconClass]="'w-4 h-4 text-emerald-500'"
+                        [extraClasses]="'w-full flex items-center gap-3 px-4 py-2 text-sm transition text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-[#3C3D37] text-left justify-start' + (lang === activeLanguage ? ' bg-gray-100 dark:bg-[#2a2d2a]' : '')"
+                        (onClick)="setLanguage(lang)">
+                    </app-button>
+                </div>
+            </div>
+
+            <a href="#" (click)="$event.preventDefault()" class="flex items-center gap-3 px-4 py-2 text-sm transition
+                       text-gray-800 hover:bg-gray-100
+                       dark:text-white dark:hover:bg-[#3C3D37]">
+                <i class="ph ph-download-simple text-base text-gray-500 dark:text-gray-300"></i>
+                Download the app
+            </a>
+        </div>
+    </div>
+</div>
+
+<div *ngIf="isOpen" (click)="closeDropdown()" class="fixed inset-0 z-40"></div>

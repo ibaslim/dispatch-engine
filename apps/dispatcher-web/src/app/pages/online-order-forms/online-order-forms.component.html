@@ -1,0 +1,82 @@
+<app-page
+    containerClass="w-full px-6 py-6 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]"
+    contentClass="w-full">
+
+    <div class="max-w-4xl mx-auto space-y-10">
+        <!-- Intro -->
+        <div class="space-y-2">
+            <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Online Order Forms</h1>
+            <p class="text-sm text-gray-600 dark:text-gray-400 max-w-2xl leading-6">
+                You can share these order form links with your customers to get orders.
+            </p>
+            <p class="text-sm text-gray-600 dark:text-gray-400 max-w-2xl leading-6">
+                Once the orders are submitted via these forms, you get email notifications and orders are automatically
+                inserted to your dispatch dashboard.
+            </p>
+        </div>
+
+        <!-- Highlighted form block -->
+        <section class="space-y-3">
+            <div class="flex items-center gap-2">
+                <h3 class="text-sm font-semibold">Simple delivery order form with payment calculation</h3>
+                <i class="ph ph-info text-xs text-gray-400"></i>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500 text-black font-medium">New</span>
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+                Please go to <span class="underline">Pricing and payout settings</span> to update payment calculation
+                related values
+            </p>
+
+            <div class="flex items-center justify-between">
+                <p class="text-sm">Payment calculation delivery order form</p>
+                <div class="flex items-center gap-2">
+                    <app-button variant="ghost" ariaLabel="Open Link" label="Open Link"
+                        [extraClasses]="'bg-[#0f7f5c] text-white hover:bg-[#0d6f51] px-4 py-2 rounded-md text-sm'">
+                    </app-button>
+
+                    <app-button variant="ghost" ariaLabel="Copy Link" label="Copy Link"
+                        [extraClasses]="'border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-4 py-2 rounded-md text-sm flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-[#2a2d2a]'">
+                    </app-button>
+
+                    <app-button variant="ghost" ariaLabel="QR Code" label=""
+                        [extraClasses]="'border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-3 py-2 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-[#2a2d2a] flex items-center'">
+                    </app-button>
+
+                    <app-button variant="ghost" ariaLabel="Share" label="Share"
+                        [extraClasses]="'border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-4 py-2 rounded-md text-sm flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-[#2a2d2a]'">
+                    </app-button>
+                </div>
+            </div>
+        </section>
+
+        <hr class="border-gray-200 dark:border-[#2a2d2a]" />
+
+        <!-- Sections -->
+        <section *ngFor="let section of sections" class="space-y-6">
+            <h3 class="text-sm font-semibold">{{ section.title }}</h3>
+
+            <div *ngFor="let item of section.items" class="flex items-center justify-between">
+                <p class="text-sm">{{ item.name }}</p>
+                <div class="flex items-center gap-2">
+                    <app-button variant="ghost" ariaLabel="Open Link" label="Open Link"
+                        [extraClasses]="'bg-[#0f7f5c] text-white hover:bg-[#0d6f51] px-4 py-2 rounded-md text-sm'">
+                    </app-button>
+
+                    <app-button variant="ghost" ariaLabel="Copy Link" label="Copy Link"
+                        [extraClasses]="'border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-4 py-2 rounded-md text-sm flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-[#2a2d2a]'">
+                    </app-button>
+
+                    <app-button variant="ghost" ariaLabel="QR Code" label=""
+                        [extraClasses]="'border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-3 py-2 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-[#2a2d2a] flex items-center'">
+                    </app-button>
+
+                    <app-button variant="ghost" ariaLabel="Share" label="Share"
+                        [extraClasses]="'border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 px-4 py-2 rounded-md text-sm flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-[#2a2d2a]'">
+                    </app-button>
+                </div>
+            </div>
+
+            <hr class="border-gray-200 dark:border-[#2a2d2a]" />
+        </section>
+    </div>
+</app-page>

@@ -1,0 +1,26 @@
+<app-page title="Orders" titleClass="text-2xl font-semibold text-gray-900 dark:text-gray-100"
+    containerClass="w-full px-4 py-8 sm:px-6 lg:px-8 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]"
+    contentClass="w-full space-y-6">
+    <div page-actions class="flex items-center gap-2">
+        <app-search-bar></app-search-bar>
+
+        <app-button variant="ghost" label="CSV upload"
+            [extraClasses]="'border border-gray-300 dark:border-grey-100 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-3 py-2 rounded-md text-sm'">
+        </app-button>
+
+        <app-button variant="primary" label="+ New order"
+            [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-3 py-2 rounded-md text-sm'">
+        </app-button>
+    </div>
+
+    <div
+        class="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-[#2a2d2a] pb-2 mt-2">
+        <app-button *ngFor="let tab of tabs" variant="tab" [label]="tab" (onClick)="setActiveTab(tab)" [extraClasses]="activeTab === tab 
+            ? 'text-[#3ddc97] border-b-2 border-[#3ddc97]' 
+            : 'text-gray-500'">
+        </app-button>
+    </div>
+
+    <app-table [columns]="columns" [rows]="rows" [emptyTitle]="emptyTitle" [emptySubtitle]="emptySubtitle">
+    </app-table>
+</app-page>

@@ -1,0 +1,11 @@
+<app-page title="Reports" titleClass="text-2xl font-semibold text-gray-900 dark:text-gray-100"
+    containerClass="w-full px-4 py-8 sm:px-6 lg:px-8 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]"
+    contentClass="w-full">
+
+    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <app-card *ngFor="let card of cards" [title]="card.title" [description]="card.description" [icon]="card.icon"
+            [active]="card.active">
+        </app-card>
+    </div>
+
+</app-page>

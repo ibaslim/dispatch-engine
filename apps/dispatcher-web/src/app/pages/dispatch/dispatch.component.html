@@ -1,0 +1,101 @@
+<app-page title=""
+    containerClass="w-full px-4 py-6 sm:px-6 lg:px-8 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]"
+    contentClass="w-full h-[calc(100vh-6rem)] flex flex-col gap-3">
+
+    <!-- Header row aligned to columns -->
+    <div
+        class="grid grid-cols-1 lg:grid-cols-[280px_1fr_380px] text-sm font-medium text-gray-700 dark:text-gray-300 px-2">
+        <span>Assigned orders by driver</span>
+        <span></span>
+        <span class="text-left">New Orders</span>
+    </div>
+
+    <!-- Split layout (full height) -->
+    <div
+        class="grid grid-cols-1 lg:grid-cols-[280px_1fr_380px] gap-0 border border-gray-200 dark:border-[#2a2d2a] rounded-md overflow-hidden flex-1">
+
+        <!-- Left column -->
+        <div
+            class="bg-gray-50 dark:bg-[#151a18] border-r border-gray-200 dark:border-[#2a2d2a] p-4 space-y-4 overflow-auto">
+            <div *ngFor="let driver of assignedDrivers"
+                class="rounded-lg border border-gray-200 dark:border-[#2a2d2a] p-3 bg-white dark:bg-[#1E201E]">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="font-semibold text-sm text-gray-900 dark:text-gray-100">{{ driver.name }}</span>
+                    <span class="text-xs text-emerald-500">{{ driver.status }}</span>
+                </div>
+                <div class="space-y-2">
+                    <div *ngFor="let order of driver.orders" class="text-xs text-gray-600 dark:text-gray-400">
+                        <div class="font-medium text-gray-800 dark:text-gray-200">{{ order.id }}</div>
+                        <div>{{ order.pickup }} → {{ order.dropoff }}</div>
+                        <div class="text-[11px]">{{ order.time }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Middle column -->
+        <div class="bg-white dark:bg-[#1E201E] p-6 overflow-auto">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Order {{ selectedOrder.id }}</h3>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Pick-up From</h4>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ selectedOrder.pickup.name }}</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ selectedOrder.pickup.phone }}</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ selectedOrder.pickup.address }}</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Pickup: {{ selectedOrder.pickup.time }}</p>
+                </div>
+
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Deliver To</h4>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ selectedOrder.delivery.name }}</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ selectedOrder.delivery.phone }}</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ selectedOrder.delivery.address }}</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Delivery: {{ selectedOrder.delivery.date }} • {{
+                        selectedOrder.delivery.time }}</p>
+                </div>
+            </div>
+
+            <div class="mt-6">
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Items</h4>
+                <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                    <div *ngFor="let item of selectedOrder.items" class="flex justify-between">
+                        <span>{{ item.name }} × {{ item.qty }}</span>
+                        <span>${{ item.price }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 grid md:grid-cols-2 gap-4 text-sm text-gray-600 dark:text-gray-400">
+                <div>Tax Rate: {{ selectedOrder.taxRate }}%</div>
+                <div>Delivery Fee: ${{ selectedOrder.deliveryFee }}</div>
+                <div>Tip: ${{ selectedOrder.tip }}</div>
+                <div>Discount: ${{ selectedOrder.discount }}</div>
+                <div>Payment: {{ selectedOrder.payment }}</div>
+            </div>
+
+            <p class="mt-4 text-sm text-gray-600 dark:text-gray-400">Instruction: {{ selectedOrder.instructions }}</p>
+        </div>
+
+        <!-- Right column -->
+        <div class="bg-white dark:bg-[#1E201E] border-l border-gray-200 dark:border-[#2a2d2a] p-4 overflow-auto">
+            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">New Orders</h4>
+            <div class="space-y-3">
+                <div *ngFor="let order of newOrders"
+                    class="rounded-lg border border-gray-200 dark:border-[#2a2d2a] p-3 bg-gray-50 dark:bg-[#151a18]">
+                    <div class="font-medium text-sm text-gray-900 dark:text-gray-100">{{ order.id }}</div>
+                    <div class="text-xs text-gray-600 dark:text-gray-400">{{ order.pickup }} → {{ order.dropoff }}</div>
+                    <div class="text-[11px] text-gray-500 dark:text-gray-400">ETA: {{ order.eta }} · {{ order.total }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 flex items-center justify-center">
+                <app-button variant="icon" ariaLabel="Add new order" [icon]="'M12 5v14M5 12h14'"
+                    [extraClasses]="'w-12 h-12 rounded-md bg-[#2ecc8a] text-white hover:bg-[#27b87b] flex items-center justify-center'">
+                </app-button>
+            </div>
+        </div>
+
+    </div>
+</app-page>

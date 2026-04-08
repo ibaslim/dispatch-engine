@@ -1,0 +1,17 @@
+<div class="flex items-center justify-between px-5 py-4" [class.border-b]="bordered" [class.border-gray-200]="bordered"
+    [class.dark:border-[#2a2d2a]]="bordered">
+
+    <div>
+        <p class="text-xs text-gray-500">{{ label }}</p>
+        <p class="text-sm">
+            <ng-container *ngIf="value; else projectedValue">{{ value }}</ng-container>
+            <ng-template #projectedValue>
+                <ng-content select="[value]"></ng-content>
+            </ng-template>
+        </p>
+    </div>
+
+    <app-button *ngIf="actionLabel" [label]="actionLabel" variant="ghost"
+        [extraClasses]="'text-sm dark:text-white dark:hover:bg-[#3C3D37] transition'" (onClick)="actionClick.emit()">
+    </app-button>
+</div>

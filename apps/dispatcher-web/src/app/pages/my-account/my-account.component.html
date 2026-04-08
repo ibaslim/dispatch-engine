@@ -1,0 +1,146 @@
+<app-page title="Account Details"
+    containerClass="w-full px-6 py-6 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]"
+    contentClass="w-full">
+
+    <!-- Tabs -->
+    <div
+        class="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-[#2a2d2a] pb-2 mt-2 mb-8">
+        <app-button *ngFor="let tab of accountTabs" variant="tab" [label]="tab" (onClick)="setActiveTab(tab)"
+            [extraClasses]="activeTab === tab
+        ? 'text-[#3ddc97] border-b-2 border-[#3ddc97]'
+        : 'text-gray-500'">
+        </app-button>
+    </div>
+
+    <!-- Account Tab -->
+    <ng-container *ngIf="activeTab === 'Account'">
+        <!-- Profile Card -->
+        <div class="max-w-3xl mx-auto mb-12">
+            <h3 class="text-lg font-semibold mb-4">Profile</h3>
+
+            <app-account-card-section>
+                <app-account-info-row label="Account owner name" [value]="profile.ownerName"
+                    actionLabel="Change"></app-account-info-row>
+                <app-account-info-row label="Phone number" [value]="profile.phone"
+                    actionLabel="Change"></app-account-info-row>
+                <app-account-info-row label="Email" [value]="profile.email"></app-account-info-row>
+
+                <app-account-info-row label="API Key" [value]="showApiKey ? profile.apiKey : '********'"
+                    [actionLabel]="showApiKey ? 'Hide' : 'Show'" (actionClick)="showApiKey = !showApiKey">
+                </app-account-info-row>
+
+                <app-account-info-row label="Password" [value]="profile.password" actionLabel="Change"
+                    [bordered]="false"></app-account-info-row>
+            </app-account-card-section>
+        </div>
+
+        <!-- Billing Card -->
+        <div class="max-w-3xl mx-auto">
+            <h3 class="text-lg font-semibold mb-1">Billing contact details</h3>
+            <p class="text-xs text-gray-500 mb-4">Billing contact details</p>
+
+            <app-account-card-section>
+                <app-account-info-row label="Company name" [value]="billing.companyName"
+                    actionLabel="Change"></app-account-info-row>
+                <app-account-info-row label="Email" [value]="billing.email" actionLabel="Change"></app-account-info-row>
+                <app-account-info-row label="Billing address" [value]="billing.address"
+                    actionLabel="Change"></app-account-info-row>
+                <app-account-info-row label="Contact Name" [value]="billing.contactName"
+                    actionLabel="Change"></app-account-info-row>
+                <app-account-info-row label="Contact Phone" [value]="billing.contactPhone" actionLabel="Change"
+                    [bordered]="false"></app-account-info-row>
+            </app-account-card-section>
+        </div>
+    </ng-container>
+
+    <!-- Billing & Usage Tab -->
+    <ng-container *ngIf="activeTab === 'Billing & Usage'">
+        <div class="max-w-3xl mx-auto space-y-14">
+            <!-- Payment Method -->
+            <section class="space-y-6">
+                <div class="flex items-start justify-between gap-6">
+                    <div class="space-y-2">
+                        <h3 class="text-lg font-semibold">Payment Method</h3>
+                        <p class="text-xs text-gray-500">Pay with the method of payment you prefer</p>
+                    </div>
+                    <app-button label="Add payment method" variant="ghost"
+                        [extraClasses]="'border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2.5 rounded-md text-xs flex items-center gap-2'">
+                        <i class="ph ph-plus text-sm"></i>
+                    </app-button>
+                </div>
+
+                <div
+                    class="border border-gray-300 dark:border-[#2a2d2a] rounded-lg px-5 py-4 text-sm text-gray-600 dark:text-gray-300 bg-white dark:bg-[#1E201E] flex items-center gap-3">
+                    <i class="ph ph-info text-base"></i>
+                    No payment method have been added
+                </div>
+            </section>
+
+            <!-- Buy Credits -->
+            <section class="space-y-6">
+                <div class="flex items-start justify-between gap-6">
+                    <div class="space-y-2">
+                        <h3 class="text-lg font-semibold">Buy Credits</h3>
+                        <p class="text-xs text-gray-500">Buy Shipday credits to use towards your charges</p>
+                    </div>
+                    <app-button label="Buy credits" variant="ghost"
+                        [extraClasses]="'border border-gray-300 dark:border-[#2a2d2a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2.5 rounded-md text-xs flex items-center gap-2'">
+                        <i class="ph ph-currency-circle-dollar text-sm"></i>
+                    </app-button>
+                </div>
+
+                <div
+                    class="border border-gray-300 dark:border-[#2a2d2a] rounded-lg px-5 py-4 bg-white dark:bg-[#1E201E]">
+                    <div class="flex items-center justify-between">
+                        <div class="space-y-2">
+                            <p class="text-xs text-gray-500">Credit Balance</p>
+                            <p class="text-lg font-semibold">$0</p>
+                        </div>
+                        <app-button label="Transaction History" variant="ghost"
+                            [extraClasses]="'text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white transition flex items-center gap-2'">
+                            <i class="ph ph-clock-counter-clockwise text-sm"></i>
+                        </app-button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Usage -->
+            <section class="space-y-4">
+                <h3 class="text-lg font-semibold">Usage</h3>
+                <div
+                    class="border border-gray-300 dark:border-[#2a2d2a] rounded-lg overflow-hidden bg-white dark:bg-[#1E201E]">
+                    <div
+                        class="grid grid-cols-6 text-xs text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-[#2a2d2a] px-5 py-3.5">
+                        <div>Month</div>
+                        <div>Billed Orders</div>
+                        <div>Plan</div>
+                        <div>Cost (in USD)</div>
+                        <div>Invoice</div>
+                        <div>Report</div>
+                    </div>
+
+                    <div *ngFor="let row of usageRows"
+                        class="grid grid-cols-6 px-5 py-3.5 text-sm border-b border-gray-200 dark:border-[#2a2d2a] last:border-b-0">
+                        <div>{{ row.month }}</div>
+                        <div>{{ row.billedOrders }}</div>
+                        <div>{{ row.plan }}</div>
+                        <div>{{ row.cost }}</div>
+                        <div class="text-gray-500">
+                            <i *ngIf="row.invoice" class="ph ph-download-simple"></i>
+                        </div>
+                        <div class="text-gray-500">
+                            <i *ngIf="row.report" class="ph ph-file-text"></i>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Receipts -->
+            <section class="space-y-4">
+                <h3 class="text-lg font-semibold">Receipts</h3>
+                <div class="border border-gray-300 dark:border-[#2a2d2a] rounded-lg h-4 bg-white dark:bg-[#1E201E]">
+                </div>
+            </section>
+        </div>
+    </ng-container>
+</app-page>
