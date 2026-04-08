@@ -17,57 +17,21 @@
         <!-- Profile Card -->
         <div class="max-w-3xl mx-auto mb-12">
             <h3 class="text-lg font-semibold mb-4">Profile</h3>
-            <div class="rounded-xl border border-gray-300 dark:border-[#2a2d2a] bg-white dark:bg-[#1E201E]">
-                <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
-                    <div>
-                        <p class="text-xs text-gray-500">Account owner name</p>
-                        <p class="text-sm">{{ profile.ownerName }}</p>
-                    </div>
-                    <app-button label="Change" variant="ghost"
-                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'">
-                    </app-button>
-                </div>
 
-                <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
-                    <div>
-                        <p class="text-xs text-gray-500">Phone number</p>
-                        <p class="text-sm">{{ profile.phone }}</p>
-                    </div>
-                    <app-button label="Change" variant="ghost"
-                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'">
-                    </app-button>
-                </div>
+            <app-account-card-section>
+                <app-account-info-row label="Account owner name" [value]="profile.ownerName"
+                    actionLabel="Change"></app-account-info-row>
+                <app-account-info-row label="Phone number" [value]="profile.phone"
+                    actionLabel="Change"></app-account-info-row>
+                <app-account-info-row label="Email" [value]="profile.email"></app-account-info-row>
 
-                <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
-                    <div>
-                        <p class="text-xs text-gray-500">Email</p>
-                        <p class="text-sm">{{ profile.email }}</p>
-                    </div>
-                </div>
+                <app-account-info-row label="API Key" [value]="showApiKey ? profile.apiKey : '********'"
+                    [actionLabel]="showApiKey ? 'Hide' : 'Show'" (actionClick)="showApiKey = !showApiKey">
+                </app-account-info-row>
 
-                <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
-                    <div>
-                        <p class="text-xs text-gray-500">API Key</p>
-                        <p class="text-sm">
-                            {{ showApiKey ? profile.apiKey : '********' }}
-                        </p>
-                    </div>
-                    <app-button [label]="showApiKey ? 'Hide' : 'Show'" variant="ghost"
-                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'"
-                        (onClick)="showApiKey = !showApiKey">
-                    </app-button>
-                </div>
-
-                <div class="flex items-center justify-between px-5 py-4">
-                    <div>
-                        <p class="text-xs text-gray-500">Password</p>
-                        <p class="text-sm">{{ profile.password }}</p>
-                    </div>
-                    <app-button label="Change" variant="ghost"
-                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'">
-                    </app-button>
-                </div>
-            </div>
+                <app-account-info-row label="Password" [value]="profile.password" actionLabel="Change"
+                    [bordered]="false"></app-account-info-row>
+            </app-account-card-section>
         </div>
 
         <!-- Billing Card -->
@@ -75,57 +39,17 @@
             <h3 class="text-lg font-semibold mb-1">Billing contact details</h3>
             <p class="text-xs text-gray-500 mb-4">Billing contact details</p>
 
-            <div class="rounded-xl border border-gray-300 dark:border-[#2a2d2a] bg-white dark:bg-[#1E201E]">
-                <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
-                    <div>
-                        <p class="text-xs text-gray-500">Company name</p>
-                        <p class="text-sm">{{ billing.companyName }}</p>
-                    </div>
-                    <app-button label="Change" variant="ghost"
-                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'">
-                    </app-button>
-                </div>
-
-                <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
-                    <div>
-                        <p class="text-xs text-gray-500">Email</p>
-                        <p class="text-sm">{{ billing.email }}</p>
-                    </div>
-                    <app-button label="Change" variant="ghost"
-                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'">
-                    </app-button>
-                </div>
-
-                <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
-                    <div>
-                        <p class="text-xs text-gray-500">Billing address</p>
-                        <p class="text-sm">{{ billing.address }}</p>
-                    </div>
-                    <app-button label="Change" variant="ghost"
-                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'">
-                    </app-button>
-                </div>
-
-                <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
-                    <div>
-                        <p class="text-xs text-gray-500">Contact Name</p>
-                        <p class="text-sm">{{ billing.contactName }}</p>
-                    </div>
-                    <app-button label="Change" variant="ghost"
-                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'">
-                    </app-button>
-                </div>
-
-                <div class="flex items-center justify-between px-5 py-4">
-                    <div>
-                        <p class="text-xs text-gray-500">Contact Phone</p>
-                        <p class="text-sm">{{ billing.contactPhone }}</p>
-                    </div>
-                    <app-button label="Change" variant="ghost"
-                        [extraClasses]="'text-emerald-400 text-sm dark:hover:bg-[#3C3D37] transition'">
-                    </app-button>
-                </div>
-            </div>
+            <app-account-card-section>
+                <app-account-info-row label="Company name" [value]="billing.companyName"
+                    actionLabel="Change"></app-account-info-row>
+                <app-account-info-row label="Email" [value]="billing.email" actionLabel="Change"></app-account-info-row>
+                <app-account-info-row label="Billing address" [value]="billing.address"
+                    actionLabel="Change"></app-account-info-row>
+                <app-account-info-row label="Contact Name" [value]="billing.contactName"
+                    actionLabel="Change"></app-account-info-row>
+                <app-account-info-row label="Contact Phone" [value]="billing.contactPhone" actionLabel="Change"
+                    [bordered]="false"></app-account-info-row>
+            </app-account-card-section>
         </div>
     </ng-container>
 
@@ -172,11 +96,10 @@
                             <p class="text-xs text-gray-500">Credit Balance</p>
                             <p class="text-lg font-semibold">$0</p>
                         </div>
-                        <button
-                            class="text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white transition flex items-center gap-2">
+                        <app-button label="Transaction History" variant="ghost"
+                            [extraClasses]="'text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white transition flex items-center gap-2'">
                             <i class="ph ph-clock-counter-clockwise text-sm"></i>
-                            Transaction History
-                        </button>
+                        </app-button>
                     </div>
                 </div>
             </section>

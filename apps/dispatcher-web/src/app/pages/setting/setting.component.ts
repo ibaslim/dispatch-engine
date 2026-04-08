@@ -1,10 +1,11 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { PageComponent } from '../../components/page/page.component';
+import { ButtonComponent } from '../../components/button/button.component';
 
 @Component({
   selector: 'app-setting',
-  imports: [CommonModule, PageComponent],
+  imports: [CommonModule, PageComponent, ButtonComponent],
   templateUrl: './setting.component.html'
 })
 export class SettingComponent {
@@ -23,4 +24,7 @@ export class SettingComponent {
     { key: 'location', label: 'Location', icon: 'ph-globe' },
     { key: 'agentflow', label: 'Shipday AgentFlow', icon: 'ph-gear', badge: 'New' },
   ];
+
+  editIconBtnClasses =
+    '!w-auto !h-auto p-2 rounded-md border border-gray-300 dark:border-[#2a2d2a] bg-transparent hover:bg-gray-100 dark:hover:bg-[#2a2d2a]';
 }

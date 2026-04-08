@@ -6,19 +6,25 @@
         <!-- Sidebar -->
         <aside class="w-72 border-r border-gray-200 dark:border-[#2a2d2a] pr-4">
             <nav class="space-y-1 text-sm">
-                <button *ngFor="let item of navItems" (click)="activeItem = item.key"
-                    class="w-full flex items-center justify-between px-3 py-2 rounded-md transition" [ngClass]="activeItem === item.key
-          ? 'bg-emerald-100 text-gray-900'
-          : 'text-gray-400 hover:text-gray-200'">
-                    <span class="flex items-center gap-2">
-                        <i class="ph" [ngClass]="item.icon"></i>
-                        {{ item.label }}
-                    </span>
-                    <span *ngIf="item.badge"
-                        class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500 text-black font-medium">
-                        {{ item.badge }}
-                    </span>
-                </button>
+                <app-button *ngFor="let item of navItems" variant="icon" type="button" (onClick)="activeItem = item.key"
+                    [ariaLabel]="item.label" [extraClasses]="
+    '!w-full !h-auto !p-0 bg-transparent ' +
+    (activeItem === item.key ? '' : '')
+  ">
+                    <div class="w-full flex items-center justify-between px-3 py-2 rounded-md transition" [ngClass]="activeItem === item.key
+      ? 'bg-emerald-100 text-gray-900'
+      : 'text-gray-400 hover:text-gray-200'">
+                        <span class="flex items-center gap-2">
+                            <i class="ph" [ngClass]="item.icon"></i>
+                            {{ item.label }}
+                        </span>
+
+                        <span *ngIf="item.badge"
+                            class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500 text-black font-medium">
+                            {{ item.badge }}
+                        </span>
+                    </div>
+                </app-button>
             </nav>
         </aside>
 
@@ -37,10 +43,9 @@
                             <p class="text-xs text-gray-500">Business name</p>
                             <p class="text-sm">Central Courier Services</p>
                         </div>
-                        <button
-                            class="p-2 rounded-md border border-gray-300 dark:border-[#2a2d2a] hover:bg-gray-100 dark:hover:bg-[#2a2d2a]">
-                            <i class="ph ph-pencil-simple text-sm"></i>
-                        </button>
+                        <app-button variant="icon" type="button" ariaLabel="Edit" [extraClasses]="editIconBtnClasses">
+                            <i class="ph ph-pencil-simple text-sm text-gray-700 dark:text-gray-200"></i>
+                        </app-button>
                     </div>
 
                     <div class="flex items-center justify-between">
@@ -48,10 +53,9 @@
                             <p class="text-xs text-gray-500">Business logo</p>
                             <img src="assets/logo.png" class="w-14 h-14 rounded-md mt-2" alt="logo">
                         </div>
-                        <button
-                            class="p-2 rounded-md border border-gray-300 dark:border-[#2a2d2a] hover:bg-gray-100 dark:hover:bg-[#2a2d2a]">
-                            <i class="ph ph-pencil-simple text-sm"></i>
-                        </button>
+                        <app-button variant="icon" type="button" ariaLabel="Edit" [extraClasses]="editIconBtnClasses">
+                            <i class="ph ph-pencil-simple text-sm text-gray-700 dark:text-gray-200"></i>
+                        </app-button>
                     </div>
                 </div>
             </section>
@@ -72,16 +76,14 @@
                     </div>
 
                     <div class="flex gap-3">
-                        <button
-                            class="flex items-center gap-2 px-4 py-3 rounded-lg border border-gray-300 dark:border-[#2a2d2a] text-sm">
-                            <i class="ph ph-storefront"></i>
-                            Merchant
-                        </button>
-                        <button
-                            class="flex items-center gap-2 px-4 py-3 rounded-lg border border-emerald-500 text-sm text-emerald-400">
-                            <i class="ph ph-truck"></i>
-                            Delivery company
-                        </button>
+                        <app-button variant="ghost" label="Merchant"
+                            [extraClasses]="'!flex items-center gap-2 !px-4 !py-3 !rounded-lg border border-gray-300 dark:border-[#2a2d2a] text-sm bg-transparent dark:text-gray-200 dark:hover:bg-[#2a2d2a]'">
+                            <i data-icon class="ph ph-storefront"></i>
+                        </app-button>
+                        <app-button variant="ghost" label="Delivery company"
+                            [extraClasses]="'!flex items-center gap-2 !px-4 !py-3 !rounded-lg border border-emerald-500 text-sm !text-emerald-400 bg-transparent hover:bg-gray-100 dark:hover:bg-[#2a2d2a]'">
+                            <i data-icon class="ph ph-truck"></i>
+                        </app-button>
                     </div>
                 </div>
             </section>
@@ -97,10 +99,9 @@
                             <p class="text-sm">Maximum time allowed for delivery (on-demand)</p>
                             <p class="text-xs text-gray-400 mt-1">180 Minutes</p>
                         </div>
-                        <button
-                            class="p-2 rounded-md border border-gray-300 dark:border-[#2a2d2a] hover:bg-gray-100 dark:hover:bg-[#2a2d2a]">
-                            <i class="ph ph-pencil-simple text-sm"></i>
-                        </button>
+                        <app-button variant="icon" type="button" ariaLabel="Edit" [extraClasses]="editIconBtnClasses">
+                            <i class="ph ph-pencil-simple text-sm text-gray-700 dark:text-gray-200"></i>
+                        </app-button>
                     </div>
 
                     <div class="flex items-center justify-between">
@@ -108,10 +109,9 @@
                             <p class="text-sm">Order preparation time</p>
                             <p class="text-xs text-gray-400 mt-1">30 Minutes</p>
                         </div>
-                        <button
-                            class="p-2 rounded-md border border-gray-300 dark:border-[#2a2d2a] hover:bg-gray-100 dark:hover:bg-[#2a2d2a]">
-                            <i class="ph ph-pencil-simple text-sm"></i>
-                        </button>
+                        <app-button variant="icon" type="button" ariaLabel="Edit" [extraClasses]="editIconBtnClasses">
+                            <i class="ph ph-pencil-simple text-sm text-gray-700 dark:text-gray-200"></i>
+                        </app-button>
                     </div>
                 </div>
             </section>

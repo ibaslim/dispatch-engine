@@ -4,11 +4,13 @@ import { ButtonComponent } from '../../components/button/button.component';
 import { PageComponent } from '../../components/page/page.component';
 import { BillingInfo, ProfileInfo } from '../../models/my-account/my-account.model';
 import { UsageRow } from '../../models/my-account/billing.model';
+import { AccountCardSectionComponent } from '../../components/account-card-section/account-card-section.component';
+import { AccountInfoRowComponent } from '../../components/account-info-row/account-info-row.component';
 
 @Component({
   selector: 'app-my-account',
   standalone: true,
-  imports: [CommonModule, ButtonComponent, PageComponent],
+  imports: [CommonModule, ButtonComponent, PageComponent, AccountCardSectionComponent, AccountInfoRowComponent],
   templateUrl: './my-account.component.html',
 })
 export class MyAccountComponent {
