@@ -1,0 +1,11 @@
+<label class="block w-full">
+    <div class="flex items-center gap-1 mb-1">
+        <span class="text-xs text-gray-500">{{ label }}</span>
+        <span *ngIf="required" class="text-xs text-red-500">*</span>
+    </div>
+
+    <textarea class="w-full px-3 py-2 rounded-md border border-gray-300 dark:border-[#2a2d2a]
+           bg-white dark:bg-[#1E201E] text-sm text-gray-900 dark:text-gray-100
+           placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3ddc97]/30" rows="3"
+        [placeholder]="placeholder" [value]="value" [disabled]="disabled" (input)="onInput($event)"></textarea>
+</label>

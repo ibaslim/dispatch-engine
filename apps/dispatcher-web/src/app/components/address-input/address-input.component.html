@@ -1,0 +1,21 @@
+<div class="w-full">
+    <div class="flex items-center gap-1 mb-1">
+        <span class="text-xs text-gray-500">{{ label }}</span>
+        <span *ngIf="required" class="text-xs text-red-500">*</span>
+    </div>
+
+    <div class="flex items-stretch gap-2">
+        <input class="flex-1 px-3 py-2 rounded-md border border-gray-300 dark:border-[#2a2d2a]
+             bg-white dark:bg-[#1E201E] text-sm text-gray-900 dark:text-gray-100
+             placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3ddc97]/30"
+            [placeholder]="placeholder" [value]="value" (input)="onInput($event)" />
+
+        <app-button variant="icon" type="button" ariaLabel="Pick on map" (onClick)="pinClick.emit()"
+            [extraClasses]="'!w-auto !h-auto !p-0 bg-transparent'">
+            <span class="px-3 rounded-md border border-gray-300 dark:border-[#2a2d2a]
+               hover:bg-gray-100 dark:hover:bg-[#2a2d2a] transition flex items-center">
+                <i class="ph ph-map-pin text-gray-700 dark:text-gray-200"></i>
+            </span>
+        </app-button>
+    </div>
+</div>

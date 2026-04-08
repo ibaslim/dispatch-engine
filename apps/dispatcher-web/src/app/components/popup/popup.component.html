@@ -1,0 +1,34 @@
+<div *ngIf="open" class="fixed inset-0 z-50">
+    <!-- Backdrop -->
+    <div class="absolute inset-0 bg-black/40" (click)="onBackdropClick()"></div>
+
+    <!-- Dialog -->
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+        <div class="w-full {{ widthClass }} rounded-xl bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100
+             border border-gray-200 dark:border-[#2a2d2a] shadow-xl overflow-hidden"
+            (click)="$event.stopPropagation()">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
+                <h2 class="text-xl font-semibold">{{ title }}</h2>
+
+                <app-button variant="icon" type="button" ariaLabel="Close" (onClick)="close.emit()"
+                    [extraClasses]="'!w-auto !h-auto !p-0 bg-transparent'">
+                    <span
+                        class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-[#2a2d2a] transition flex items-center justify-center">
+                        <i class="ph ph-x text-lg text-gray-700 dark:text-gray-200"></i>
+                    </span>
+                </app-button>
+            </div>
+
+            <!-- Body -->
+            <div class="p-6">
+                <ng-content></ng-content>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-4 border-t border-gray-200 dark:border-[#2a2d2a] bg-gray-50 dark:bg-[#171917]">
+                <ng-content select="[modal-footer]"></ng-content>
+            </div>
+        </div>
+    </div>
+</div>

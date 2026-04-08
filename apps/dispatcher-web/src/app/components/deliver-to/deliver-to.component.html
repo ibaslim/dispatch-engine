@@ -1,0 +1,25 @@
+<section>
+    <h3 class="text-sm font-semibold mb-4 text-gray-900 dark:text-gray-100">Deliver to:</h3>
+
+    <div class="space-y-4">
+        <app-base-input label="Name" placeholder="Enter customer name" [required]="true" [value]="value.name"
+            (valueChange)="patch({ name: $event })"></app-base-input>
+
+        <app-phone-input label="Phone No." [required]="true" [value]="value.phone"
+            (valueChange)="patch({ phone: $event })"></app-phone-input>
+
+        <app-base-input label="Email" type="email" placeholder="Enter an email" [value]="value.email"
+            (valueChange)="patch({ email: $event })"></app-base-input>
+
+        <app-address-input label="Address" placeholder="Enter a location" [required]="true" [value]="value.address"
+            (valueChange)="patch({ address: $event })" (pinClick)="pinClick.emit()"></app-address-input>
+
+        <div class="grid grid-cols-2 gap-3">
+            <app-base-input label="Delivery Date" type="date" [required]="true" [value]="value.deliveryDate"
+                (valueChange)="patch({ deliveryDate: $event })"></app-base-input>
+
+            <app-base-input label="Delivery Time" type="time" [required]="true" [value]="value.deliveryTime"
+                (valueChange)="patch({ deliveryTime: $event })"></app-base-input>
+        </div>
+    </div>
+</section>

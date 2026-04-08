@@ -5,21 +5,117 @@ import { TableComponent } from '../../components/table/table.component';
 import { SearchBarComponent } from '../../components/search-bar/search-bar.component';
 import { ButtonComponent } from '../../components/button/button.component';
 import { TableColumn } from '../../models/table.model';
+
 import { Order } from '../../models/orders/current-orders.model';
 import { ScheduledOrder } from '../../models/orders/scheduled-orders.model';
 import { CompletedOrder } from '../../models/orders/completed-orders.model';
 import { IncompleteOrder } from '../../models/orders/incomplete-orders.model';
 import { HistoryOrder } from '../../models/orders/history-orders.model';
 
+import { NewOrderFormComponent } from '../../components/new-order-form/new-order-form.component';
+import { NewOrderFormValue } from '../../models/new-order-form/new-order-form.model';
+import { PopupComponent } from '../../components/popup/popup.component';
+
 @Component({
   selector: 'app-orders',
-  imports: [CommonModule, PageComponent, TableComponent, SearchBarComponent, ButtonComponent],
+  standalone: true,
+  imports: [
+    CommonModule,
+    PageComponent,
+    TableComponent,
+    SearchBarComponent,
+    ButtonComponent,
+    PopupComponent,
+    NewOrderFormComponent
+  ],
   templateUrl: './orders.component.html'
 })
 export class OrdersComponent {
   tabs = ['Current', 'Scheduled', 'Completed', 'Incomplete', 'History'];
   activeTab = 'Current';
 
+  // =========================
+  // New Order modal state
+  // =========================
+  isNewOrderOpen = false;
+
+  newOrderValue: NewOrderFormValue = this.createDefaultNewOrder();
+
+  openNewOrder(): void {
+    // If you want a fresh form every time:
+    this.newOrderValue = this.createDefaultNewOrder();
+    this.isNewOrderOpen = true;
+  }
+
+  closeNewOrder(): void {
+    this.isNewOrderOpen = false;
+  }
+
+  saveNewOrder(): void {
+    // TODO: integrate backend API later
+    // This payload includes computed values: subtotal/taxAmount/total
+    console.log('Saving new order payload:', this.newOrderValue);
+
+    this.closeNewOrder();
+  }
+
+  // Optional: hooks from address pin clicks
+  onPickupPin(): void {
+    console.log('Pickup pin clicked');
+  }
+
+  onDeliveryPin(): void {
+    console.log('Delivery pin clicked');
+  }
+
+  private todayYYYYMMDD(): string {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  private createDefaultNewOrder(): NewOrderFormValue {
+    return {
+      orderNumber: '',
+      pickup: {
+        name: '',
+        phone: { countryCode: '+1', number: '' },
+        address: '',
+        pickupTime: ''
+      },
+      delivery: {
+        name: '',
+        phone: { countryCode: '+1', number: '' },
+        email: '',
+        address: '',
+        deliveryDate: this.todayYYYYMMDD(),
+        deliveryTime: ''
+      },
+      details: {
+        itemName: '',
+        itemPrice: 0,
+        itemQty: 0,
+
+        taxRate: 0,
+        deliveryFees: 0,
+        deliveryTips: 0,
+        discount: 0,
+
+        subtotal: 0,
+        taxAmount: 0,
+        total: 0,
+
+        instructions: '',
+        paymentMethod: ''
+      }
+    };
+  }
+
+  // =========================
+  // Tabs
+  // =========================
   setActiveTab(tab: string): void {
     this.activeTab = tab;
   }
@@ -90,7 +186,7 @@ export class OrdersComponent {
     { key: 'actions', label: '', sortable: false }
   ];
 
-  // History columns (from screenshot)
+  // History columns
   historyColumns: TableColumn[] = [
     { key: 'date', label: 'Date', sortable: true },
     { key: 'orderNo', label: 'Order No.', sortable: true },
