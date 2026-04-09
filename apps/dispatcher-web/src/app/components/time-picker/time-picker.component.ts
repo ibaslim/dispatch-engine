@@ -6,13 +6,13 @@ import { BaseInputComponent } from '../base-input/base-input.component';
 @Component({
   selector: 'app-time-picker',
   standalone: true,
-  imports: [CommonModule, ButtonComponent, BaseInputComponent],
+  imports: [CommonModule, BaseInputComponent],
   templateUrl: './time-picker.component.html'
 })
 export class TimePickerComponent {
   @Input() label = 'Time';
   @Input() required = false;
-
+  @Input() name = '';
   @Input() value = ''; // HH:mm
   @Output() valueChange = new EventEmitter<string>();
 }

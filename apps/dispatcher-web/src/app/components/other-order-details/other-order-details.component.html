@@ -1,12 +1,12 @@
-<section class="space-y-5">
+<section class="space-y-7">
     <div class="flex items-center gap-2">
-        <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Order Details</h3>
-        <span class="text-xs text-gray-400">(Optional)</span>
+        <h3 class="text-md font-semibold text-gray-900 dark:text-gray-100">Order Details</h3>
+        <span class="text-xs text-gray-400 dark:text-gray-300">(Optional)</span>
     </div>
 
-    <div class="space-y-5">
+    <div class="space-y-7">
         <div>
-            <p class="text-xs text-gray-500 mb-1.5">Items:</p>
+            <p class="text-sm text-gray-600 dark:text-gray-200 mb-1">Items:</p>
 
             <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
                 <div class="sm:col-span-6">
@@ -30,16 +30,16 @@
             <app-base-input label="Tax Rate %" placeholder="Enter tax rate" [value]="value.taxRate"
                 (valueChange)="patch({ taxRate: $event })"></app-base-input>
 
-            <div class="rounded-md border border-gray-200 dark:border-[#2a2d2a] px-4 py-2.5">
-                <p class="text-xs text-gray-500">Subtotal (C$):</p>
+            <div class="rounded-md border border-gray-300 dark:border-gray-100 px-4 py-2.5">
+                <p class="text-sm text-gray-600 dark:text-gray-200">Subtotal (C$):</p>
                 <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
                     {{ money(value.subtotal) }}
                 </p>
             </div>
         </div>
 
-        <div class="rounded-md border border-gray-200 dark:border-[#2a2d2a] px-4 py-2.5">
-            <p class="text-xs text-gray-500">Tax (C$):</p>
+        <div class="rounded-md border border-gray-300 dark:border-gray-100 px-4 py-2.5">
+            <p class="text-sm text-gray-600 dark:text-gray-200">Tax (C$):</p>
             <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
                 {{ money(value.taxAmount) }}
             </p>
@@ -54,8 +54,8 @@
         <app-base-input label="Discount (C$)" placeholder="Enter discount amount" [value]="value.discount"
             (valueChange)="patch({ discount: $event })"></app-base-input>
 
-        <div class="rounded-md border border-gray-200 dark:border-[#2a2d2a] px-4 py-2.5">
-            <p class="text-xs text-gray-500">Total (C$):</p>
+        <div class="rounded-md border border-gray-300 dark:border-gray-100 px-4 py-2.5">
+            <p class="text-sm text-gray-600 dark:text-gray-200">Total (C$):</p>
             <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
                 {{ money(value.total) }}
             </p>

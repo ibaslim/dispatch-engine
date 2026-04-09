@@ -1,20 +1,30 @@
-<label class="block w-full">
-    <div *ngIf="showLabel" class="flex items-center gap-1 mb-2">
-        <span class="text-xs text-gray-500">{{ label }}</span>
+<label class="block w-full my-4">
+    <div *ngIf="showLabel" class="flex items-center gap-1.5 mb-4">
+        <span class="text-sm text-gray-600 dark:text-gray-200">{{ label }}</span>
         <span *ngIf="required" class="text-xs text-red-500">*</span>
     </div>
 
     <div class="flex items-stretch gap-2" [class.hidden]="!hasSuffix">
-        <input class="flex-1 h-10 px-3 py-2 rounded-md border border-gray-300 dark:border-[#2a2d2a]
+        <input class="flex-1 h-10 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-100
              bg-white dark:bg-[#1E201E] text-sm text-gray-900 dark:text-gray-100
-             placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3ddc97]/30" [type]="type"
-            [placeholder]="placeholder" [value]="value" [disabled]="disabled" (input)="onInput($event)" />
-
+             placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3ddc97]/30
+             [color-scheme:light] dark:[color-scheme:dark]" [type]="type" [placeholder]="placeholder"
+            [disabled]="disabled" [required]="required" [pattern]="pattern" [min]="min" [max]="max" [step]="step"
+            [attr.name]="getName()" [ngModel]="value" (ngModelChange)="onInputValue($event)" #model="ngModel" />
         <ng-content select="[suffix]"></ng-content>
     </div>
 
-    <input *ngIf="!hasSuffix" class="w-full h-10 px-3 py-2 rounded-md border border-gray-300 dark:border-[#2a2d2a]
+    <input *ngIf="!hasSuffix" class="w-full h-10 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-100
            bg-white dark:bg-[#1E201E] text-sm text-gray-900 dark:text-gray-100
-           placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3ddc97]/30" [type]="type"
-        [placeholder]="placeholder" [value]="value" [disabled]="disabled" (input)="onInput($event)" />
+           placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3ddc97]/30
+           [color-scheme:light] dark:[color-scheme:dark]" [type]="type" [placeholder]="placeholder"
+        [disabled]="disabled" [required]="required" [pattern]="pattern" [min]="min" [max]="max" [step]="step"
+        [attr.name]="getName()" [ngModel]="value" (ngModelChange)="onInputValue($event)" #model="ngModel" />
+
+    <app-error-message [show]="model.invalid && (model.touched || model.dirty)" [messages]="[
+      model.errors?.['required'] ? (errorMessages['required'] || 'This field is required.') : '',
+      model.errors?.['pattern'] ? (errorMessages['pattern'] || 'Invalid format.') : '',
+      model.errors?.['min'] ? (errorMessages['min'] || 'Value is too small.') : '',
+      model.errors?.['max'] ? (errorMessages['max'] || 'Value is too large.') : ''
+    ]"></app-error-message>
 </label>

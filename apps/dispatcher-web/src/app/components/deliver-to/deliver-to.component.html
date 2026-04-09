@@ -1,23 +1,28 @@
-<section class="space-y-5">
-    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Deliver to:</h3>
+<section class="space-y-6">
+    <h3 class="text-md font-semibold text-gray-900 dark:text-gray-100">Deliver to:</h3>
 
-    <app-base-input label="Name" placeholder="Enter customer name" [required]="true" [value]="value.name"
-        (valueChange)="patch({ name: $event })"></app-base-input>
+    <app-base-input label="Name" placeholder="Enter customer name" [required]="true" pattern="^[A-Za-z\s.'-]+$"
+        [value]="value.name" (valueChange)="patch({ name: $event })" [errorMessages]="{
+      required: 'Recipient name is required.',
+      pattern: 'Only alphabets allowed.'
+    }"></app-base-input>
 
     <app-phone-input label="Phone No." [required]="true" [value]="value.phone"
         (valueChange)="patch({ phone: $event })"></app-phone-input>
 
-    <app-base-input label="Email" type="email" placeholder="Enter an email" [value]="value.email"
-        (valueChange)="patch({ email: $event })"></app-base-input>
+    <app-base-input label="Email" type="email" placeholder="Enter an email" pattern="^[^\s@]+@[^\s@]+\.[^\s@]+$"
+        [value]="value.email" (valueChange)="patch({ email: $event })"
+        [errorMessages]="{ pattern: 'Enter a valid email.' }"></app-base-input>
 
-    <app-address-input label="Address" placeholder="Enter a location" [required]="true" [value]="value.address"
-        (valueChange)="patch({ address: $event })" (pinClick)="pinClick.emit()"></app-address-input>
+    <app-address-input label="Address" placeholder="Enter a location" [required]="true" pattern="^[A-Za-z0-9\s.,#\-/]+$"
+        [value]="value.address" (valueChange)="patch({ address: $event })" (pinClick)="pinClick.emit()"
+        name="deliveryAddress"></app-address-input>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
         <app-date-picker label="Delivery Date" [required]="true" [value]="value.deliveryDate"
-            (valueChange)="patch({ deliveryDate: $event })"></app-date-picker>
+            (valueChange)="patch({ deliveryDate: $event })" name="deliveryDate"></app-date-picker>
 
         <app-time-picker label="Delivery Time" [required]="true" [value]="value.deliveryTime"
-            (valueChange)="patch({ deliveryTime: $event })"></app-time-picker>
+            (valueChange)="patch({ deliveryTime: $event })" name="deliveryTime"></app-time-picker>
     </div>
 </section>

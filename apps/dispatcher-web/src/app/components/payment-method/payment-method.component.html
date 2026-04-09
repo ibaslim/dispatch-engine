@@ -1,10 +1,10 @@
-<div class="space-y-4">
+<div class="space-y-7">
     <app-dropdown-selector label="Payment Method" [required]="required" [options]="paymentOptions"
         [value]="value.method" (valueChange)="setMethod($event)"
         placeholder="Select payment method"></app-dropdown-selector>
 
     <ng-container *ngIf="value.method === 'credit_card'">
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <app-base-input label="Cardholder Name" placeholder="Name on card" [required]="true"
                 [value]="value.creditCard?.cardholderName || ''"
                 (valueChange)="patchCreditCard({ cardholderName: $event })"></app-base-input>
@@ -12,19 +12,19 @@
             <app-base-input label="Card Number" placeholder="1234 5678 9012 3456" [required]="true"
                 [value]="value.creditCard?.cardNumber || ''"
                 (valueChange)="patchCreditCard({ cardNumber: $event })"></app-base-input>
+        </div>
 
-            <div class="grid grid-cols-3 gap-3">
-                <app-base-input label="Exp. Month" placeholder="MM" [required]="true"
-                    [value]="value.creditCard?.expiryMonth || ''"
-                    (valueChange)="patchCreditCard({ expiryMonth: $event })"></app-base-input>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <app-base-input label="Exp. Month" placeholder="MM" [required]="true"
+                [value]="value.creditCard?.expiryMonth || ''"
+                (valueChange)="patchCreditCard({ expiryMonth: $event })"></app-base-input>
 
-                <app-base-input label="Exp. Year" placeholder="YYYY" [required]="true"
-                    [value]="value.creditCard?.expiryYear || ''"
-                    (valueChange)="patchCreditCard({ expiryYear: $event })"></app-base-input>
+            <app-base-input label="Exp. Year" placeholder="YYYY" [required]="true"
+                [value]="value.creditCard?.expiryYear || ''"
+                (valueChange)="patchCreditCard({ expiryYear: $event })"></app-base-input>
 
-                <app-base-input label="CVC" placeholder="123" [required]="true" [value]="value.creditCard?.cvc || ''"
-                    (valueChange)="patchCreditCard({ cvc: $event })"></app-base-input>
-            </div>
+            <app-base-input label="CVC" placeholder="123" [required]="true" [value]="value.creditCard?.cvc || ''"
+                (valueChange)="patchCreditCard({ cvc: $event })"></app-base-input>
         </div>
     </ng-container>
 </div>

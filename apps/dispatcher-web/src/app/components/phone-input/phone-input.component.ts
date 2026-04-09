@@ -1,10 +1,13 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { PhoneValue } from '../../models/phone-input/phone-input.model';
+import { ErrorMessageComponent } from '../error-message/error-message.component';
 
 @Component({
   selector: 'app-phone-input',
-  imports: [CommonModule],
+  standalone: true,
+  imports: [CommonModule, FormsModule, ErrorMessageComponent],
   templateUrl: './phone-input.component.html'
 })
 export class PhoneInputComponent {
@@ -14,11 +17,11 @@ export class PhoneInputComponent {
   @Input() value: PhoneValue = { countryCode: '+1', number: '' };
   @Output() valueChange = new EventEmitter<PhoneValue>();
 
-  onCountryCode(e: Event): void {
-    this.valueChange.emit({ ...this.value, countryCode: (e.target as HTMLInputElement).value });
+  onCountryCode(v: string): void {
+    this.valueChange.emit({ ...this.value, countryCode: v });
   }
 
-  onNumber(e: Event): void {
-    this.valueChange.emit({ ...this.value, number: (e.target as HTMLInputElement).value });
+  onNumber(v: string): void {
+    this.valueChange.emit({ ...this.value, number: v });
   }
 }

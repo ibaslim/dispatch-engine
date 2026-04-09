@@ -1,10 +1,12 @@
-<!-- new-order-form.component.html -->
 <div class="p-4 sm:p-6 lg:p-8">
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 lg:gap-10">
-        <!-- LEFT -->
-        <div class="space-y-6">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12">
+        <div class="space-y-7">
             <app-base-input label="Order Number" placeholder="Enter order number" [required]="true"
-                [value]="value.orderNumber" (valueChange)="patch({ orderNumber: $event })"></app-base-input>
+                pattern="^[A-Za-z0-9\s\-_.#/]+$" [value]="value.orderNumber"
+                (valueChange)="patch({ orderNumber: $event })" [errorMessages]="{
+          required: 'Order number is required.',
+          pattern: 'Only letters, numbers, spaces and -_.#/ allowed.'
+        }"></app-base-input>
 
             <app-pickup-from [value]="value.pickup" (valueChange)="patch({ pickup: $event })"
                 (pinClick)="pinPickup.emit()"></app-pickup-from>
@@ -13,8 +15,7 @@
                 (pinClick)="pinDelivery.emit()"></app-deliver-to>
         </div>
 
-        <!-- RIGHT -->
-        <div class="lg:border-l lg:border-gray-200 lg:dark:border-[#2a2d2a] lg:pl-10">
+        <div class="lg:border-l lg:border-gray-200 lg:dark:border-[#2a2d2a] lg:pl-10 mt-6 lg:mt-0">
             <app-other-order-details [value]="value.details"
                 (valueChange)="patch({ details: $event })"></app-other-order-details>
         </div>

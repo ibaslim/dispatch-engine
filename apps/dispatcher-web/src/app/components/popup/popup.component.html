@@ -5,8 +5,9 @@
     <!-- Dialog -->
     <div class="absolute inset-0 flex items-center justify-center p-4">
         <div class="w-full {{ widthClass }} rounded-xl bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100
-             border border-gray-200 dark:border-[#2a2d2a] shadow-xl overflow-hidden"
+             border border-gray-200 dark:border-[#2a2d2a] shadow-xl overflow-hidden max-h-[90vh] flex flex-col"
             (click)="$event.stopPropagation()">
+
             <!-- Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-[#2a2d2a]">
                 <h2 class="text-xl font-semibold">{{ title }}</h2>
@@ -20,8 +21,8 @@
                 </app-button>
             </div>
 
-            <!-- Body -->
-            <div class="p-6">
+            <!-- Body (scrollable) -->
+            <div class="p-6 overflow-y-auto flex-1">
                 <ng-content></ng-content>
             </div>
 
