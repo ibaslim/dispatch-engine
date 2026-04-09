@@ -1,36 +1,36 @@
-<section class="space-y-6">
+<section class="space-y-5">
     <div class="flex items-center gap-2">
         <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Order Details</h3>
         <span class="text-xs text-gray-400">(Optional)</span>
     </div>
 
-    <div class="space-y-4">
+    <div class="space-y-5">
         <div>
-            <p class="text-xs text-gray-500 mb-2">Items:</p>
+            <p class="text-xs text-gray-500 mb-1.5">Items:</p>
 
-            <div class="grid grid-cols-12 gap-2">
-                <div class="col-span-6">
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                <div class="sm:col-span-6">
                     <app-base-input [showLabel]="false" placeholder="Name" [value]="value.itemName"
                         (valueChange)="patch({ itemName: $event })"></app-base-input>
                 </div>
 
-                <div class="col-span-4">
+                <div class="sm:col-span-4">
                     <app-base-input [showLabel]="false" type="number" placeholder="Price" [value]="value.itemPrice"
                         (valueChange)="patch({ itemPrice: $event })"></app-base-input>
                 </div>
 
-                <div class="col-span-2">
+                <div class="sm:col-span-2">
                     <app-base-input [showLabel]="false" type="number" placeholder="qty" [value]="value.itemQty"
                         (valueChange)="patch({ itemQty: $event })"></app-base-input>
                 </div>
             </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-3 items-end">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
             <app-base-input label="Tax Rate %" placeholder="Enter tax rate" [value]="value.taxRate"
                 (valueChange)="patch({ taxRate: $event })"></app-base-input>
 
-            <div class="rounded-md border border-gray-200 dark:border-[#2a2d2a] px-4 py-3">
+            <div class="rounded-md border border-gray-200 dark:border-[#2a2d2a] px-4 py-2.5">
                 <p class="text-xs text-gray-500">Subtotal (C$):</p>
                 <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
                     {{ money(value.subtotal) }}
@@ -38,7 +38,7 @@
             </div>
         </div>
 
-        <div class="rounded-md border border-gray-200 dark:border-[#2a2d2a] px-4 py-3">
+        <div class="rounded-md border border-gray-200 dark:border-[#2a2d2a] px-4 py-2.5">
             <p class="text-xs text-gray-500">Tax (C$):</p>
             <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
                 {{ money(value.taxAmount) }}
@@ -54,7 +54,7 @@
         <app-base-input label="Discount (C$)" placeholder="Enter discount amount" [value]="value.discount"
             (valueChange)="patch({ discount: $event })"></app-base-input>
 
-        <div class="rounded-md border border-gray-200 dark:border-[#2a2d2a] px-4 py-3">
+        <div class="rounded-md border border-gray-200 dark:border-[#2a2d2a] px-4 py-2.5">
             <p class="text-xs text-gray-500">Total (C$):</p>
             <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
                 {{ money(value.total) }}
@@ -64,7 +64,6 @@
         <app-textarea label="Delivery Instruction" placeholder="Enter delivery instructions"
             [value]="value.instructions" (valueChange)="patch({ instructions: $event })"></app-textarea>
 
-        <!-- UPDATED: use reusable payment method component (dropdown + credit card fields) -->
         <app-payment-method [required]="true" [value]="value.payment"
             (valueChange)="patch({ payment: $event })"></app-payment-method>
     </div>

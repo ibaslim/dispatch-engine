@@ -1,19 +1,22 @@
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-    <!-- LEFT -->
-    <div class="space-y-4">
-        <app-base-input label="Order Number" placeholder="Enter order number" [required]="true"
-            [value]="value.orderNumber" (valueChange)="patch({ orderNumber: $event })"></app-base-input>
+<!-- new-order-form.component.html -->
+<div class="p-4 sm:p-6 lg:p-8">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 lg:gap-10">
+        <!-- LEFT -->
+        <div class="space-y-6">
+            <app-base-input label="Order Number" placeholder="Enter order number" [required]="true"
+                [value]="value.orderNumber" (valueChange)="patch({ orderNumber: $event })"></app-base-input>
 
-        <app-pickup-from [value]="value.pickup" (valueChange)="patch({ pickup: $event })"
-            (pinClick)="pinPickup.emit()"></app-pickup-from>
+            <app-pickup-from [value]="value.pickup" (valueChange)="patch({ pickup: $event })"
+                (pinClick)="pinPickup.emit()"></app-pickup-from>
 
-        <app-deliver-to [value]="value.delivery" (valueChange)="patch({ delivery: $event })"
-            (pinClick)="pinDelivery.emit()"></app-deliver-to>
-    </div>
+            <app-deliver-to [value]="value.delivery" (valueChange)="patch({ delivery: $event })"
+                (pinClick)="pinDelivery.emit()"></app-deliver-to>
+        </div>
 
-    <!-- RIGHT -->
-    <div class="lg:border-l lg:border-gray-200 lg:dark:border-[#2a2d2a] lg:pl-8">
-        <app-other-order-details [value]="value.details"
-            (valueChange)="patch({ details: $event })"></app-other-order-details>
+        <!-- RIGHT -->
+        <div class="lg:border-l lg:border-gray-200 lg:dark:border-[#2a2d2a] lg:pl-10">
+            <app-other-order-details [value]="value.details"
+                (valueChange)="patch({ details: $event })"></app-other-order-details>
+        </div>
     </div>
 </div>
