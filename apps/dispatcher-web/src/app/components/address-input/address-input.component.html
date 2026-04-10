@@ -5,7 +5,7 @@
     </div>
 
     <div class="flex items-stretch gap-2">
-        <input class="flex-1 h-10 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-100
+        <input class="flex-1 h-10 px-3 py-2 rounded-md border border-gray-300 dark:border-[#5a5d5a]
              bg-white dark:bg-[#1E201E] text-sm text-gray-900 dark:text-gray-100
              placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3ddc97]/30"
             [placeholder]="placeholder" [required]="required" [pattern]="pattern" [attr.name]="getName()"
@@ -13,7 +13,7 @@
 
         <app-button variant="icon" type="button" ariaLabel="Pick on map" (onClick)="pinClick.emit()"
             [extraClasses]="'!w-auto !h-auto !p-0 bg-transparent'">
-            <span class="h-10 w-10 rounded-md border border-gray-300 dark:border-gray-100
+            <span class="h-10 w-10 rounded-md border border-gray-300 dark:border-[#5a5d5a]
          hover:bg-gray-100 dark:hover:bg-[#2a2d2a] transition flex items-center justify-center">
                 <i class="ph ph-map-pin text-gray-700 dark:text-gray-200"></i>
             </span>

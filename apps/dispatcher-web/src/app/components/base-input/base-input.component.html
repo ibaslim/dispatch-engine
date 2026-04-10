@@ -5,7 +5,7 @@
     </div>
 
     <div class="flex items-stretch gap-2" [class.hidden]="!hasSuffix">
-        <input class="flex-1 h-10 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-100
+        <input class="flex-1 h-10 px-3 py-2 rounded-md border border-gray-300 dark:border-[#5a5d5a]
              bg-white dark:bg-[#1E201E] text-sm text-gray-900 dark:text-gray-100
              placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3ddc97]/30
              [color-scheme:light] dark:[color-scheme:dark]" [type]="type" [placeholder]="placeholder"
@@ -14,7 +14,7 @@
         <ng-content select="[suffix]"></ng-content>
     </div>
 
-    <input *ngIf="!hasSuffix" class="w-full h-10 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-100
+    <input *ngIf="!hasSuffix" class="w-full h-10 px-3 py-2 rounded-md border border-gray-300 dark:border-[#5a5d5a]
            bg-white dark:bg-[#1E201E] text-sm text-gray-900 dark:text-gray-100
            placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3ddc97]/30
            [color-scheme:light] dark:[color-scheme:dark]" [type]="type" [placeholder]="placeholder"
