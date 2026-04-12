@@ -3,9 +3,10 @@
 
     <app-base-input label="Name" placeholder="Enter store name" [required]="true" pattern="^[A-Za-z\s.'-]+$"
         [value]="value.name" (valueChange)="patch({ name: $event })" [errorMessages]="{
-      required: 'Pickup name is required.',
-      pattern: 'Only alphabets allowed.'
-    }"></app-base-input>
+    required: 'Name is required.',
+    pattern: 'Only alphabets allowed.'
+  }" [showSubmitValidation]="showSubmitValidation">
+    </app-base-input>
 
     <app-phone-input label="Phone No." [required]="true" [value]="value.phone"
         (valueChange)="patch({ phone: $event })"></app-phone-input>
@@ -15,5 +16,7 @@
         name="pickupAddress"></app-address-input>
 
     <app-time-picker label="Pickup Time" [required]="true" [value]="value.pickupTime"
-        (valueChange)="patch({ pickupTime: $event })" name="pickupTime"></app-time-picker>
+        (valueChange)="patch({ pickupTime: $event })" name="pickupTime" [externalError]="pickupTimeError"
+        [showExternalError]="showPickupTimeError">
+    </app-time-picker>
 </section>

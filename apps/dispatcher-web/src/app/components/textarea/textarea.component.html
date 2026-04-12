@@ -10,8 +10,5 @@
         [placeholder]="placeholder" [disabled]="disabled" [required]="required" [pattern]="pattern"
         [attr.name]="getName()" [ngModel]="value" (ngModelChange)="onInput($event)" #model="ngModel"></textarea>
 
-    <app-error-message [show]="model.invalid && (model.touched || model.dirty)" [messages]="[
-      model.errors?.['required'] ? 'This field is required.' : '',
-      model.errors?.['pattern'] ? 'Invalid format.' : ''
-    ]"></app-error-message>
+    <app-error-message [show]="showError" [messages]="errorList"></app-error-message>
 </label>

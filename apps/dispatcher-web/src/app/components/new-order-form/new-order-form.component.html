@@ -9,10 +9,14 @@
         }"></app-base-input>
 
             <app-pickup-from [value]="value.pickup" (valueChange)="patch({ pickup: $event })"
-                (pinClick)="pinPickup.emit()"></app-pickup-from>
+                (pinClick)="pinPickup.emit()" [pickupTimeError]="deliveryTimeError"
+                [showPickupTimeError]="showDeliveryTimeError">
+            </app-pickup-from>
 
             <app-deliver-to [value]="value.delivery" (valueChange)="patch({ delivery: $event })"
-                (pinClick)="pinDelivery.emit()"></app-deliver-to>
+                (pinClick)="pinDelivery.emit()" [deliveryTimeError]="deliveryTimeError"
+                [showDeliveryTimeError]="showDeliveryTimeError">
+            </app-deliver-to>
         </div>
 
         <div class="lg:border-l lg:border-gray-200 lg:dark:border-[#5a5d5a] lg:pl-10 mt-6 lg:mt-0">

@@ -3,16 +3,19 @@
 
     <app-base-input label="Name" placeholder="Enter customer name" [required]="true" pattern="^[A-Za-z\s.'-]+$"
         [value]="value.name" (valueChange)="patch({ name: $event })" [errorMessages]="{
-      required: 'Recipient name is required.',
+      required: 'Name is required.',
       pattern: 'Only alphabets allowed.'
     }"></app-base-input>
 
     <app-phone-input label="Phone No." [required]="true" [value]="value.phone"
         (valueChange)="patch({ phone: $event })"></app-phone-input>
 
-    <app-base-input label="Email" type="email" placeholder="Enter an email" pattern="^[^\s@]+@[^\s@]+\.[^\s@]+$"
-        [value]="value.email" (valueChange)="patch({ email: $event })"
-        [errorMessages]="{ pattern: 'Enter a valid email.' }"></app-base-input>
+    <app-base-input label="Email" type="email" placeholder="Enter an email" [required]="true"
+        pattern="^[^\s@]+@[^\s@]+\.[^\s@]+$" [value]="value.email" (valueChange)="patch({ email: $event })"
+        [errorMessages]="{
+          required: 'Email is required.',
+          pattern: 'Enter a valid email.'
+        }"></app-base-input>
 
     <app-address-input label="Address" placeholder="Enter a location" [required]="true" pattern="^[A-Za-z0-9\s.,#\-/]+$"
         [value]="value.address" (valueChange)="patch({ address: $event })" (pinClick)="pinClick.emit()"
@@ -23,6 +26,8 @@
             (valueChange)="patch({ deliveryDate: $event })" name="deliveryDate"></app-date-picker>
 
         <app-time-picker label="Delivery Time" [required]="true" [value]="value.deliveryTime"
-            (valueChange)="patch({ deliveryTime: $event })" name="deliveryTime"></app-time-picker>
+            (valueChange)="patch({ deliveryTime: $event })" name="deliveryTime" [externalError]="deliveryTimeError"
+            [showExternalError]="showDeliveryTimeError">
+        </app-time-picker>
     </div>
 </section>

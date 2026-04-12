@@ -27,14 +27,56 @@ export class BaseInputComponent {
   @Input() step?: number;
 
   @Input() errorMessages: { [key: string]: string } = {};
+  @Input() externalError = '';
+  @Input() showExternalError = false;
+
+  @Input() showSubmitValidation = false;
 
   @Output() valueChange = new EventEmitter<string>();
 
+  private interacted = false;
+
   onInputValue(v: string): void {
+    this.interacted = true;
+    this.value = v;
     this.valueChange.emit(v);
   }
 
   getName(): string {
     return this.name || this.label?.replace(/\s+/g, '_').toLowerCase() || 'field';
+  }
+
+  isPatternInvalid(): boolean {
+    if (!this.pattern || !this.value) return false;
+    return !new RegExp(this.pattern).test(String(this.value));
+  }
+
+  get showError(): boolean {
+    if (!this.interacted && !this.showSubmitValidation) return false;
+
+    const requiredError = this.required && !this.value;
+    const patternError = this.isPatternInvalid();
+
+    return requiredError || patternError || !!this.externalError;
+  }
+
+  get errorList(): string[] {
+    const list: string[] = [];
+
+    if (!this.interacted && !this.showSubmitValidation) return list;
+
+    if (this.required && !this.value) {
+      list.push(this.errorMessages['required'] || 'This field is required.');
+    }
+
+    if (this.isPatternInvalid()) {
+      list.push(this.errorMessages['pattern'] || 'Invalid format.');
+    }
+
+    if (this.externalError) {
+      list.push(this.externalError);
+    }
+
+    return list;
   }
 }

@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { FormsModule, NgModel } from '@angular/forms';
 import { ButtonComponent } from '../button/button.component';
 import { ErrorMessageComponent } from '../error-message/error-message.component';
 
@@ -18,8 +18,12 @@ export class AddressInputComponent {
   @Input() name = '';
   @Input() pattern?: string;
 
+  @Input() errorMessages: Partial<Record<'required' | 'pattern', string>> = {};
+
   @Output() valueChange = new EventEmitter<string>();
   @Output() pinClick = new EventEmitter<void>();
+
+  @ViewChild('model', { static: true }) model?: NgModel;
 
   onInput(v: string): void {
     this.valueChange.emit(v);
@@ -27,5 +31,20 @@ export class AddressInputComponent {
 
   getName(): string {
     return this.name || this.label?.replace(/\s+/g, '_').toLowerCase() || 'address';
+  }
+
+  get showError(): boolean {
+    const m = this.model;
+    return !!(m && m.invalid && (m.touched || m.dirty));
+  }
+
+  get errorList(): string[] {
+    const m = this.model;
+    if (!m || !m.errors) return [];
+
+    return [
+      m.errors['required'] ? (this.errorMessages.required || 'Address is required.') : '',
+      m.errors['pattern'] ? (this.errorMessages.pattern || 'Invalid address format.') : ''
+    ].filter(Boolean);
   }
 }

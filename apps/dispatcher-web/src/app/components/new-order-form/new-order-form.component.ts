@@ -72,4 +72,35 @@ export class NewOrderFormComponent {
   patch(partial: Partial<NewOrderFormValue>): void {
     this.valueChange.emit({ ...this.value, ...partial });
   }
+
+  // Cross-field validation
+  private toMinutes(t: string): number {
+    const [hh, mm] = t.split(':').map(Number);
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return NaN;
+    return hh * 60 + mm;
+  }
+
+  private get pickupTime(): string {
+    return this.value.pickup?.pickupTime || '';
+  }
+
+  private get deliveryTime(): string {
+    return this.value.delivery?.deliveryTime || '';
+  }
+
+  get showDeliveryTimeError(): boolean {
+    if (!this.pickupTime || !this.deliveryTime) return false;
+    return this.isDeliveryBeforeOrEqualPickup;
+  }
+
+  get deliveryTimeError(): string {
+    return this.showDeliveryTimeError ? 'Delivery time must be after pickup time.' : '';
+  }
+
+  private get isDeliveryBeforeOrEqualPickup(): boolean {
+    const p = this.toMinutes(this.pickupTime);
+    const d = this.toMinutes(this.deliveryTime);
+    if (Number.isNaN(p) || Number.isNaN(d)) return false;
+    return d <= p; // strictly after required
+  }
 }

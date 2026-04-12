@@ -18,7 +18,16 @@ export class PickupFromComponent {
 
   @Output() pinClick = new EventEmitter<void>();
 
+  @Input() pickupTimeError = '';
+  @Input() showPickupTimeError = false;
+
+  showSubmitValidation = false;
+
   patch(p: Partial<NewOrderFormValue['pickup']>): void {
     this.valueChange.emit({ ...this.value, ...p });
+  }
+
+  onSubmit(): void {
+    this.showSubmitValidation = true;
   }
 }

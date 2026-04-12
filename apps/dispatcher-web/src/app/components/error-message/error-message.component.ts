@@ -9,4 +9,8 @@ import { Component, Input } from '@angular/core';
 export class ErrorMessageComponent {
   @Input() show = false;
   @Input() messages: string[] = [];
+
+  get uniqueMessages(): string[] {
+    return Array.from(new Set(this.messages.filter(Boolean)));
+  }
 }

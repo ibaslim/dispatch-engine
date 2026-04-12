@@ -20,8 +20,5 @@
         </app-button>
     </div>
 
-    <app-error-message [show]="model.invalid && (model.touched || model.dirty)" [messages]="[
-      model.errors?.['required'] ? 'Address is required.' : '',
-      model.errors?.['pattern'] ? 'Invalid address format.' : ''
-    ]"></app-error-message>
+    <app-error-message [show]="showError" [messages]="errorList"></app-error-message>
 </div>

@@ -1,6 +1,5 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { ButtonComponent } from '../button/button.component';
 import { BaseInputComponent } from '../base-input/base-input.component';
 
 @Component({
@@ -15,4 +14,7 @@ export class TimePickerComponent {
   @Input() name = '';
   @Input() value = ''; // HH:mm
   @Output() valueChange = new EventEmitter<string>();
+
+  @Input() externalError = '';
+  @Input() showExternalError = false;
 }

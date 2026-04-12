@@ -18,6 +18,10 @@ export class DeliverToComponent {
 
   @Output() pinClick = new EventEmitter<void>();
 
+  // NEW: cross-field time error from parent
+  @Input() deliveryTimeError = '';
+  @Input() showDeliveryTimeError = false;
+
   patch(p: Partial<NewOrderFormValue['delivery']>): void {
     this.valueChange.emit({ ...this.value, ...p });
   }
