@@ -91,10 +91,13 @@ export class OrdersComponent {
         deliveryTime: ''
       },
       details: {
-        itemName: '',
-        itemPrice: 0,
-        itemQty: 0,
-
+        items: [
+          {
+            itemName: '',
+            itemPrice: 0,
+            itemQty: 0
+          }
+        ],
         taxRate: 0,
         deliveryFees: 0,
         deliveryTips: 0,

@@ -5,30 +5,56 @@
     </div>
 
     <div class="space-y-7">
-        <div>
-            <p class="text-sm text-gray-600 dark:text-gray-200 mb-1">Items:</p>
 
-            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                <div class="sm:col-span-6">
-                    <app-base-input [showLabel]="false" placeholder="Name" [value]="value.itemName"
-                        (valueChange)="patch({ itemName: $event })"></app-base-input>
+        <!-- ITEMS -->
+        <div>
+            <div class="flex justify-between items-center mb-2">
+                <p class="text-sm text-gray-600 dark:text-gray-200">Items:</p>
+
+                <app-button variant="primary" label="+ Add another Item" (onClick)="addItem()"
+                    [extraClasses]="'bg-[#91D06C] text-black hover:bg-[#6FAF4F] px-3 py-2 rounded-md text-sm'">
+                </app-button>
+            </div>
+
+            <div *ngFor="let item of value.items; let i = index" class="grid grid-cols-1 sm:grid-cols-12 gap-3 mb-2">
+
+                <div class="sm:col-span-5">
+                    <app-base-input [showLabel]="false" placeholder="Name" [value]="item.itemName"
+                        (valueChange)="updateItem(i, 'itemName', $event)">
+                    </app-base-input>
                 </div>
 
-                <div class="sm:col-span-4">
-                    <app-base-input [showLabel]="false" type="number" placeholder="Price" [value]="value.itemPrice"
-                        (valueChange)="patch({ itemPrice: $event })"></app-base-input>
+                <div class="sm:col-span-3">
+                    <app-base-input type="number" [showLabel]="false" placeholder="Price" [value]="item.itemPrice"
+                        (valueChange)="updateItem(i, 'itemPrice', $event)">
+                    </app-base-input>
                 </div>
 
                 <div class="sm:col-span-2">
-                    <app-base-input [showLabel]="false" type="number" placeholder="qty" [value]="value.itemQty"
-                        (valueChange)="patch({ itemQty: $event })"></app-base-input>
+                    <app-base-input type="number" [showLabel]="false" placeholder="Qty" [value]="item.itemQty"
+                        (valueChange)="updateItem(i, 'itemQty', $event)">
+                    </app-base-input>
                 </div>
+
+                <div class="sm:col-span-2 flex items-center gap-2">
+
+                    <app-button variant="icon" type="button" (onClick)="removeItem(i)" ariaLabel="Delete item"
+                        extraClasses="text-red-600 hover:text-red-700 hover:scale-110 transition-transform duration-200">
+
+                        <i class="ph ph-trash text-lg text-red-600"></i>
+                    </app-button>
+
+                </div>
+
             </div>
         </div>
 
+        <!-- REST SAME -->
+
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
             <app-base-input label="Tax Rate %" placeholder="Enter tax rate" [value]="value.taxRate"
-                (valueChange)="patch({ taxRate: $event })"></app-base-input>
+                (valueChange)="patch({ taxRate: $event })">
+            </app-base-input>
 
             <div class="rounded-md border border-gray-300 dark:border-[#5a5d5a] px-4 py-2.5">
                 <p class="text-sm text-gray-600 dark:text-gray-200">Subtotal (C$):</p>
@@ -45,14 +71,16 @@
             </p>
         </div>
 
-        <app-base-input label="Delivery Fees (C$)" placeholder="Enter delivery fees" [value]="value.deliveryFees"
-            (valueChange)="patch({ deliveryFees: $event })"></app-base-input>
+        <app-base-input label="Delivery Fees (C$)" [value]="value.deliveryFees"
+            (valueChange)="patch({ deliveryFees: $event })">
+        </app-base-input>
 
-        <app-base-input label="Delivery Tips (C$)" placeholder="Enter delivery tips amount" [value]="value.deliveryTips"
-            (valueChange)="patch({ deliveryTips: $event })"></app-base-input>
+        <app-base-input label="Delivery Tips (C$)" [value]="value.deliveryTips"
+            (valueChange)="patch({ deliveryTips: $event })">
+        </app-base-input>
 
-        <app-base-input label="Discount (C$)" placeholder="Enter discount amount" [value]="value.discount"
-            (valueChange)="patch({ discount: $event })"></app-base-input>
+        <app-base-input label="Discount (C$)" [value]="value.discount" (valueChange)="patch({ discount: $event })">
+        </app-base-input>
 
         <div class="rounded-md border border-gray-300 dark:border-[#5a5d5a] px-4 py-2.5">
             <p class="text-sm text-gray-600 dark:text-gray-200">Total (C$):</p>
@@ -61,10 +89,12 @@
             </p>
         </div>
 
-        <app-textarea label="Delivery Instruction" placeholder="Enter delivery instructions"
-            [value]="value.instructions" (valueChange)="patch({ instructions: $event })"></app-textarea>
+        <app-textarea label="Delivery Instruction" [value]="value.instructions"
+            (valueChange)="patch({ instructions: $event })">
+        </app-textarea>
 
-        <app-payment-method [required]="true" [value]="value.payment"
-            (valueChange)="patch({ payment: $event })"></app-payment-method>
+        <app-payment-method [required]="true" [value]="value.payment" (valueChange)="patch({ payment: $event })">
+        </app-payment-method>
+
     </div>
 </section>

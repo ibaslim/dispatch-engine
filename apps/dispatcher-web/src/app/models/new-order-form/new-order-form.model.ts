@@ -5,9 +5,9 @@ export type PaymentMethodType = 'cash_on_delivery' | 'credit_card';
 export interface CreditCardDetails {
     cardholderName: string;
     cardNumber: string;
-    expiryMonth: string; // "01".."12"
-    expiryYear: string;  // "2026"
-    cvc: string;         // "123"
+    expiryMonth: string;
+    expiryYear: string;
+    cvc: string;
 }
 
 export interface PaymentDetails {
@@ -22,7 +22,7 @@ export interface NewOrderFormValue {
         name: string;
         phone: PhoneValue;
         address: string;
-        pickupTime: string; // HH:mm
+        pickupTime: string;
     };
 
     delivery: {
@@ -30,14 +30,16 @@ export interface NewOrderFormValue {
         phone: PhoneValue;
         email: string;
         address: string;
-        deliveryDate: string; // YYYY-MM-DD
-        deliveryTime: string; // HH:mm
+        deliveryDate: string;
+        deliveryTime: string;
     };
 
     details: {
-        itemName: string;
-        itemPrice: number;
-        itemQty: number;
+        items: {
+            itemName: string;
+            itemPrice: number;
+            itemQty: number;
+        }[];
 
         taxRate: number;
         deliveryFees: number;
@@ -49,7 +51,6 @@ export interface NewOrderFormValue {
         total: number;
 
         instructions: string;
-
         payment: PaymentDetails;
     };
 }

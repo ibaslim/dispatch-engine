@@ -51,9 +51,13 @@ export class NewOrderFormComponent {
         deliveryTime: ''
       },
       details: {
-        itemName: '',
-        itemPrice: 0,
-        itemQty: 0,
+        items: [
+          {
+            itemName: '',
+            itemPrice: 0,
+            itemQty: 0
+          }
+        ],
         taxRate: 0,
         deliveryFees: 0,
         deliveryTips: 0,
@@ -73,7 +77,6 @@ export class NewOrderFormComponent {
     this.valueChange.emit({ ...this.value, ...partial });
   }
 
-  // Cross-field validation
   private toMinutes(t: string): number {
     const [hh, mm] = t.split(':').map(Number);
     if (Number.isNaN(hh) || Number.isNaN(mm)) return NaN;
@@ -101,6 +104,6 @@ export class NewOrderFormComponent {
     const p = this.toMinutes(this.pickupTime);
     const d = this.toMinutes(this.deliveryTime);
     if (Number.isNaN(p) || Number.isNaN(d)) return false;
-    return d <= p; // strictly after required
+    return d <= p;
   }
 }
