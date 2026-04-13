@@ -75,7 +75,7 @@
             <div class="rounded-md border border-gray-300 dark:border-[#5a5d5a] px-4 py-2.5">
                 <p class="text-sm text-gray-600 dark:text-gray-200">Subtotal (C$):</p>
                 <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    {{ money(value.subtotal) }}
+                    {{ money(value.subtotal || 0) }}
                 </p>
             </div>
         </div>

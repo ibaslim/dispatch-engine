@@ -95,10 +95,15 @@ export class OtherOrderDetailsComponent {
   private recalc(details: NewOrderFormValue['details']): NewOrderFormValue['details'] {
     const items = details.items || [];
 
+    // ✅ SUBTOTAL = price * qty ONLY
     const subtotal = this.round2(
       items.reduce((sum, item) => {
         const price = this.toNumber(item.itemPrice);
         const qty = this.toNumber(item.itemQty);
+
+        // ignore empty rows
+        if (!price || !qty) return sum;
+
         return sum + price * qty;
       }, 0)
     );
@@ -109,17 +114,25 @@ export class OtherOrderDetailsComponent {
     const discount = this.toNumber(details.discount);
 
     const taxAmount = this.round2((subtotal * taxRate) / 100);
-    const total = this.round2(subtotal + taxAmount + deliveryFees + deliveryTips - discount);
+
+    // ✅ TOTAL = subtotal + extras
+    const total = this.round2(
+      subtotal +
+      taxAmount +
+      deliveryFees +
+      deliveryTips -
+      discount
+    );
 
     return {
       ...details,
       items,
+      subtotal,
       taxRate,
+      taxAmount,
       deliveryFees,
       deliveryTips,
       discount,
-      subtotal,
-      taxAmount,
       total
     };
   }
