@@ -5,16 +5,26 @@ import { BaseInputComponent } from '../base-input/base-input.component';
 import { PaymentMethodComponent } from '../payment-method/payment-method.component';
 import { TextareaComponent } from '../textarea/textarea.component';
 import { ButtonComponent } from '../button/button.component';
+import { ErrorMessageComponent } from '../error-message/error-message.component';
 
 @Component({
   selector: 'app-other-order-details',
   standalone: true,
-  imports: [CommonModule, BaseInputComponent, TextareaComponent, PaymentMethodComponent, ButtonComponent],
+  imports: [
+    CommonModule,
+    BaseInputComponent,
+    TextareaComponent,
+    PaymentMethodComponent,
+    ButtonComponent,
+    ErrorMessageComponent
+  ],
   templateUrl: './other-order-details.component.html'
 })
 export class OtherOrderDetailsComponent {
   @Input() value!: NewOrderFormValue['details'];
   @Output() valueChange = new EventEmitter<NewOrderFormValue['details']>();
+
+  itemErrors: { [key: number]: string[] } = {};
 
   private toNumber(v: unknown): number {
     const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').trim());
@@ -23,6 +33,10 @@ export class OtherOrderDetailsComponent {
 
   private round2(n: number): number {
     return Math.round(n * 100) / 100;
+  }
+
+  trackByIndex(index: number): number {
+    return index;
   }
 
   addItem(): void {
@@ -34,17 +48,51 @@ export class OtherOrderDetailsComponent {
   removeItem(index: number): void {
     const items = [...(this.value.items || [])];
     items.splice(index, 1);
+    delete this.itemErrors[index];
     this.patch({ items });
   }
 
   updateItem(index: number, field: string, value: any): void {
     const items = [...(this.value.items || [])];
-    items[index] = { ...items[index], [field]: value };
+    const item = { ...items[index], [field]: value };
+
+    const errors: string[] = [];
+
+    const nameFilled = !!item.itemName?.trim();
+    const price = this.toNumber(item.itemPrice);
+    const qty = this.toNumber(item.itemQty);
+
+    // required logic
+    if (nameFilled) {
+      if (price <= 0) errors.push('Price is required and must be > 0');
+      if (qty <= 0) errors.push('Quantity is required and must be > 0');
+    }
+
+    // negative checks
+    if (price < 0) errors.push('Price cannot be negative');
+    if (qty < 0) errors.push('Quantity cannot be negative');
+
+    this.itemErrors[index] = errors;
+
+    items[index] = item;
     this.patch({ items });
   }
 
-  private recalc(details: NewOrderFormValue['details']): NewOrderFormValue['details'] {
+  getFieldErrors(index: number, type: 'price' | 'qty'): string[] {
+    const errors = this.itemErrors[index] || [];
 
+    if (type === 'price') {
+      return errors.filter(e => e.toLowerCase().includes('price'));
+    }
+
+    if (type === 'qty') {
+      return errors.filter(e => e.toLowerCase().includes('quantity'));
+    }
+
+    return [];
+  }
+
+  private recalc(details: NewOrderFormValue['details']): NewOrderFormValue['details'] {
     const items = details.items || [];
 
     const subtotal = this.round2(
