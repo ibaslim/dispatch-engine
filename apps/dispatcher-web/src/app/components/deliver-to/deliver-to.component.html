@@ -5,29 +5,31 @@
         [value]="value.name" (valueChange)="patch({ name: $event })" [errorMessages]="{
       required: 'Name is required.',
       pattern: 'Only alphabets allowed.'
-    }"></app-base-input>
+    }" [showSubmitValidation]="showSubmitValidation"></app-base-input>
 
-    <app-phone-input label="Phone No." [required]="true" [value]="value.phone"
-        (valueChange)="patch({ phone: $event })"></app-phone-input>
+    <app-phone-input label="Phone No." [required]="true" [value]="value.phone" (valueChange)="patch({ phone: $event })"
+        [showSubmitValidation]="showSubmitValidation"></app-phone-input>
 
     <app-base-input label="Email" type="email" placeholder="Enter an email" [required]="true"
         pattern="^[^\s@]+@[^\s@]+\.[^\s@]+$" [value]="value.email" (valueChange)="patch({ email: $event })"
         [errorMessages]="{
           required: 'Email is required.',
           pattern: 'Enter a valid email.'
-        }"></app-base-input>
+        }" [showSubmitValidation]="showSubmitValidation"></app-base-input>
 
     <app-address-input label="Address" placeholder="Enter a location" [required]="true" pattern="^[A-Za-z0-9\s.,#\-/]+$"
         [value]="value.address" (valueChange)="patch({ address: $event })" (pinClick)="pinClick.emit()"
-        name="deliveryAddress"></app-address-input>
+        name="deliveryAddress" [showSubmitValidation]="showSubmitValidation"></app-address-input>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
         <app-date-picker label="Delivery Date" [required]="true" [value]="value.deliveryDate"
-            (valueChange)="patch({ deliveryDate: $event })" name="deliveryDate"></app-date-picker>
+            (valueChange)="patch({ deliveryDate: $event })" name="deliveryDate"
+            [showSubmitValidation]="showSubmitValidation">
+        </app-date-picker>
 
         <app-time-picker label="Delivery Time" [required]="true" [value]="value.deliveryTime"
             (valueChange)="patch({ deliveryTime: $event })" name="deliveryTime" [externalError]="deliveryTimeError"
-            [showExternalError]="showDeliveryTimeError">
+            [showExternalError]="showDeliveryTimeError" [showSubmitValidation]="showSubmitValidation">
         </app-time-picker>
     </div>
 </section>

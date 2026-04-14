@@ -22,6 +22,8 @@ import { ErrorMessageComponent } from '../error-message/error-message.component'
 })
 export class OtherOrderDetailsComponent {
   @Input() value!: NewOrderFormValue['details'];
+  @Input() showSubmitValidation = false;
+
   @Output() valueChange = new EventEmitter<NewOrderFormValue['details']>();
 
   itemErrors: { [key: number]: string[] } = {};
@@ -95,7 +97,7 @@ export class OtherOrderDetailsComponent {
   private recalc(details: NewOrderFormValue['details']): NewOrderFormValue['details'] {
     const items = details.items || [];
 
-    // ✅ SUBTOTAL = price * qty ONLY
+    // SUBTOTAL = price * qty ONLY
     const subtotal = this.round2(
       items.reduce((sum, item) => {
         const price = this.toNumber(item.itemPrice);
@@ -115,7 +117,7 @@ export class OtherOrderDetailsComponent {
 
     const taxAmount = this.round2((subtotal * taxRate) / 100);
 
-    // ✅ TOTAL = subtotal + extras
+    // TOTAL = subtotal + extras
     const total = this.round2(
       subtotal +
       taxAmount +

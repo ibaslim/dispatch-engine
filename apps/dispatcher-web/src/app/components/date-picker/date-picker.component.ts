@@ -17,6 +17,7 @@ export class DatePickerComponent {
   @Input() name = '';
   @Input() minDate?: string;
   @Input() errorMessages: { [key: string]: string } = {};
+  @Input() showSubmitValidation = false;
 
   @Output() valueChange = new EventEmitter<string>();
 

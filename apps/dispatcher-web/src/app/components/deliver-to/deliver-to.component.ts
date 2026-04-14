@@ -14,13 +14,12 @@ import { DatePickerComponent } from '../date-picker/date-picker.component';
 })
 export class DeliverToComponent {
   @Input() value!: NewOrderFormValue['delivery'];
-  @Output() valueChange = new EventEmitter<NewOrderFormValue['delivery']>();
-
-  @Output() pinClick = new EventEmitter<void>();
-
-  // NEW: cross-field time error from parent
   @Input() deliveryTimeError = '';
   @Input() showDeliveryTimeError = false;
+  @Input() showSubmitValidation = false;
+
+  @Output() valueChange = new EventEmitter<NewOrderFormValue['delivery']>();
+  @Output() pinClick = new EventEmitter<void>();
 
   patch(p: Partial<NewOrderFormValue['delivery']>): void {
     this.valueChange.emit({ ...this.value, ...p });

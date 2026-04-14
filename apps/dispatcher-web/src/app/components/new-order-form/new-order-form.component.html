@@ -4,24 +4,26 @@
             <app-base-input label="Order Number" placeholder="Enter order number" [required]="true"
                 pattern="^[A-Za-z0-9\s\-_.#/]+$" [value]="value.orderNumber"
                 (valueChange)="patch({ orderNumber: $event })" [errorMessages]="{
-          required: 'Order number is required.',
-          pattern: 'Only letters, numbers, spaces and -_.#/ allowed.'
-        }"></app-base-input>
+    required: 'Order number is required.',
+    pattern: 'Only letters, numbers, spaces and -_.#/ allowed.'
+  }" [showSubmitValidation]="showSubmitValidation">
+            </app-base-input>
 
             <app-pickup-from [value]="value.pickup" (valueChange)="patch({ pickup: $event })"
                 (pinClick)="pinPickup.emit()" [pickupTimeError]="deliveryTimeError"
-                [showPickupTimeError]="showDeliveryTimeError">
+                [showPickupTimeError]="showDeliveryTimeError" [showSubmitValidation]="showSubmitValidation">
             </app-pickup-from>
 
             <app-deliver-to [value]="value.delivery" (valueChange)="patch({ delivery: $event })"
                 (pinClick)="pinDelivery.emit()" [deliveryTimeError]="deliveryTimeError"
-                [showDeliveryTimeError]="showDeliveryTimeError">
+                [showDeliveryTimeError]="showDeliveryTimeError" [showSubmitValidation]="showSubmitValidation">
             </app-deliver-to>
         </div>
 
         <div class="lg:border-l lg:border-gray-200 lg:dark:border-[#5a5d5a] lg:pl-10 mt-6 lg:mt-0">
-            <app-other-order-details [value]="value.details"
-                (valueChange)="patch({ details: $event })"></app-other-order-details>
+            <app-other-order-details [value]="value.details" (valueChange)="patch({ details: $event })"
+                [showSubmitValidation]="showSubmitValidation">
+            </app-other-order-details>
         </div>
     </div>
 </div>

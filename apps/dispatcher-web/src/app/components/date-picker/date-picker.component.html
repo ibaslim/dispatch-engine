@@ -1,6 +1,7 @@
 <app-base-input [label]="label" type="date" [required]="required" [name]="name" [placeholder]="placeholder"
     [value]="value" (valueChange)="valueChange.emit($event)" [hasSuffix]="true" [min]="effectiveMinDate"
-    [errorMessages]="{ ...errorMessages, min: 'Delivery date cannot be in the past.' }">
+    [errorMessages]="{ ...errorMessages, min: 'Delivery date cannot be in the past.' }"
+    [showSubmitValidation]="showSubmitValidation">
     <app-button suffix variant="icon" type="button" ariaLabel="Open calendar"
         [extraClasses]="'!w-auto !h-auto !p-0 bg-transparent'">
     </app-button>

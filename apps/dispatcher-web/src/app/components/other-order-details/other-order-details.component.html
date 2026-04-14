@@ -25,21 +25,24 @@
                     <!-- NAME -->
                     <div class="sm:col-span-5">
                         <app-base-input [showLabel]="false" placeholder="Name" [value]="item.itemName"
-                            (valueChange)="updateItem(i, 'itemName', $event)">
+                            (valueChange)="updateItem(i, 'itemName', $event)"
+                            [showSubmitValidation]="showSubmitValidation">
                         </app-base-input>
                     </div>
 
                     <!-- PRICE -->
                     <div class="sm:col-span-3">
                         <app-base-input type="number" [showLabel]="false" placeholder="Price" [value]="item.itemPrice"
-                            (valueChange)="updateItem(i, 'itemPrice', $event)">
+                            (valueChange)="updateItem(i, 'itemPrice', $event)"
+                            [showSubmitValidation]="showSubmitValidation">
                         </app-base-input>
                     </div>
 
                     <!-- QTY -->
                     <div class="sm:col-span-2">
                         <app-base-input type="number" [showLabel]="false" placeholder="Qty" [value]="item.itemQty"
-                            (valueChange)="updateItem(i, 'itemQty', $event)">
+                            (valueChange)="updateItem(i, 'itemQty', $event)"
+                            [showSubmitValidation]="showSubmitValidation">
                         </app-base-input>
                     </div>
 
@@ -116,7 +119,8 @@
         </app-textarea>
 
         <!-- PAYMENT -->
-        <app-payment-method [required]="true" [value]="value.payment" (valueChange)="patch({ payment: $event })">
+        <app-payment-method [required]="true" [value]="value.payment" (valueChange)="patch({ payment: $event })"
+            [showSubmitValidation]="showSubmitValidation">
         </app-payment-method>
 
     </div>

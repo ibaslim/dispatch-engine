@@ -14,20 +14,14 @@ import { TimePickerComponent } from '../time-picker/time-picker.component';
 })
 export class PickupFromComponent {
   @Input() value!: NewOrderFormValue['pickup'];
-  @Output() valueChange = new EventEmitter<NewOrderFormValue['pickup']>();
-
-  @Output() pinClick = new EventEmitter<void>();
-
   @Input() pickupTimeError = '';
   @Input() showPickupTimeError = false;
+  @Input() showSubmitValidation = false;
 
-  showSubmitValidation = false;
+  @Output() valueChange = new EventEmitter<NewOrderFormValue['pickup']>();
+  @Output() pinClick = new EventEmitter<void>();
 
   patch(p: Partial<NewOrderFormValue['pickup']>): void {
     this.valueChange.emit({ ...this.value, ...p });
-  }
-
-  onSubmit(): void {
-    this.showSubmitValidation = true;
   }
 }

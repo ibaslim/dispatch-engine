@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { PageComponent } from '../../components/page/page.component';
 import { TableComponent } from '../../components/table/table.component';
 import { SearchBarComponent } from '../../components/search-bar/search-bar.component';
@@ -33,6 +33,7 @@ import { NewOrderFormValue } from '../../models/new-order-form/new-order-form.mo
 export class OrdersComponent {
   tabs = ['Current', 'Scheduled', 'Completed', 'Incomplete', 'History'];
   activeTab = 'Current';
+  formSubmitted = signal(false);
 
   // =====================
   // New Order popup state
@@ -42,6 +43,7 @@ export class OrdersComponent {
 
   openNewOrder(): void {
     this.newOrderValue = this.createDefaultNewOrder();
+    this.formSubmitted.set(false);
     this.isNewOrderOpen = true;
   }
 
@@ -50,10 +52,52 @@ export class OrdersComponent {
   }
 
   saveNewOrder(): void {
-    // TODO: send to backend
-    console.log('New order payload:', this.newOrderValue);
+    this.formSubmitted.set(true);
+
+    const hasErrors = this.checkFormErrors();
+
+    if (hasErrors) return;
+
+    console.log('Saving order:', this.newOrderValue);
+
+    // add to current tab
+    this.currentOrders.unshift({
+      orderNo: this.newOrderValue.orderNumber,
+      customer: this.newOrderValue.delivery.name,
+      pickup: this.newOrderValue.pickup.name,
+      amount: `C$ ${this.newOrderValue.details.total}`,
+      distance: '—',
+      placed: new Date().toISOString(),
+      reqPickup: this.newOrderValue.pickup.pickupTime,
+      reqDelivery: this.newOrderValue.delivery.deliveryTime,
+      ready: 'No',
+      driver: 'Unassigned',
+      status: 'Pending',
+      tracking: 'Inactive'
+    });
+
     this.closeNewOrder();
+    this.formSubmitted.set(false);
   }
+
+  private checkFormErrors(): boolean {
+    const v = this.newOrderValue;
+
+    const pickupTime = v.pickup.pickupTime;
+    const deliveryTime = v.delivery.deliveryTime;
+
+    if (pickupTime && deliveryTime && deliveryTime <= pickupTime) {
+      return true;
+    }
+
+    // basic required checks (extend if needed)
+    if (!v.orderNumber.trim()) return true;
+    if (!v.pickup.name.trim()) return true;
+    if (!v.delivery.name.trim()) return true;
+
+    return false;
+  }
+
 
   onPickupPin(): void {
     // TODO: map pin action

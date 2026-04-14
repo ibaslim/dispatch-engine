@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { PhoneValue } from '../../models/phone-input/phone-input.model';
 import { ErrorMessageComponent } from '../error-message/error-message.component';
@@ -12,25 +12,29 @@ import { PHONE_COUNTRIES, PhoneCountry } from '../../models/phone-countries/phon
   imports: [CommonModule, FormsModule, ErrorMessageComponent, DropdownSelectorComponent],
   templateUrl: './phone-input.component.html'
 })
-export class PhoneInputComponent {
+export class PhoneInputComponent implements OnChanges {
   @Input() label = 'Phone No.';
   @Input() required = false;
-
   @Input() value: PhoneValue = { countryCode: '+1', number: '' };
-  @Output() valueChange = new EventEmitter<PhoneValue>();
-
   @Input() countries: PhoneCountry[] = PHONE_COUNTRIES;
-
   @Input() errorMessages: {
     required?: string;
     onlyNumbers?: string;
     length?: string;
   } = {};
-
   @Input() showSubmitValidation = false;
+
+  @Output() valueChange = new EventEmitter<PhoneValue>();
 
   private interacted = false;
   private invalidChars = false;
+
+  ngOnChanges(): void {
+    if (!this.showSubmitValidation) {
+      this.interacted = false;
+      this.invalidChars = false;
+    }
+  }
 
   get countryOptions() {
     return this.countries.map(c => ({
@@ -90,7 +94,7 @@ export class PhoneInputComponent {
     // ONLY NUMBERS ERROR (highest priority)
     if (this.invalidChars) {
       list.push(this.errorMessages.onlyNumbers || 'Only numbers are allowed.');
-      return list; // 🔥 stop here (important fix)
+      return list;
     }
 
     // REQUIRED ERROR

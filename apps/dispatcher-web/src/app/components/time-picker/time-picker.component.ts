@@ -13,8 +13,9 @@ export class TimePickerComponent {
   @Input() required = false;
   @Input() name = '';
   @Input() value = ''; // HH:mm
-  @Output() valueChange = new EventEmitter<string>();
-
   @Input() externalError = '';
   @Input() showExternalError = false;
+  @Input() showSubmitValidation = false;
+  
+  @Output() valueChange = new EventEmitter<string>();
 }

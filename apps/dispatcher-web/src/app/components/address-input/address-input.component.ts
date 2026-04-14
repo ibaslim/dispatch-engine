@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, ViewChild } from '@angular/core';
 import { FormsModule, NgModel } from '@angular/forms';
 import { ButtonComponent } from '../button/button.component';
 import { ErrorMessageComponent } from '../error-message/error-message.component';
@@ -10,20 +10,24 @@ import { ErrorMessageComponent } from '../error-message/error-message.component'
   imports: [CommonModule, FormsModule, ButtonComponent, ErrorMessageComponent],
   templateUrl: './address-input.component.html',
 })
-export class AddressInputComponent {
+export class AddressInputComponent implements OnChanges {
   @Input() label = 'Address';
   @Input() placeholder = 'Enter a location';
   @Input() value = '';
   @Input() required = false;
   @Input() name = '';
   @Input() pattern?: string;
-
+  @Input() showSubmitValidation = false;
   @Input() errorMessages: Partial<Record<'required' | 'pattern', string>> = {};
 
   @Output() valueChange = new EventEmitter<string>();
   @Output() pinClick = new EventEmitter<void>();
 
   @ViewChild('model', { static: true }) model?: NgModel;
+
+  ngOnChanges(): void {
+    this.model?.control?.updateValueAndValidity();
+  }
 
   onInput(v: string): void {
     this.valueChange.emit(v);
@@ -35,7 +39,12 @@ export class AddressInputComponent {
 
   get showError(): boolean {
     const m = this.model;
-    return !!(m && m.invalid && (m.touched || m.dirty));
+
+    return !!(
+      m &&
+      m.invalid &&
+      (m.touched || m.dirty || this.showSubmitValidation)
+    );
   }
 
   get errorList(): string[] {

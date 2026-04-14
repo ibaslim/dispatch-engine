@@ -8,15 +8,15 @@
   }" [showSubmitValidation]="showSubmitValidation">
     </app-base-input>
 
-    <app-phone-input label="Phone No." [required]="true" [value]="value.phone"
-        (valueChange)="patch({ phone: $event })"></app-phone-input>
+    <app-phone-input label="Phone No." [required]="true" [value]="value.phone" (valueChange)="patch({ phone: $event })"
+        [showSubmitValidation]="showSubmitValidation"></app-phone-input>
 
     <app-address-input label="Address" placeholder="Enter a location" [required]="true" pattern="^[A-Za-z0-9\s.,#\-/]+$"
         [value]="value.address" (valueChange)="patch({ address: $event })" (pinClick)="pinClick.emit()"
-        name="pickupAddress"></app-address-input>
+        name="pickupAddress" [showSubmitValidation]="showSubmitValidation"></app-address-input>
 
     <app-time-picker label="Pickup Time" [required]="true" [value]="value.pickupTime"
         (valueChange)="patch({ pickupTime: $event })" name="pickupTime" [externalError]="pickupTimeError"
-        [showExternalError]="showPickupTimeError">
+        [showExternalError]="showPickupTimeError" [showSubmitValidation]="showSubmitValidation">
     </app-time-picker>
 </section>
