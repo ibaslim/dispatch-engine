@@ -36,9 +36,9 @@ export class OrdersComponent {
   activeMenuRow: any = null;
 
   menuItems = [
-    { label: 'Details', action: 'details' },
-    { label: 'Edit', action: 'edit' },
-    { label: 'Print Order', action: 'print' }
+    { label: 'Details', action: 'details', icon: 'ph ph-eye' },
+    { label: 'Edit', action: 'edit', icon: 'ph ph-pencil-simple' },
+    { label: 'Print Order', action: 'print', icon: 'ph ph-printer' }
   ];
 
   toggleMenu(row: any): void {

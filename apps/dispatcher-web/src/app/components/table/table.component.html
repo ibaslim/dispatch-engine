@@ -56,7 +56,8 @@
                     <ng-container *ngSwitchCase="'actions'">
                         <div class="relative flex justify-center w-full">
 
-                            <app-button variant="ghost" label="⋯" (onClick)="onActionClick(row)">
+                            <app-button variant="icon" (onClick)="onActionClick(row)" ariaLabel="Row actions">
+                                <i class="ph ph-dots-three text-base text-black dark:text-gray-300"></i>
                             </app-button>
 
                             <app-menu [items]="menuItems" [visible]="activeMenuRow === row"

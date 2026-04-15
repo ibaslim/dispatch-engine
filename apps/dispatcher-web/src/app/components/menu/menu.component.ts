@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 export interface MenuItem {
   label: string;
   action: string;
+  icon?: string;
 }
 
 @Component({
