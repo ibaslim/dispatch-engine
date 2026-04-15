@@ -1,4 +1,4 @@
-<div *ngIf="visible" class="absolute right-0 mt-2 w-56 rounded-lg shadow-2xl border z-50
+<div *ngIf="visible" (click)="$event.stopPropagation()" class="absolute right-0 top-full mt-2 w-56 rounded-lg shadow-2xl border z-50
             bg-white text-gray-900 border-gray-200
             dark:bg-[#141414] dark:text-white dark:border-[#242424]">
 

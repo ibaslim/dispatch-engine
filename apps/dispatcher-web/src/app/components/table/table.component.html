@@ -56,8 +56,11 @@
                     <ng-container *ngSwitchCase="'actions'">
                         <div class="relative flex justify-center w-full">
 
-                            <app-button variant="icon" (onClick)="onActionClick(row)" ariaLabel="Row actions">
-                                <i class="ph ph-dots-three text-base text-black dark:text-gray-300"></i>
+                            <app-button variant="icon"
+                                class="group rounded-md hover:bg-gray-100 dark:hover:bg-[#2a2d2a] transition"
+                                (onClick)="onActionClick(row, $event)" ariaLabel="Row actions">
+                                <i
+                                    class="ph ph-dots-three text-xl text-gray-900 dark:text-gray-200 transition-transform duration-150 group-hover:scale-125"></i>
                             </app-button>
 
                             <app-menu [items]="menuItems" [visible]="activeMenuRow === row"

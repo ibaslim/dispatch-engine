@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, TemplateRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, TemplateRef, HostListener } from '@angular/core';
 import { TableColumn } from '../../models/table.model';
 import { CommonModule } from '@angular/common';
 import { ToggleButtonComponent } from '../toggle-button/toggle-button.component';
@@ -27,7 +27,11 @@ export class TableComponent {
   // action button click
   @Output() actionClick = new EventEmitter<any>();
 
-  onActionClick(row: any): void {
+  onActionClick(row: any, event?: MouseEvent): void {
+    event?.stopPropagation(); // important
+
+    this.activeMenuRow = this.activeMenuRow === row ? null : row;
+
     this.actionClick.emit(row);
   }
 
@@ -36,5 +40,19 @@ export class TableComponent {
     const parts = name.trim().split(/\s+/);
     if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '';
     return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+
+  @HostListener('document:click', ['$event'])
+  onOutsideClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+
+    // If click is inside menu OR button → do nothing
+    const clickedInsideMenu = target.closest('app-menu');
+    const clickedInsideButton = target.closest('app-button');
+
+    if (clickedInsideMenu || clickedInsideButton) return;
+
+    // Otherwise close menu
+    this.activeMenuRow = null;
   }
 }
