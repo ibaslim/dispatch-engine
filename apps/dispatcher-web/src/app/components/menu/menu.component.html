@@ -1,0 +1,19 @@
+<div *ngIf="visible" class="absolute right-0 mt-2 w-56 rounded-lg shadow-2xl border z-50
+            bg-white text-gray-900 border-gray-200
+            dark:bg-[#141414] dark:text-white dark:border-[#242424]">
+
+    <div class="py-2">
+
+        <div *ngFor="let item of items" (click)="onSelect(item)" class="flex items-center gap-3 px-4 py-2 text-sm cursor-pointer transition
+                hover:bg-gray-100 dark:hover:bg-[#3C3D37]">
+
+            <!-- ICON -->
+            <i [class]="item.icon + ' text-base text-gray-500 dark:text-gray-300'"></i>
+
+            <!-- LABEL -->
+            <span>{{ item.label }}</span>
+
+        </div>
+
+    </div>
+</div>

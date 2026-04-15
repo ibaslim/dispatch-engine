@@ -3,10 +3,11 @@ import { TableColumn } from '../../models/table.model';
 import { CommonModule } from '@angular/common';
 import { ToggleButtonComponent } from '../toggle-button/toggle-button.component';
 import { ButtonComponent } from '../button/button.component';
+import { MenuComponent } from '../menu/menu.component';
 
 @Component({
   selector: 'app-table',
-  imports: [CommonModule, ToggleButtonComponent, ButtonComponent],
+  imports: [CommonModule, ToggleButtonComponent, ButtonComponent, MenuComponent],
   templateUrl: './table.component.html',
 })
 export class TableComponent {
@@ -18,6 +19,10 @@ export class TableComponent {
 
   // optional custom column widths
   @Input() columnTemplate = '';
+  @Input() activeMenuRow: any = null;
+  @Input() menuItems: any[] = [];
+
+  @Output() menuSelect = new EventEmitter<any>();
 
   // action button click
   @Output() actionClick = new EventEmitter<any>();

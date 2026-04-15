@@ -54,9 +54,15 @@
 
                     <!-- ACTIONS -->
                     <ng-container *ngSwitchCase="'actions'">
-                        <div class="flex justify-center w-full">
-                            <app-button variant="ghost" label="⋯" (onClick)="onActionClick(row)"
-                                [extraClasses]="'text-gray-400 hover:text-gray-200 px-2 py-0 leading-none text-lg'"></app-button>
+                        <div class="relative flex justify-center w-full">
+
+                            <app-button variant="ghost" label="⋯" (onClick)="onActionClick(row)">
+                            </app-button>
+
+                            <app-menu [items]="menuItems" [visible]="activeMenuRow === row"
+                                (select)="menuSelect.emit({ item: $event, row })">
+                            </app-menu>
+
                         </div>
                     </ng-container>
 

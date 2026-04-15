@@ -19,7 +19,10 @@
         </app-button>
     </div>
 
-    <app-table [columns]="columns" [rows]="rows" [emptyTitle]="emptyTitle" [emptySubtitle]="emptySubtitle"></app-table>
+    <app-table [columns]="columns" [rows]="rows" [emptyTitle]="emptyTitle" [emptySubtitle]="emptySubtitle"
+        [activeMenuRow]="activeMenuRow" [menuItems]="menuItems" (actionClick)="toggleMenu($event)"
+        (menuSelect)="handleMenuAction($event.item, $event.row)">
+    </app-table>
 
     <!-- New Order Modal -->
     <app-popup [open]="isNewOrderOpen" title="New Order" (close)="closeNewOrder()">

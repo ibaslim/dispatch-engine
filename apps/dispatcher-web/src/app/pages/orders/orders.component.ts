@@ -33,6 +33,23 @@ export class OrdersComponent {
   isNewOrderOpen = false;
   newOrderValue: NewOrderFormValue = this.createDefaultNewOrder();
 
+  activeMenuRow: any = null;
+
+  menuItems = [
+    { label: 'Details', action: 'details' },
+    { label: 'Edit', action: 'edit' },
+    { label: 'Print Order', action: 'print' }
+  ];
+
+  toggleMenu(row: any): void {
+    this.activeMenuRow = this.activeMenuRow === row ? null : row;
+  }
+
+  handleMenuAction(event: any, row: any): void {
+    console.log(event.action, row);
+    this.activeMenuRow = null;
+  }
+
   openNewOrder(): void {
     this.newOrderValue = this.createDefaultNewOrder();
     this.formSubmitted.set(false);
@@ -229,7 +246,8 @@ export class OrdersComponent {
     { key: 'ready', label: 'Ready for pick-up', sortable: true },
     { key: 'driver', label: 'Driver', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
-    { key: 'tracking', label: 'Tracking', sortable: true }
+    { key: 'tracking', label: 'Tracking', sortable: true },
+    { key: 'actions', label: '', sortable: false }
   ];
 
   // Scheduled tab columns
@@ -244,7 +262,8 @@ export class OrdersComponent {
     { key: 'estDeliveryTime', label: 'Est. Delivery Time', sortable: true },
     { key: 'elapsedTime', label: 'Elapsed Time', sortable: true },
     { key: 'driver', label: 'Driver', sortable: true },
-    { key: 'status', label: 'Status', sortable: true }
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'actions', label: '', sortable: false }
   ];
 
   completedColumns: TableColumn[] = [
