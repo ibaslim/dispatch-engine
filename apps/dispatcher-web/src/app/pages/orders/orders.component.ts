@@ -15,7 +15,6 @@ import { HistoryOrder } from '../../models/orders/history-orders.model';
 
 import { NewOrderFormComponent } from '../../components/new-order-form/new-order-form.component';
 import { NewOrderFormValue } from '../../models/new-order-form/new-order-form.model';
-import { ToggleButtonComponent } from '../../components/toggle-button/toggle-button.component';
 
 @Component({
   selector: 'app-orders',
@@ -55,12 +54,8 @@ export class OrdersComponent {
     const isToday = this.isToday(v.delivery.deliveryDate);
     const diff = this.getTimeDiffHours(v.pickup.pickupTime, v.delivery.deliveryTime);
 
-    // single source of truth
-    const driver = '';
-
-    const status = this.getStatus(driver);
-
-    const orderData = {
+    // SINGLE SOURCE OF TRUTH
+    const baseOrder = {
       orderNo: v.orderNumber,
       customer: v.delivery.name,
       pickup: v.pickup.name,
@@ -70,39 +65,45 @@ export class OrdersComponent {
       reqPickup: this.formatTime(v.pickup.pickupTime),
       reqDelivery: this.formatTime(v.delivery.deliveryTime),
       ready: false,
-      driver,
-      status,
+      driver: '',
+      status: '',
       tracking: 'Inactive'
     };
 
-    // SCHEDULED ORDERS
-    if (!isToday || diff >= 3) {
-      this.scheduledOrders.unshift({
-        select: false,
-        orderNo: orderData.orderNo,
-        customerName: orderData.customer,
-        pickup: orderData.pickup,
-        amount: orderData.amount,
-        distance: orderData.distance,
-        placementTime: this.formatDateTime(v.delivery.deliveryDate, v.pickup.pickupTime),
-        estDeliveryTime: this.formatDateTime(v.delivery.deliveryDate, v.delivery.deliveryTime),
-        elapsedTime: '—',
-        driver,
-        status
-      });
-    }
+    // derive status from driver
+    baseOrder.status = this.getStatus(baseOrder.driver);
 
     // CURRENT ORDERS
+    if (isToday && diff < 3) {
+      this.currentOrders.unshift(baseOrder);
+    }
+
+    // SCHEDULED ORDERS
     else {
-      this.currentOrders.unshift(orderData);
+      this.scheduledOrders.unshift({
+        select: false,
+        orderNo: baseOrder.orderNo,
+        customerName: baseOrder.customer,
+        pickup: baseOrder.pickup,
+        amount: baseOrder.amount,
+        distance: baseOrder.distance,
+        placementTime: baseOrder.placed,
+        estDeliveryTime: this.formatDateTime(
+          v.delivery.deliveryDate,
+          v.delivery.deliveryTime
+        ),
+        elapsedTime: '—',
+        driver: baseOrder.driver,
+        status: baseOrder.status
+      });
     }
 
     this.closeNewOrder();
     this.formSubmitted.set(false);
   }
 
-  private getStatus(driver: string): string {
-    return driver ? 'Assigned' : 'Unassigned';
+  private getStatus(driver?: string): 'Assigned' | 'Unassigned' {
+    return driver?.trim() ? 'Assigned' : 'Unassigned';
   }
 
   private toMinutes(t: string): number {
