@@ -25,8 +25,8 @@
 
     <!-- New Order Modal -->
     <app-popup [open]="isNewOrderOpen" title="New Order" (close)="closeNewOrder()">
-        <app-new-order-form [value]="newOrderValue" (valueChange)="newOrderValue = $event" (pinPickup)="onPickupPin()"
-            (pinDelivery)="onDeliveryPin()" [showSubmitValidation]="formSubmitted()">
+        <app-new-order-form *ngIf="isNewOrderOpen" [value]="newOrderValue" (valueChange)="newOrderValue = $event"
+            (pinPickup)="onPickupPin()" (pinDelivery)="onDeliveryPin()" [showSubmitValidation]="formSubmitted()">
         </app-new-order-form>
 
         <div modal-footer class="flex items-center justify-end gap-3">
