@@ -7,7 +7,7 @@ export interface Order {
     placed: string;
     reqPickup: string;
     reqDelivery: string;
-    ready: string;
+    ready: boolean;
     driver: string;
     status: string;
     tracking: string;

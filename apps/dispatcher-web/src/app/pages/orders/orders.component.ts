@@ -15,18 +15,13 @@ import { HistoryOrder } from '../../models/orders/history-orders.model';
 
 import { NewOrderFormComponent } from '../../components/new-order-form/new-order-form.component';
 import { NewOrderFormValue } from '../../models/new-order-form/new-order-form.model';
+import { ToggleButtonComponent } from '../../components/toggle-button/toggle-button.component';
 
 @Component({
   selector: 'app-orders',
   standalone: true,
   imports: [
-    CommonModule,
-    PageComponent,
-    TableComponent,
-    SearchBarComponent,
-    ButtonComponent,
-    PopupComponent,
-    NewOrderFormComponent
+    CommonModule, PageComponent, TableComponent, SearchBarComponent, ButtonComponent, PopupComponent, NewOrderFormComponent
   ],
   templateUrl: './orders.component.html'
 })
@@ -53,15 +48,17 @@ export class OrdersComponent {
     this.formSubmitted.set(true);
 
     const hasErrors = this.checkFormErrors();
-
     if (hasErrors) return;
-
-    console.log('Saving order:', this.newOrderValue);
 
     const v = this.newOrderValue;
 
     const isToday = this.isToday(v.delivery.deliveryDate);
     const diff = this.getTimeDiffHours(v.pickup.pickupTime, v.delivery.deliveryTime);
+
+    // single source of truth
+    const driver = '';
+
+    const status = this.getStatus(driver);
 
     const orderData = {
       orderNo: v.orderNumber,
@@ -72,13 +69,13 @@ export class OrdersComponent {
       placed: this.formatDateTime(v.delivery.deliveryDate, v.pickup.pickupTime),
       reqPickup: this.formatTime(v.pickup.pickupTime),
       reqDelivery: this.formatTime(v.delivery.deliveryTime),
-      ready: 'No',
-      driver: 'Unassigned',
-      status: 'Pending',
+      ready: false,
+      driver,
+      status,
       tracking: 'Inactive'
     };
 
-    // Decision logic
+    // SCHEDULED ORDERS
     if (!isToday || diff >= 3) {
       this.scheduledOrders.unshift({
         select: false,
@@ -90,15 +87,22 @@ export class OrdersComponent {
         placementTime: this.formatDateTime(v.delivery.deliveryDate, v.pickup.pickupTime),
         estDeliveryTime: this.formatDateTime(v.delivery.deliveryDate, v.delivery.deliveryTime),
         elapsedTime: '—',
-        driver: orderData.driver,
-        status: 'Scheduled'
+        driver,
+        status
       });
-    } else {
+    }
+
+    // CURRENT ORDERS
+    else {
       this.currentOrders.unshift(orderData);
     }
 
     this.closeNewOrder();
     this.formSubmitted.set(false);
+  }
+
+  private getStatus(driver: string): string {
+    return driver ? 'Assigned' : 'Unassigned';
   }
 
   private toMinutes(t: string): number {
@@ -301,24 +305,10 @@ export class OrdersComponent {
       placed: '2026-04-01 10:32 AM',
       reqPickup: '2026-04-01 10:50 AM',
       reqDelivery: '2026-04-01 11:15 AM',
-      ready: 'Yes',
+      ready: true,
       driver: 'Central Courier Services',
       status: 'Assigned',
       tracking: 'Active'
-    },
-    {
-      orderNo: 'ORD-1002',
-      customer: 'Emma Watson',
-      pickup: 'City Plaza',
-      amount: '$24.00',
-      distance: '5.6 km',
-      placed: '2026-04-01 11:05 AM',
-      reqPickup: '2026-04-01 11:20 AM',
-      reqDelivery: '2026-04-01 11:45 AM',
-      ready: 'No',
-      driver: 'Ghazanfarr Rehman',
-      status: 'Pending',
-      tracking: 'Inactive'
     }
   ];
 
@@ -334,20 +324,7 @@ export class OrdersComponent {
       estDeliveryTime: '2026-04-02 10:15 AM',
       elapsedTime: '—',
       driver: 'Central Courier Services',
-      status: 'Scheduled'
-    },
-    {
-      select: false,
-      orderNo: 'SCH-2002',
-      customerName: 'Mark Lee',
-      pickup: 'Airport Plaza',
-      amount: '$42.00',
-      distance: '9.2 km',
-      placementTime: '2026-04-02 11:20 AM',
-      estDeliveryTime: '2026-04-02 12:30 PM',
-      elapsedTime: '—',
-      driver: 'Ghazanfarr Rehman',
-      status: 'Scheduled'
+      status: 'Assigned'
     }
   ];
 
@@ -367,22 +344,6 @@ export class OrdersComponent {
       deliveryTime: '2026-04-01 10:00 AM',
       driver: 'Central Courier Services',
       feedback: 'Excellent'
-    },
-    {
-      select: false,
-      date: '2026-04-01',
-      orderNo: 'CMP-3002',
-      customerName: 'Pam Beesly',
-      pickup: 'City Mall',
-      amount: '$16.75',
-      distance: '2.8 km',
-      placementTime: '2026-04-01 11:30 AM',
-      startTime: '2026-04-01 11:45 AM',
-      pickupTime: '2026-04-01 12:00 PM',
-      reqDeliveryTime: '2026-04-01 12:25 PM',
-      deliveryTime: '2026-04-01 12:20 PM',
-      driver: 'Ghazanfarr Rehman',
-      feedback: 'Good'
     }
   ];
 
@@ -418,20 +379,6 @@ export class OrdersComponent {
       pickupTime: '2026-04-02 09:15 AM',
       deliveryTime: '2026-04-02 09:45 AM',
       driver: 'Ali Anayat',
-      status: 'Completed'
-    },
-    {
-      date: '2026-04-02',
-      orderNo: 'HIS-4002',
-      customerName: 'Monica Geller',
-      pickup: 'West Mall',
-      amount: '$27.50',
-      distance: '6.2 km',
-      placementTime: '2026-04-02 10:30 AM',
-      startTime: '2026-04-02 10:45 AM',
-      pickupTime: '2026-04-02 11:05 AM',
-      deliveryTime: '2026-04-02 11:40 AM',
-      driver: 'Central Courier Services',
       status: 'Completed'
     }
   ];

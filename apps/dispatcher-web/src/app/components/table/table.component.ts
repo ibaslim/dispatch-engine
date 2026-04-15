@@ -1,16 +1,18 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input, Output, EventEmitter, TemplateRef } from '@angular/core';
 import { TableColumn } from '../../models/table.model';
 import { CommonModule } from '@angular/common';
+import { ToggleButtonComponent } from '../toggle-button/toggle-button.component';
+import { ButtonComponent } from '../button/button.component';
 
 @Component({
   selector: 'app-table',
-  imports: [CommonModule],
+  imports: [CommonModule, ToggleButtonComponent, ButtonComponent],
   templateUrl: './table.component.html',
 })
 export class TableComponent {
   @Input() columns: TableColumn[] = [];
   @Input() rows: any[] = [];
-
+  @Input() cellTemplate?: (row: any, col: TableColumn) => TemplateRef<any> | null;
   @Input() emptyTitle = 'You currently have no orders';
   @Input() emptySubtitle = '';
 
