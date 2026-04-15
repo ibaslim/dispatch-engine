@@ -35,9 +35,7 @@ export class OrdersComponent {
   activeTab = 'Current';
   formSubmitted = signal(false);
 
-  // =====================
   // New Order popup state
-  // =====================
   isNewOrderOpen = false;
   newOrderValue: NewOrderFormValue = this.createDefaultNewOrder();
 
@@ -60,24 +58,74 @@ export class OrdersComponent {
 
     console.log('Saving order:', this.newOrderValue);
 
-    // add to current tab
-    this.currentOrders.unshift({
-      orderNo: this.newOrderValue.orderNumber,
-      customer: this.newOrderValue.delivery.name,
-      pickup: this.newOrderValue.pickup.name,
-      amount: `C$ ${this.newOrderValue.details.total}`,
+    const v = this.newOrderValue;
+
+    const isToday = this.isToday(v.delivery.deliveryDate);
+    const diff = this.getTimeDiffHours(v.pickup.pickupTime, v.delivery.deliveryTime);
+
+    const orderData = {
+      orderNo: v.orderNumber,
+      customer: v.delivery.name,
+      pickup: v.pickup.name,
+      amount: `C$ ${v.details.total}`,
       distance: '—',
-      placed: new Date().toISOString(),
-      reqPickup: this.newOrderValue.pickup.pickupTime,
-      reqDelivery: this.newOrderValue.delivery.deliveryTime,
+      placed: this.formatDateTime(v.delivery.deliveryDate, v.pickup.pickupTime),
+      reqPickup: this.formatTime(v.pickup.pickupTime),
+      reqDelivery: this.formatTime(v.delivery.deliveryTime),
       ready: 'No',
       driver: 'Unassigned',
       status: 'Pending',
       tracking: 'Inactive'
-    });
+    };
+
+    // Decision logic
+    if (!isToday || diff >= 3) {
+      this.scheduledOrders.unshift({
+        select: false,
+        orderNo: orderData.orderNo,
+        customerName: orderData.customer,
+        pickup: orderData.pickup,
+        amount: orderData.amount,
+        distance: orderData.distance,
+        placementTime: this.formatDateTime(v.delivery.deliveryDate, v.pickup.pickupTime),
+        estDeliveryTime: this.formatDateTime(v.delivery.deliveryDate, v.delivery.deliveryTime),
+        elapsedTime: '—',
+        driver: orderData.driver,
+        status: 'Scheduled'
+      });
+    } else {
+      this.currentOrders.unshift(orderData);
+    }
 
     this.closeNewOrder();
     this.formSubmitted.set(false);
+  }
+
+  private toMinutes(t: string): number {
+    const [hh, mm] = t.split(':').map(Number);
+    return hh * 60 + mm;
+  }
+
+  private isToday(date: string): boolean {
+    return date === this.todayYYYYMMDD();
+  }
+
+  private getTimeDiffHours(pickup: string, delivery: string): number {
+    return (this.toMinutes(delivery) - this.toMinutes(pickup)) / 60;
+  }
+
+  private formatTime(time: string): string {
+    const [hh, mm] = time.split(':').map(Number);
+    const period = hh >= 12 ? 'pm' : 'am';
+    const hour = hh % 12 || 12;
+    return `${hour}:${mm.toString().padStart(2, '0')}${period}`;
+  }
+
+  private formatDateTime(dateStr: string, time: string): string {
+    const date = new Date(dateStr);
+    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+    const formattedDate = date.toLocaleDateString('en-US', options);
+    return `${formattedDate}, ${this.formatTime(time)}`;
   }
 
   private checkFormErrors(): boolean {
