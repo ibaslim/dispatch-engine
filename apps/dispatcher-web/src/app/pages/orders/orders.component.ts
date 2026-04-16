@@ -56,10 +56,21 @@ export class OrdersComponent {
 
   activeMenuRow: any = null;
 
+  isDetailsOpen = false;
+  selectedOrderForDetails: OrderEntity | null = null;
+  isDetailsMenuOpen = false;
+
   menuItems = [
     { label: 'Details', action: 'details', icon: 'ph ph-eye' },
     { label: 'Edit', action: 'edit', icon: 'ph ph-pencil-simple' },
     { label: 'Print Order', action: 'print', icon: 'ph ph-printer' }
+  ];
+
+  detailsMenuItems = [
+    { label: 'Mark as Done', action: 'done', icon: 'ph ph-check' },
+    { label: 'Mark as Failed', action: 'failed', icon: 'ph ph-x' },
+    { label: 'Delete', action: 'delete', icon: 'ph ph-trash' },
+    { label: 'Download PDF', action: 'pdf', icon: 'ph ph-download' }
   ];
 
   // -------------------------
@@ -85,7 +96,66 @@ export class OrdersComponent {
       if (order) this.editOrder(order);
     }
 
+    if (event.action === 'details') {
+      const order = this.orders.find(o => {
+        const v = o.view;
+        return (
+          v.current?.orderNo === row.orderNo ||
+          v.scheduled?.orderNo === row.orderNo ||
+          v.completed?.orderNo === row.orderNo ||
+          v.incomplete?.orderNo === row.orderNo ||
+          v.history?.orderNo === row.orderNo
+        );
+      });
+
+      if (order) {
+        this.selectedOrderForDetails = order;
+        this.isDetailsOpen = true;
+      }
+    }
+
     this.activeMenuRow = null;
+  }
+
+  handleDetailsMenu(action: string): void {
+    if (!this.selectedOrderForDetails) return;
+
+    const id = this.selectedOrderForDetails.id;
+
+    if (action === 'done') {
+      this.updateOrderTab(id, 'completed');
+    }
+
+    if (action === 'failed') {
+      this.updateOrderTab(id, 'incomplete');
+    }
+
+    if (action === 'delete') {
+      this.orders = this.orders.filter(o => o.id !== id);
+      this.closeDetails();
+    }
+
+    if (action === 'pdf') {
+      this.downloadOrderPdf(this.selectedOrderForDetails);
+    }
+  }
+
+  // -------------------------
+  // OPEN / CLOSE
+  // -------------------------
+
+  downloadOrderPdf(order: OrderEntity): void {
+    const content = JSON.stringify(order.full, null, 2);
+
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `order-${order.full.orderNumber}.json`;
+    a.click();
+
+    window.URL.revokeObjectURL(url);
   }
 
   // -------------------------
@@ -100,6 +170,16 @@ export class OrdersComponent {
 
   closeNewOrder(): void {
     this.isNewOrderOpen = false;
+  }
+
+  closeDetails(): void {
+    this.isDetailsOpen = false;
+    this.selectedOrderForDetails = null;
+  }
+
+  maskCard(card: string = ''): string {
+    if (!card) return '';
+    return card.replace(/\d(?=\d{4})/g, '*');
   }
 
   // -------------------------
@@ -333,7 +413,8 @@ export class OrdersComponent {
     { key: 'reqDeliveryTime', label: 'Req. Delivery Time', sortable: true },
     { key: 'deliveryTime', label: 'Delivery Time', sortable: true },
     { key: 'driver', label: 'Driver', sortable: true },
-    { key: 'feedback', label: 'Feedback', sortable: true }
+    { key: 'feedback', label: 'Feedback', sortable: true },
+    { key: 'actions', label: '', sortable: false }
   ];
 
   incompleteColumns: TableColumn[] = [
@@ -350,7 +431,7 @@ export class OrdersComponent {
     { key: 'deliveryTime', label: 'Delivery Time', sortable: true },
     { key: 'driver', label: 'Driver', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
-    { key: 'actions', label: '', sortable: false }
+    { key: 'actions', label: '', sortable: false },
   ];
 
   historyColumns: TableColumn[] = [
@@ -365,7 +446,8 @@ export class OrdersComponent {
     { key: 'pickupTime', label: 'Pick up Time', sortable: true },
     { key: 'deliveryTime', label: 'Delivery Time', sortable: true },
     { key: 'driver', label: 'Driver', sortable: true },
-    { key: 'status', label: 'Status', sortable: true }
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'actions', label: '', sortable: false }
   ];
 
   // -------------------------
@@ -447,6 +529,14 @@ export class OrdersComponent {
         payment: { method: 'cash_on_delivery' }
       }
     };
+  }
+
+  private updateOrderTab(id: string, tab: OrderTab): void {
+    const index = this.orders.findIndex(o => o.id === id);
+    if (index === -1) return;
+
+    this.orders[index].tab = tab;
+    this.closeDetails();
   }
 
   emptyTitle = 'No data available';

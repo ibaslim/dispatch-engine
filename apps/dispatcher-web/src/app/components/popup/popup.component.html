@@ -10,15 +10,26 @@
 
             <!-- Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-[#5a5d5a]">
+
+                <!-- TITLE -->
                 <h2 class="text-xl font-semibold">{{ title }}</h2>
 
-                <app-button variant="icon" type="button" ariaLabel="Close" (onClick)="close.emit()"
-                    [extraClasses]="'!w-auto !h-auto !p-0 bg-transparent'">
-                    <span
-                        class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-[#2f3230] transition flex items-center justify-center">
-                        <i class="ph ph-x text-lg text-gray-700 dark:text-gray-200"></i>
-                    </span>
-                </app-button>
+                <!-- RIGHT SIDE: SLOT + CLOSE -->
+                <div class="flex items-center gap-2">
+                    <ng-content select="[popup-actions]"></ng-content>
+
+                    <!-- CLOSE BUTTON -->
+                    <app-button variant="icon" type="button" ariaLabel="Close" (onClick)="close.emit()"
+                        [extraClasses]="'!w-auto !h-auto !p-0 bg-transparent'">
+
+                        <span
+                            class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-[#2f3230] transition flex items-center justify-center">
+                            <i class="ph ph-x text-lg text-gray-700 dark:text-gray-200"></i>
+                        </span>
+
+                    </app-button>
+                </div>
+
             </div>
 
             <!-- Body (scrollable) -->
