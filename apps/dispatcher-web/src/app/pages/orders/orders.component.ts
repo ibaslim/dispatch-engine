@@ -1,35 +1,56 @@
 import { CommonModule } from '@angular/common';
 import { Component, signal } from '@angular/core';
+
 import { PageComponent } from '../../components/page/page.component';
 import { TableComponent } from '../../components/table/table.component';
 import { SearchBarComponent } from '../../components/search-bar/search-bar.component';
 import { ButtonComponent } from '../../components/button/button.component';
 import { PopupComponent } from '../../components/popup/popup.component';
+import { NewOrderFormComponent } from '../../components/new-order-form/new-order-form.component';
 
 import { TableColumn } from '../../models/table.model';
+import { OrderEntity, OrderTab } from '../../models/orders/order-entity.model';
 import { Order } from '../../models/orders/current-orders.model';
 import { ScheduledOrder } from '../../models/orders/scheduled-orders.model';
 import { CompletedOrder } from '../../models/orders/completed-orders.model';
 import { IncompleteOrder } from '../../models/orders/incomplete-orders.model';
 import { HistoryOrder } from '../../models/orders/history-orders.model';
-
-import { NewOrderFormComponent } from '../../components/new-order-form/new-order-form.component';
 import { NewOrderFormValue } from '../../models/new-order-form/new-order-form.model';
 
 @Component({
   selector: 'app-orders',
   standalone: true,
   imports: [
-    CommonModule, PageComponent, TableComponent, SearchBarComponent, ButtonComponent, PopupComponent, NewOrderFormComponent
+    CommonModule,
+    PageComponent,
+    TableComponent,
+    SearchBarComponent,
+    ButtonComponent,
+    PopupComponent,
+    NewOrderFormComponent
   ],
   templateUrl: './orders.component.html'
 })
 export class OrdersComponent {
+
+  // -------------------------
+  // TABS
+  // -------------------------
   tabs = ['Current', 'Scheduled', 'Completed', 'Incomplete', 'History'];
   activeTab = 'Current';
+
+  setActiveTab(tab: string): void {
+    this.activeTab = tab;
+  }
+
+  // -------------------------
+  // STATE
+  // -------------------------
   formSubmitted = signal(false);
 
-  // New Order popup state
+  orders: OrderEntity[] = [];
+  editingOrderId: string | null = null;
+
   isNewOrderOpen = false;
   newOrderValue: NewOrderFormValue = this.createDefaultNewOrder();
 
@@ -41,17 +62,38 @@ export class OrdersComponent {
     { label: 'Print Order', action: 'print', icon: 'ph ph-printer' }
   ];
 
+  // -------------------------
+  // MENU
+  // -------------------------
   toggleMenu(row: any): void {
     this.activeMenuRow = this.activeMenuRow === row ? null : row;
   }
 
   handleMenuAction(event: any, row: any): void {
-    console.log(event.action, row);
+    if (event.action === 'edit') {
+      const order = this.orders.find(o => {
+        const v = o.view;
+        return (
+          v.current?.orderNo === row.orderNo ||
+          v.scheduled?.orderNo === row.orderNo ||
+          v.completed?.orderNo === row.orderNo ||
+          v.incomplete?.orderNo === row.orderNo ||
+          v.history?.orderNo === row.orderNo
+        );
+      });
+
+      if (order) this.editOrder(order);
+    }
+
     this.activeMenuRow = null;
   }
 
+  // -------------------------
+  // OPEN / CLOSE
+  // -------------------------
   openNewOrder(): void {
     this.newOrderValue = this.createDefaultNewOrder();
+    this.editingOrderId = null;
     this.formSubmitted.set(false);
     this.isNewOrderOpen = true;
   }
@@ -60,180 +102,192 @@ export class OrdersComponent {
     this.isNewOrderOpen = false;
   }
 
+  // -------------------------
+  // SAVE (CREATE + EDIT)
+  // -------------------------
   saveNewOrder(): void {
     this.formSubmitted.set(true);
 
-    const hasErrors = this.checkFormErrors();
-    if (hasErrors) return;
+    if (this.checkFormErrors()) return;
 
     const v = this.newOrderValue;
 
     const isToday = this.isToday(v.delivery.deliveryDate);
     const diff = this.getTimeDiffHours(v.pickup.pickupTime, v.delivery.deliveryTime);
 
-    // SINGLE SOURCE OF TRUTH
-    const baseOrder = {
+    const base = {
       orderNo: v.orderNumber,
       customer: v.delivery.name,
       pickup: v.pickup.name,
       amount: `C$ ${v.details.total}`,
       distance: '—',
+      driver: '',
+      status: this.getStatus('')
+    };
+
+    // ---------------- CURRENT ----------------
+    const currentView: Order = {
+      ...base,
       placed: this.formatDateTime(v.delivery.deliveryDate, v.pickup.pickupTime),
       reqPickup: this.formatTime(v.pickup.pickupTime),
       reqDelivery: this.formatTime(v.delivery.deliveryTime),
       ready: false,
-      driver: '',
-      status: '',
       tracking: 'Inactive'
     };
 
-    // derive status from driver
-    baseOrder.status = this.getStatus(baseOrder.driver);
+    // ---------------- SCHEDULED ----------------
+    const scheduledView: ScheduledOrder = {
+      select: false,
+      orderNo: base.orderNo,
+      customerName: base.customer,
+      pickup: base.pickup,
+      amount: base.amount,
+      distance: base.distance,
+      placementTime: currentView.placed,
+      estDeliveryTime: this.formatDateTime(v.delivery.deliveryDate, v.delivery.deliveryTime),
+      elapsedTime: '—',
+      driver: base.driver,
+      status: base.status
+    };
 
-    // CURRENT ORDERS
-    if (isToday && diff < 3) {
-      this.currentOrders.unshift(baseOrder);
-    }
+    // ---------------- COMPLETED ----------------
+    const completedView: CompletedOrder = {
+      select: false,
+      date: v.delivery.deliveryDate,
+      orderNo: base.orderNo,
+      customerName: base.customer,
+      pickup: base.pickup,
+      amount: base.amount,
+      distance: base.distance,
+      placementTime: currentView.placed,
+      startTime: '—',
+      pickupTime: '—',
+      reqDeliveryTime: this.formatTime(v.delivery.deliveryTime),
+      deliveryTime: this.formatTime(v.delivery.deliveryTime),
+      driver: base.driver,
+      feedback: ''
+    };
 
-    // SCHEDULED ORDERS
-    else {
-      this.scheduledOrders.unshift({
-        select: false,
-        orderNo: baseOrder.orderNo,
-        customerName: baseOrder.customer,
-        pickup: baseOrder.pickup,
-        amount: baseOrder.amount,
-        distance: baseOrder.distance,
-        placementTime: baseOrder.placed,
-        estDeliveryTime: this.formatDateTime(
-          v.delivery.deliveryDate,
-          v.delivery.deliveryTime
-        ),
-        elapsedTime: '—',
-        driver: baseOrder.driver,
-        status: baseOrder.status
-      });
+    // ---------------- INCOMPLETE ----------------
+    const incompleteView: IncompleteOrder = {
+      select: false,
+      date: v.delivery.deliveryDate,
+      orderNo: base.orderNo,
+      customerName: base.customer,
+      pickup: base.pickup,
+      amount: base.amount,
+      distance: base.distance,
+      placementTime: currentView.placed,
+      startTime: 'N/A',
+      pickupTime: '',
+      deliveryTime: '',
+      driver: base.driver,
+      status: base.status,
+      actions: ''
+    };
+
+    // ---------------- HISTORY ----------------
+    const historyView: HistoryOrder = {
+      date: v.delivery.deliveryDate,
+      orderNo: base.orderNo,
+      customerName: base.customer,
+      pickup: base.pickup,
+      amount: base.amount,
+      distance: base.distance,
+      placementTime: currentView.placed,
+      startTime: '',
+      pickupTime: '',
+      deliveryTime: '',
+      driver: base.driver,
+      status: base.status
+    };
+
+    const tab: OrderTab =
+      isToday && diff < 3 ? 'current' : 'scheduled';
+
+    const id = this.editingOrderId ?? crypto.randomUUID();
+
+    const entity: OrderEntity = {
+      id,
+      full: structuredClone(v),
+      tab,
+      view: {
+        current: currentView,
+        scheduled: scheduledView,
+        completed: completedView,
+        incomplete: incompleteView,
+        history: historyView
+      }
+    };
+
+    if (this.editingOrderId) {
+      const index = this.orders.findIndex(o => o.id === this.editingOrderId);
+      this.orders[index] = entity;
+      this.editingOrderId = null;
+    } else {
+      this.orders.unshift(entity);
     }
 
     this.closeNewOrder();
     this.formSubmitted.set(false);
   }
 
-  private getStatus(driver?: string): 'Assigned' | 'Unassigned' {
-    return driver?.trim() ? 'Assigned' : 'Unassigned';
+  // -------------------------
+  // EDIT
+  // -------------------------
+  editOrder(order: OrderEntity): void {
+    this.newOrderValue = structuredClone(order.full);
+    this.editingOrderId = order.id;
+    this.isNewOrderOpen = true;
   }
 
-  private toMinutes(t: string): number {
-    const [hh, mm] = t.split(':').map(Number);
-    return hh * 60 + mm;
-  }
+  // -------------------------
+  // ROWS
+  // -------------------------
+  get rows(): any[] {
+    const tabKey = this.getTabKey(this.activeTab);
 
-  private isToday(date: string): boolean {
-    return date === this.todayYYYYMMDD();
-  }
-
-  private getTimeDiffHours(pickup: string, delivery: string): number {
-    return (this.toMinutes(delivery) - this.toMinutes(pickup)) / 60;
-  }
-
-  private formatTime(time: string): string {
-    const [hh, mm] = time.split(':').map(Number);
-    const period = hh >= 12 ? 'pm' : 'am';
-    const hour = hh % 12 || 12;
-    return `${hour}:${mm.toString().padStart(2, '0')}${period}`;
-  }
-
-  private formatDateTime(dateStr: string, time: string): string {
-    const date = new Date(dateStr);
-    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-    const formattedDate = date.toLocaleDateString('en-US', options);
-    return `${formattedDate}, ${this.formatTime(time)}`;
-  }
-
-  private checkFormErrors(): boolean {
-    const v = this.newOrderValue;
-
-    const pickupTime = v.pickup.pickupTime;
-    const deliveryTime = v.delivery.deliveryTime;
-
-    if (pickupTime && deliveryTime && deliveryTime <= pickupTime) {
-      return true;
-    }
-
-    // basic required checks (extend if needed)
-    if (!v.orderNumber.trim()) return true;
-    if (!v.pickup.name.trim()) return true;
-    if (!v.delivery.name.trim()) return true;
-
-    return false;
-  }
-
-
-  onPickupPin(): void {
-    // TODO: map pin action
-    console.log('Pickup pin');
-  }
-
-  onDeliveryPin(): void {
-    // TODO: map pin action
-    console.log('Delivery pin');
-  }
-
-  private todayYYYYMMDD(): string {
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  }
-
-  private createDefaultNewOrder(): NewOrderFormValue {
-    return {
-      orderNumber: '',
-      pickup: {
-        name: '',
-        phone: { countryCode: '+1', number: '' },
-        address: '',
-        pickupTime: ''
-      },
-      delivery: {
-        name: '',
-        phone: { countryCode: '+1', number: '' },
-        email: '',
-        address: '',
-        deliveryDate: this.todayYYYYMMDD(),
-        deliveryTime: ''
-      },
-      details: {
-        items: [
-          {
-            itemName: '',
-            itemPrice: 0,
-            itemQty: 0
-          }
-        ],
-        taxRate: 0,
-        deliveryFees: 0,
-        deliveryTips: 0,
-        discount: 0,
-
-        subtotal: 0,
-        taxAmount: 0,
-        total: 0,
-
-        instructions: '',
-        payment: {
-          method: 'cash_on_delivery'
+    return this.orders
+      .filter(o => o.tab === tabKey)
+      .map(o => {
+        switch (tabKey) {
+          case 'scheduled': return o.view.scheduled;
+          case 'completed': return o.view.completed;
+          case 'incomplete': return o.view.incomplete;
+          case 'history': return o.view.history;
+          default: return o.view.current;
         }
-      }
-    };
+      });
   }
 
-  setActiveTab(tab: string): void {
-    this.activeTab = tab;
+  private getTabKey(tab: string): OrderTab {
+    switch (tab) {
+      case 'Scheduled': return 'scheduled';
+      case 'Completed': return 'completed';
+      case 'Incomplete': return 'incomplete';
+      case 'History': return 'history';
+      default: return 'current';
+    }
   }
 
-  // Current tab columns
+  // -------------------------
+  // COLUMNS
+  // -------------------------
+  get columns(): TableColumn[] {
+    switch (this.activeTab) {
+      case 'Scheduled':
+        return this.scheduledColumns;
+      case 'Completed':
+        return this.completedColumns;
+      case 'Incomplete':
+        return this.incompleteColumns;
+      case 'History':
+        return this.historyColumns;
+      default:
+        return this.currentColumns;
+    }
+  }
+
   currentColumns: TableColumn[] = [
     { key: 'orderNo', label: 'Order No.', sortable: true },
     { key: 'customer', label: 'C. Name', sortable: true },
@@ -250,7 +304,6 @@ export class OrdersComponent {
     { key: 'actions', label: '', sortable: false }
   ];
 
-  // Scheduled tab columns
   scheduledColumns: TableColumn[] = [
     { key: 'select', label: '', sortable: false },
     { key: 'orderNo', label: 'Order No.', sortable: true },
@@ -315,115 +368,87 @@ export class OrdersComponent {
     { key: 'status', label: 'Status', sortable: true }
   ];
 
-  currentOrders: Order[] = [
-    {
-      orderNo: 'ORD-1001',
-      customer: 'John Carter',
-      pickup: 'Downtown Mall',
-      amount: '$18.50',
-      distance: '3.2 km',
-      placed: '2026-04-01 10:32 AM',
-      reqPickup: '2026-04-01 10:50 AM',
-      reqDelivery: '2026-04-01 11:15 AM',
-      ready: true,
-      driver: 'Central Courier Services',
-      status: 'Assigned',
-      tracking: 'Active'
-    }
-  ];
-
-  scheduledOrders: ScheduledOrder[] = [
-    {
-      select: false,
-      orderNo: 'SCH-2001',
-      customerName: 'Sarah Ahmed',
-      pickup: 'City Center',
-      amount: '$30.00',
-      distance: '6.5 km',
-      placementTime: '2026-04-02 09:00 AM',
-      estDeliveryTime: '2026-04-02 10:15 AM',
-      elapsedTime: '—',
-      driver: 'Central Courier Services',
-      status: 'Assigned'
-    }
-  ];
-
-  completedOrders: CompletedOrder[] = [
-    {
-      select: false,
-      date: '2026-04-01',
-      orderNo: 'CMP-3001',
-      customerName: 'Michael Scott',
-      pickup: 'Downtown Plaza',
-      amount: '$22.50',
-      distance: '4.3 km',
-      placementTime: '2026-04-01 09:10 AM',
-      startTime: '2026-04-01 09:25 AM',
-      pickupTime: '2026-04-01 09:40 AM',
-      reqDeliveryTime: '2026-04-01 10:05 AM',
-      deliveryTime: '2026-04-01 10:00 AM',
-      driver: 'Central Courier Services',
-      feedback: 'Excellent'
-    }
-  ];
-
-  incompleteOrders: IncompleteOrder[] = [
-    {
-      select: false,
-      date: '2026-03-04',
-      orderNo: 'Test order 001',
-      customerName: 'Central Courier Services',
-      pickup: 'Central Courier Services',
-      amount: 'C$11.80',
-      distance: '1.79 km',
-      placementTime: '12:37 p.m.',
-      startTime: 'N/A',
-      pickupTime: '1:14 p.m.',
-      deliveryTime: '1:44 p.m.',
-      driver: '--',
-      status: 'Unassigned',
-      actions: ''
-    }
-  ];
-
-  historyOrders: HistoryOrder[] = [
-    {
-      date: '2026-04-02',
-      orderNo: 'HIS-4001',
-      customerName: 'Rachel Green',
-      pickup: 'City Center',
-      amount: '$19.00',
-      distance: '3.9 km',
-      placementTime: '2026-04-02 08:45 AM',
-      startTime: '2026-04-02 09:00 AM',
-      pickupTime: '2026-04-02 09:15 AM',
-      deliveryTime: '2026-04-02 09:45 AM',
-      driver: 'Ali Anayat',
-      status: 'Completed'
-    }
-  ];
-
-  get columns(): TableColumn[] {
-    if (this.activeTab === 'Scheduled') return this.scheduledColumns;
-    if (this.activeTab === 'Completed') return this.completedColumns;
-    if (this.activeTab === 'Incomplete') return this.incompleteColumns;
-    if (this.activeTab === 'History') return this.historyColumns;
-    return this.currentColumns;
+  // -------------------------
+  // UTILITIES
+  // -------------------------
+  private getStatus(driver?: string): 'Assigned' | 'Unassigned' {
+    return driver?.trim() ? 'Assigned' : 'Unassigned';
   }
 
-  get rows(): any[] {
-    if (this.activeTab === 'Scheduled') return this.scheduledOrders;
-    if (this.activeTab === 'Completed') return this.completedOrders;
-    if (this.activeTab === 'Incomplete') return this.incompleteOrders;
-    if (this.activeTab === 'History') return this.historyOrders;
-    return this.currentOrders;
+  private toMinutes(t: string): number {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m;
   }
 
-  get emptyTitle(): string {
-    return 'No data available';
+  private isToday(date: string): boolean {
+    return date === this.todayYYYYMMDD();
   }
 
-  get emptySubtitle(): string {
-    return this.activeTab === 'History' ? 'Use date range and filters to see history' : '';
+  private getTimeDiffHours(p: string, d: string): number {
+    return (this.toMinutes(d) - this.toMinutes(p)) / 60;
   }
+
+  private formatTime(t: string): string {
+    const [h, m] = t.split(':').map(Number);
+    const period = h >= 12 ? 'pm' : 'am';
+    return `${h % 12 || 12}:${m.toString().padStart(2, '0')}${period}`;
+  }
+
+  private formatDateTime(dateStr: string, time: string): string {
+    const date = new Date(dateStr);
+    return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${this.formatTime(time)}`;
+  }
+
+  private checkFormErrors(): boolean {
+    const v = this.newOrderValue;
+
+    if (!v.orderNumber.trim()) return true;
+    if (!v.pickup.name.trim()) return true;
+    if (!v.delivery.name.trim()) return true;
+
+    const p = v.pickup.pickupTime;
+    const d = v.delivery.deliveryTime;
+
+    return p && d ? d <= p : false;
+  }
+
+  private todayYYYYMMDD(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  private createDefaultNewOrder(): NewOrderFormValue {
+    return {
+      orderNumber: '',
+      pickup: {
+        name: '',
+        phone: { countryCode: '+1', number: '' },
+        address: '',
+        pickupTime: ''
+      },
+      delivery: {
+        name: '',
+        phone: { countryCode: '+1', number: '' },
+        email: '',
+        address: '',
+        deliveryDate: this.todayYYYYMMDD(),
+        deliveryTime: ''
+      },
+      details: {
+        items: [{ itemName: '', itemPrice: 0, itemQty: 0 }],
+        taxRate: 0,
+        deliveryFees: 0,
+        deliveryTips: 0,
+        discount: 0,
+        subtotal: 0,
+        taxAmount: 0,
+        total: 0,
+        instructions: '',
+        payment: { method: 'cash_on_delivery' }
+      }
+    };
+  }
+
+  emptyTitle = 'No data available';
+  emptySubtitle = '';
 }
