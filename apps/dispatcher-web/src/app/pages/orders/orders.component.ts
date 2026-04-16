@@ -68,9 +68,9 @@ export class OrdersComponent {
 
   detailsMenuItems = [
     { label: 'Mark as Done', action: 'done', icon: 'ph ph-check' },
-    { label: 'Mark as Failed', action: 'failed', icon: 'ph ph-x' },
-    { label: 'Delete', action: 'delete', icon: 'ph ph-trash' },
-    { label: 'Download PDF', action: 'pdf', icon: 'ph ph-download' }
+    { label: 'Download PDF', action: 'pdf', icon: 'ph ph-download' },
+    { label: 'Mark as Failed', action: 'failed', icon: 'ph ph-x', danger: true },
+    { label: 'Delete', action: 'delete', icon: 'ph ph-trash', danger: true }
   ];
 
   // -------------------------
@@ -81,6 +81,23 @@ export class OrdersComponent {
   }
 
   handleMenuAction(event: any, row: any): void {
+    if (event.action === 'moveToCurrent') {
+      const order = this.orders.find(o => {
+        const v = o.view;
+        return (
+          v.current?.orderNo === row.orderNo ||
+          v.scheduled?.orderNo === row.orderNo ||
+          v.completed?.orderNo === row.orderNo ||
+          v.incomplete?.orderNo === row.orderNo ||
+          v.history?.orderNo === row.orderNo
+        );
+      });
+
+      if (order) {
+        this.updateOrderTab(order.id, 'current');
+      }
+    }
+
     if (event.action === 'edit') {
       const order = this.orders.find(o => {
         const v = o.view;
@@ -114,7 +131,27 @@ export class OrdersComponent {
       }
     }
 
+    if (event.action === 'print') {
+      const order = this.findOrderByOrderNo(row.orderNo);
+      if (order) {
+        this.openPrintWindow(order);
+      }
+    }
+
     this.activeMenuRow = null;
+  }
+
+  private findOrderByOrderNo(orderNo: string): OrderEntity | undefined {
+    return this.orders.find(o => {
+      const v = o.view;
+      return (
+        v.current?.orderNo === orderNo ||
+        v.scheduled?.orderNo === orderNo ||
+        v.completed?.orderNo === orderNo ||
+        v.incomplete?.orderNo === orderNo ||
+        v.history?.orderNo === orderNo
+      );
+    });
   }
 
   handleDetailsMenu(action: string): void {
@@ -328,7 +365,10 @@ export class OrdersComponent {
     const tabKey = this.getTabKey(this.activeTab);
 
     return this.orders
-      .filter(o => o.tab === tabKey)
+      .filter(o => {
+        if (tabKey === 'history') return true;
+        return o.tab === tabKey;
+      })
       .map(o => {
         switch (tabKey) {
           case 'scheduled': return o.view.scheduled;
@@ -348,6 +388,29 @@ export class OrdersComponent {
       case 'History': return 'history';
       default: return 'current';
     }
+  }
+
+  // Get dynamic menu items based on active tab
+  getContextMenuItems(): any[] {
+    const baseItems = [
+      { label: 'Details', action: 'details', icon: 'ph ph-eye' },
+      { label: 'Edit', action: 'edit', icon: 'ph ph-pencil-simple' },
+      { label: 'Print Order', action: 'print', icon: 'ph ph-printer' }
+    ];
+
+    if (this.activeTab === 'Scheduled') {
+      baseItems.push({ label: 'Move to Current', action: 'moveToCurrent', icon: 'ph ph-arrow-up-right' });
+    }
+
+    // Add Redrop option for Incomplete and Incomplete tabs
+    if (this.activeTab === 'Incomplete' || this.activeTab === 'Completed') {
+      return [
+        { label: 'Details', action: 'details', icon: 'ph ph-eye' },
+        { label: 'Redrop', action: 'moveToCurrent', icon: 'ph ph-arrow-up-right' }
+      ];
+    }
+
+    return baseItems;
   }
 
   // -------------------------
@@ -447,7 +510,6 @@ export class OrdersComponent {
     { key: 'deliveryTime', label: 'Delivery Time', sortable: true },
     { key: 'driver', label: 'Driver', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
-    { key: 'actions', label: '', sortable: false }
   ];
 
   // -------------------------
@@ -537,6 +599,98 @@ export class OrdersComponent {
 
     this.orders[index].tab = tab;
     this.closeDetails();
+  }
+
+  private openPrintWindow(order: OrderEntity): void {
+    const printContent = this.generatePrintHTML(order);
+    const printWindow = window.open('', '', 'height=600,width=800');
+
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+    }
+  }
+
+  private generatePrintHTML(order: OrderEntity): string {
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Order #${order.full.orderNumber}</title>
+      <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h2 { text-align: center; margin-bottom: 30px; }
+        .section { margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 15px; }
+        .section h3 { font-weight: bold; margin-bottom: 10px; }
+        .row { display: flex; justify-content: space-between; margin: 5px 0; }
+        .total { font-weight: bold; font-size: 16px; margin-top: 20px; }
+        @media print { body { margin: 0; } }
+      </style>
+    </head>
+    <body>
+      <h2>Order #${order.full.orderNumber}</h2>
+      
+      <div class="section">
+        <h3>Pickup Information</h3>
+        <p><strong>${order.full.pickup.name}</strong></p>
+        <p>${order.full.pickup.phone.countryCode} ${order.full.pickup.phone.number}</p>
+        <p>${order.full.pickup.address}</p>
+        <p>Time: ${order.full.pickup.pickupTime}</p>
+      </div>
+      
+      <div class="section">
+        <h3>Delivery Information</h3>
+        <p><strong>${order.full.delivery.name}</strong></p>
+        <p>${order.full.delivery.phone.countryCode} ${order.full.delivery.phone.number}</p>
+        <p>${order.full.delivery.email}</p>
+        <p>${order.full.delivery.address}</p>
+        <p>${order.full.delivery.deliveryDate} • ${order.full.delivery.deliveryTime}</p>
+      </div>
+      
+      <div class="section">
+        <h3>Items</h3>
+        ${order.full.details.items.map(item => `
+          <div class="row">
+            <span>${item.itemName} × ${item.itemQty}</span>
+            <span>C$ ${item.itemPrice}</span>
+          </div>
+        `).join('')}
+      </div>
+      
+      <div class="section">
+        <div class="row">
+          <span>Subtotal</span>
+          <span>C$ ${order.full.details.subtotal}</span>
+        </div>
+        <div class="row">
+          <span>Tax (${order.full.details.taxRate}%)</span>
+          <span>C$ ${order.full.details.taxAmount}</span>
+        </div>
+        <div class="row">
+          <span>Delivery Fees</span>
+          <span>C$ ${order.full.details.deliveryFees}</span>
+        </div>
+        <div class="row">
+          <span>Tips</span>
+          <span>C$ ${order.full.details.deliveryTips}</span>
+        </div>
+        <div class="row">
+          <span>Discount</span>
+          <span>C$ ${order.full.details.discount}</span>
+        </div>
+      </div>
+      
+      <div class="total">
+        <div class="row">
+          <span>Total</span>
+          <span>C$ ${order.full.details.total}</span>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
   }
 
   emptyTitle = 'No data available';

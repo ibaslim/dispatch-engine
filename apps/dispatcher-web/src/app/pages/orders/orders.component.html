@@ -20,7 +20,7 @@
     </div>
 
     <app-table [columns]="columns" [rows]="rows" [emptyTitle]="emptyTitle" [emptySubtitle]="emptySubtitle"
-        [activeMenuRow]="activeMenuRow" [menuItems]="menuItems" (actionClick)="toggleMenu($event)"
+        [activeMenuRow]="activeMenuRow" [menuItems]="getContextMenuItems()" (actionClick)="toggleMenu($event)"
         (menuSelect)="handleMenuAction($event.item, $event.row)">
     </app-table>
 
@@ -58,13 +58,19 @@
                 <div *ngIf="isDetailsMenuOpen"
                     class="absolute right-0 top-full mt-2 w-48 rounded-md border border-gray-200 dark:border-[#2a2d2a] bg-white dark:bg-[#1E201E] shadow-lg z-50">
 
-                    <button *ngFor="let item of detailsMenuItems"
-                        class="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#2a2d2a]"
-                        (click)="handleDetailsMenu(item.action); isDetailsMenuOpen = false">
+                    <ng-container *ngFor="let item of detailsMenuItems; let last = last">
+                        <!-- Separator line before danger items -->
+                        <div *ngIf="item.danger && !detailsMenuItems[detailsMenuItems.indexOf(item) - 1]?.danger"
+                            class="border-t border-gray-200 dark:border-[#5a5d5a]"></div>
 
-                        <i [class]="item.icon"></i>
-                        {{ item.label }}
-                    </button>
+                        <button [class]="'w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-[#2a2d2a] ' + 
+                     (item.danger ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300')"
+                            (click)="handleDetailsMenu(item.action); isDetailsMenuOpen = false">
+
+                            <i [class]="item.icon"></i>
+                            {{ item.label }}
+                        </button>
+                    </ng-container>
 
                 </div>
             </div>
