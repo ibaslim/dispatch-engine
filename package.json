@@ -28,6 +28,8 @@
     "@react-native-community/cli": "~18.0.0",
     "@react-native-community/cli-platform-android": "~18.0.0",
     "@react-native-community/cli-platform-ios": "~18.0.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zone.js": "0.16.1"
@@ -43,6 +45,7 @@
     "@nx/js": "22.6.0",
     "@nx/react-native": "22.6.0",
     "@nx/workspace": "22.6.0",
+    "@types/html2canvas": "^0.5.35",
     "@types/jest": "30.0.0",
     "@types/node": "~18.16.9",
     "@typescript-eslint/eslint-plugin": "^6.13.2",

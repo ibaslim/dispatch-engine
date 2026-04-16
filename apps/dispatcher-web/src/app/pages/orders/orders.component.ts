@@ -16,6 +16,8 @@ import { CompletedOrder } from '../../models/orders/completed-orders.model';
 import { IncompleteOrder } from '../../models/orders/incomplete-orders.model';
 import { HistoryOrder } from '../../models/orders/history-orders.model';
 import { NewOrderFormValue } from '../../models/new-order-form/new-order-form.model';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 @Component({
   selector: 'app-orders',
@@ -154,7 +156,7 @@ export class OrdersComponent {
     });
   }
 
-  handleDetailsMenu(action: string): void {
+  async handleDetailsMenu(action: string): Promise<void> {
     if (!this.selectedOrderForDetails) return;
 
     const id = this.selectedOrderForDetails.id;
@@ -173,7 +175,7 @@ export class OrdersComponent {
     }
 
     if (action === 'pdf') {
-      this.downloadOrderPdf(this.selectedOrderForDetails);
+      await this.downloadOrderPdf(this.selectedOrderForDetails);
     }
   }
 
@@ -181,18 +183,59 @@ export class OrdersComponent {
   // OPEN / CLOSE
   // -------------------------
 
-  downloadOrderPdf(order: OrderEntity): void {
-    const content = JSON.stringify(order.full, null, 2);
+  async downloadOrderPdf(order: OrderEntity): Promise<void> {
+    const printContent = this.generatePrintHTML(order);
 
-    const blob = new Blob([content], { type: 'application/json' });
-    const url = window.URL.createObjectURL(blob);
+    const element = document.createElement('div');
+    element.innerHTML = printContent;
+    element.style.position = 'absolute';
+    element.style.left = '-9999px';
+    element.style.width = '210mm';
+    element.style.height = 'auto';
+    element.style.padding = '0';
+    element.style.margin = '0';
+    document.body.appendChild(element);
 
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `order-${order.full.orderNumber}.json`;
-    a.click();
+    try {
+      // Wait for images and fonts to load
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-    window.URL.revokeObjectURL(url);
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff'
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Handle multi-page PDFs
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+
+      while (heightLeft >= pageHeight) {
+        position = heightLeft - pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, -position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`order-${order.full.orderNumber}.pdf`);
+    } finally {
+      document.body.removeChild(element);
+    }
   }
 
   // -------------------------
