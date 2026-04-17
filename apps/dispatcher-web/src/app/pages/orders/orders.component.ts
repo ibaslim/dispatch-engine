@@ -302,7 +302,7 @@ export class OrdersComponent {
       orderPlacedTime: this.formatDateTime(v.delivery.deliveryDate, v.pickup.pickupTime),
       pickupTime: this.formatTime(v.pickup.pickupTime),
       estDeliveryTime: this.formatDateTime(v.delivery.deliveryDate, v.delivery.deliveryTime),
-      readyForPickup: true,
+      readyForPickup: false,
       driver: '',
       orderStatus: this.getStatus(''),
       trackingStatus: 'Inactive'
@@ -401,7 +401,15 @@ export class OrdersComponent {
   // COLUMNS GETTER
   // -------------------------
   get columns(): TableColumn[] {
-    return this.unifiedColumns;
+    const showPickupAndDriver = this.activeTab === 'Current' || this.activeTab === 'Scheduled';
+
+    if (showPickupAndDriver) {
+      return this.unifiedColumns;
+    }
+
+    return this.unifiedColumns.filter(
+      c => c.key !== 'readyForPickup' && c.key !== 'driver'
+    );
   }
 
   // -------------------------
