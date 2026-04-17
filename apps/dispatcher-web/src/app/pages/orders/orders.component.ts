@@ -1,22 +1,41 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
+
 import { PageComponent } from '../../components/page/page.component';
 import { TableComponent } from '../../components/table/table.component';
 import { SearchBarComponent } from '../../components/search-bar/search-bar.component';
 import { ButtonComponent } from '../../components/button/button.component';
+import { PopupComponent } from '../../components/popup/popup.component';
+import { NewOrderFormComponent } from '../../components/new-order-form/new-order-form.component';
+
 import { TableColumn } from '../../models/table.model';
-import { Order } from '../../models/orders/current-orders.model';
-import { ScheduledOrder } from '../../models/orders/scheduled-orders.model';
-import { CompletedOrder } from '../../models/orders/completed-orders.model';
-import { IncompleteOrder } from '../../models/orders/incomplete-orders.model';
-import { HistoryOrder } from '../../models/orders/history-orders.model';
+import { OrderEntity, OrderTab } from '../../models/orders/order-entity.model';
+import { NewOrderFormValue } from '../../models/new-order-form/new-order-form.model';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import { OrderView } from '../../models/orders/order-tabs.model';
+import { ToggleButtonComponent } from '../../components/toggle-button/toggle-button.component';
 
 @Component({
   selector: 'app-orders',
-  imports: [CommonModule, PageComponent, TableComponent, SearchBarComponent, ButtonComponent],
+  standalone: true,
+  imports: [
+    CommonModule,
+    PageComponent,
+    TableComponent,
+    SearchBarComponent,
+    ButtonComponent,
+    PopupComponent,
+    NewOrderFormComponent,
+    ToggleButtonComponent
+  ],
   templateUrl: './orders.component.html'
 })
 export class OrdersComponent {
+
+  // -------------------------
+  // TABS
+  // -------------------------
   tabs = ['Current', 'Scheduled', 'Completed', 'Incomplete', 'History'];
   activeTab = 'Current';
 
@@ -24,260 +43,584 @@ export class OrdersComponent {
     this.activeTab = tab;
   }
 
-  // Current tab columns
-  currentColumns: TableColumn[] = [
-    { key: 'orderNo', label: 'Order No.', sortable: true },
-    { key: 'customer', label: 'C. Name', sortable: true },
-    { key: 'pickup', label: 'Pick-up', sortable: true },
-    { key: 'amount', label: 'Amount', sortable: true },
-    { key: 'distance', label: 'Distance', sortable: true },
-    { key: 'placed', label: 'Order placed', sortable: true },
-    { key: 'reqPickup', label: 'Req. Pickup Time', sortable: true },
-    { key: 'reqDelivery', label: 'Req. Delivery Time', sortable: true },
-    { key: 'ready', label: 'Ready for pick-up', sortable: true },
-    { key: 'driver', label: 'Driver', sortable: true },
-    { key: 'status', label: 'Status', sortable: true },
-    { key: 'tracking', label: 'Tracking', sortable: true }
+  // -------------------------
+  // STATE
+  // -------------------------
+  formSubmitted = signal(false);
+
+  orders: OrderEntity[] = [];
+  editingOrderId: string | null = null;
+  readyForPickupMap: Map<string, boolean> = new Map();
+
+  isNewOrderOpen = false;
+  newOrderValue: NewOrderFormValue = this.createDefaultNewOrder();
+
+  activeMenuRow: any = null;
+
+  isDetailsOpen = false;
+  selectedOrderForDetails: OrderEntity | null = null;
+  isDetailsMenuOpen = false;
+
+  searchQuery = '';
+
+  menuItems = [
+    { label: 'Details', action: 'details', icon: 'ph ph-eye' },
+    { label: 'Edit', action: 'edit', icon: 'ph ph-pencil-simple' },
+    { label: 'Print Order', action: 'print', icon: 'ph ph-printer' }
   ];
 
-  // Scheduled tab columns
-  scheduledColumns: TableColumn[] = [
-    { key: 'select', label: '', sortable: false },
-    { key: 'orderNo', label: 'Order No.', sortable: true },
+  detailsMenuItems = [
+    { label: 'Mark as Done', action: 'done', icon: 'ph ph-check' },
+    { label: 'Download PDF', action: 'pdf', icon: 'ph ph-download' },
+    { label: 'Mark as Failed', action: 'failed', icon: 'ph ph-x', danger: true },
+    { label: 'Delete', action: 'delete', icon: 'ph ph-trash', danger: true }
+  ];
+
+  // -------------------------
+  // COLUMNS (UNIFIED)
+  // -------------------------
+  unifiedColumns: TableColumn[] = [
+    { key: 'orderNo', label: 'Order Number', sortable: true },
     { key: 'customerName', label: 'Customer Name', sortable: true },
-    { key: 'pickup', label: 'Pick-up', sortable: true },
+    { key: 'vendorName', label: 'Vendor Name', sortable: true },
     { key: 'amount', label: 'Amount', sortable: true },
     { key: 'distance', label: 'Distance', sortable: true },
-    { key: 'placementTime', label: 'Placement Time', sortable: true },
+    { key: 'orderPlacedTime', label: 'Order Placed Time', sortable: true },
+    { key: 'pickupTime', label: 'Pickup Time', sortable: true },
     { key: 'estDeliveryTime', label: 'Est. Delivery Time', sortable: true },
-    { key: 'elapsedTime', label: 'Elapsed Time', sortable: true },
+    { key: 'readyForPickup', label: 'Ready for Pickup', sortable: true },
     { key: 'driver', label: 'Driver', sortable: true },
-    { key: 'status', label: 'Status', sortable: true }
-  ];
-
-  completedColumns: TableColumn[] = [
-    { key: 'select', label: '', sortable: false },
-    { key: 'date', label: 'Date', sortable: true },
-    { key: 'orderNo', label: 'Order No.', sortable: true },
-    { key: 'customerName', label: 'C. Name', sortable: true },
-    { key: 'pickup', label: 'Pick-up', sortable: true },
-    { key: 'amount', label: 'Amount', sortable: true },
-    { key: 'distance', label: 'Distance', sortable: true },
-    { key: 'placementTime', label: 'Placement Time', sortable: true },
-    { key: 'startTime', label: 'Start Time', sortable: true },
-    { key: 'pickupTime', label: 'Pick up Time', sortable: true },
-    { key: 'reqDeliveryTime', label: 'Req. Delivery Time', sortable: true },
-    { key: 'deliveryTime', label: 'Delivery Time', sortable: true },
-    { key: 'driver', label: 'Driver', sortable: true },
-    { key: 'feedback', label: 'Feedback', sortable: true }
-  ];
-
-  // Incomplete columns
-  incompleteColumns: TableColumn[] = [
-    { key: 'select', label: '', sortable: false },
-    { key: 'date', label: 'Date', sortable: true },
-    { key: 'orderNo', label: 'Order No.', sortable: true },
-    { key: 'customerName', label: 'C. Name', sortable: true },
-    { key: 'pickup', label: 'Pick-up', sortable: true },
-    { key: 'amount', label: 'Amount', sortable: true },
-    { key: 'distance', label: 'Distance', sortable: true },
-    { key: 'placementTime', label: 'Placement Time', sortable: true },
-    { key: 'startTime', label: 'Start Time', sortable: true },
-    { key: 'pickupTime', label: 'Pick up Time', sortable: true },
-    { key: 'deliveryTime', label: 'Delivery Time', sortable: true },
-    { key: 'driver', label: 'Driver', sortable: true },
-    { key: 'status', label: 'Status', sortable: true },
+    { key: 'orderStatus', label: 'Order Status', sortable: true },
+    { key: 'trackingStatus', label: 'Tracking Status', sortable: true },
     { key: 'actions', label: '', sortable: false }
   ];
 
-  // History columns (from screenshot)
-  historyColumns: TableColumn[] = [
-    { key: 'date', label: 'Date', sortable: true },
-    { key: 'orderNo', label: 'Order No.', sortable: true },
-    { key: 'customerName', label: 'C. Name', sortable: true },
-    { key: 'pickup', label: 'Pick-up', sortable: true },
-    { key: 'amount', label: 'Amount', sortable: true },
-    { key: 'distance', label: 'Distance', sortable: true },
-    { key: 'placementTime', label: 'Placement Time', sortable: true },
-    { key: 'startTime', label: 'Start Time', sortable: true },
-    { key: 'pickupTime', label: 'Pick up Time', sortable: true },
-    { key: 'deliveryTime', label: 'Delivery Time', sortable: true },
-    { key: 'driver', label: 'Driver', sortable: true },
-    { key: 'status', label: 'Status', sortable: true }
-  ];
-
-  // Dummy dataset (Current)
-  currentOrders: Order[] = [
-    {
-      orderNo: 'ORD-1001',
-      customer: 'John Carter',
-      pickup: 'Downtown Mall',
-      amount: '$18.50',
-      distance: '3.2 km',
-      placed: '2026-04-01 10:32 AM',
-      reqPickup: '2026-04-01 10:50 AM',
-      reqDelivery: '2026-04-01 11:15 AM',
-      ready: 'Yes',
-      driver: 'Central Courier Services',
-      status: 'Assigned',
-      tracking: 'Active'
-    },
-    {
-      orderNo: 'ORD-1002',
-      customer: 'Emma Watson',
-      pickup: 'City Plaza',
-      amount: '$24.00',
-      distance: '5.6 km',
-      placed: '2026-04-01 11:05 AM',
-      reqPickup: '2026-04-01 11:20 AM',
-      reqDelivery: '2026-04-01 11:45 AM',
-      ready: 'No',
-      driver: 'Ghazanfarr Rehman',
-      status: 'Pending',
-      tracking: 'Inactive'
-    }
-  ];
-
-  // Dummy dataset (Scheduled)
-  scheduledOrders: ScheduledOrder[] = [
-    {
-      select: false,
-      orderNo: 'SCH-2001',
-      customerName: 'Sarah Ahmed',
-      pickup: 'City Center',
-      amount: '$30.00',
-      distance: '6.5 km',
-      placementTime: '2026-04-02 09:00 AM',
-      estDeliveryTime: '2026-04-02 10:15 AM',
-      elapsedTime: '—',
-      driver: 'Central Courier Services',
-      status: 'Scheduled'
-    },
-    {
-      select: false,
-      orderNo: 'SCH-2002',
-      customerName: 'Mark Lee',
-      pickup: 'Airport Plaza',
-      amount: '$42.00',
-      distance: '9.2 km',
-      placementTime: '2026-04-02 11:20 AM',
-      estDeliveryTime: '2026-04-02 12:30 PM',
-      elapsedTime: '—',
-      driver: 'Ghazanfarr Rehman',
-      status: 'Scheduled'
-    }
-  ];
-
-  completedOrders: CompletedOrder[] = [
-    {
-      select: false,
-      date: '2026-04-01',
-      orderNo: 'CMP-3001',
-      customerName: 'Michael Scott',
-      pickup: 'Downtown Plaza',
-      amount: '$22.50',
-      distance: '4.3 km',
-      placementTime: '2026-04-01 09:10 AM',
-      startTime: '2026-04-01 09:25 AM',
-      pickupTime: '2026-04-01 09:40 AM',
-      reqDeliveryTime: '2026-04-01 10:05 AM',
-      deliveryTime: '2026-04-01 10:00 AM',
-      driver: 'Central Courier Services',
-      feedback: 'Excellent'
-    },
-    {
-      select: false,
-      date: '2026-04-01',
-      orderNo: 'CMP-3002',
-      customerName: 'Pam Beesly',
-      pickup: 'City Mall',
-      amount: '$16.75',
-      distance: '2.8 km',
-      placementTime: '2026-04-01 11:30 AM',
-      startTime: '2026-04-01 11:45 AM',
-      pickupTime: '2026-04-01 12:00 PM',
-      reqDeliveryTime: '2026-04-01 12:25 PM',
-      deliveryTime: '2026-04-01 12:20 PM',
-      driver: 'Ghazanfarr Rehman',
-      feedback: 'Good'
-    }
-  ];
-
-  // Dummy data (Incomplete)
-  incompleteOrders: IncompleteOrder[] = [
-    {
-      select: false,
-      date: '2026-03-04',
-      orderNo: 'Test order 001',
-      customerName: 'Central Courier Services',
-      pickup: 'Central Courier Services',
-      amount: 'C$11.80',
-      distance: '1.79 km',
-      placementTime: '12:37 p.m.',
-      startTime: 'N/A',
-      pickupTime: '1:14 p.m.',
-      deliveryTime: '1:44 p.m.',
-      driver: '--',
-      status: 'Unassigned',
-      actions: ''
-    }
-  ];
-
-  historyOrders: HistoryOrder[] = [
-    {
-      date: '2026-04-02',
-      orderNo: 'HIS-4001',
-      customerName: 'Rachel Green',
-      pickup: 'City Center',
-      amount: '$19.00',
-      distance: '3.9 km',
-      placementTime: '2026-04-02 08:45 AM',
-      startTime: '2026-04-02 09:00 AM',
-      pickupTime: '2026-04-02 09:15 AM',
-      deliveryTime: '2026-04-02 09:45 AM',
-      driver: 'Ali Anayat',
-      status: 'Completed'
-    },
-    {
-      date: '2026-04-02',
-      orderNo: 'HIS-4002',
-      customerName: 'Monica Geller',
-      pickup: 'West Mall',
-      amount: '$27.50',
-      distance: '6.2 km',
-      placementTime: '2026-04-02 10:30 AM',
-      startTime: '2026-04-02 10:45 AM',
-      pickupTime: '2026-04-02 11:05 AM',
-      deliveryTime: '2026-04-02 11:40 AM',
-      driver: 'Central Courier Services',
-      status: 'Completed'
-    }
-  ];
-
-  // Active bindings
-  get columns(): TableColumn[] {
-    if (this.activeTab === 'Scheduled') return this.scheduledColumns;
-    if (this.activeTab === 'Completed') return this.completedColumns;
-    if (this.activeTab === 'Incomplete') return this.incompleteColumns;
-    if (this.activeTab === 'History') return this.historyColumns;
-    return this.currentColumns;
+  // -------------------------
+  // MENU
+  // -------------------------
+  toggleMenu(row: any): void {
+    this.activeMenuRow = this.activeMenuRow?.id === row.id ? null : row;
   }
 
+  handleMenuAction(event: any, row: any): void {
+    if (event.action === 'moveToCurrent') {
+      const order = this.findOrderByOrderNo(row.orderNo);
+      if (order) {
+        this.updateOrderTab(order.id, 'current');
+      }
+    }
+
+    if (event.action === 'edit') {
+      const order = this.findOrderByOrderNo(row.orderNo);
+      if (order) this.editOrder(order);
+    }
+
+    if (event.action === 'details') {
+      const order = this.findOrderByOrderNo(row.orderNo);
+      if (order) {
+        this.selectedOrderForDetails = order;
+        this.isDetailsOpen = true;
+      }
+    }
+
+    if (event.action === 'print') {
+      const order = this.findOrderByOrderNo(row.orderNo);
+      if (order) {
+        this.openPrintWindow(order);
+      }
+    }
+
+    this.activeMenuRow = null;
+  }
+
+  private findOrderByOrderNo(orderNo: string): OrderEntity | undefined {
+    return this.orders.find(o => o.view.current.orderNo === orderNo);
+  }
+
+  async handleDetailsMenu(action: string): Promise<void> {
+    if (!this.selectedOrderForDetails) return;
+
+    const id = this.selectedOrderForDetails.id;
+
+    if (action === 'done') {
+      this.updateOrderTab(id, 'completed');
+    }
+
+    if (action === 'failed') {
+      this.updateOrderTab(id, 'incomplete');
+    }
+
+    if (action === 'delete') {
+      this.orders = this.orders.filter(o => o.id !== id);
+      this.closeDetails();
+    }
+
+    if (action === 'pdf') {
+      await this.downloadOrderPdf(this.selectedOrderForDetails);
+    }
+  }
+
+  updateReadyForPickup(isReady: boolean): void {
+    if (!this.selectedOrderForDetails) return;
+
+    const id = this.selectedOrderForDetails.id;
+
+    // Update the map
+    this.readyForPickupMap.set(id, isReady);
+
+    // Update the view object
+    const index = this.orders.findIndex(o => o.id === id);
+    if (index === -1) return;
+
+    this.orders[index].view.current.readyForPickup = isReady;
+    this.orders[index].view.scheduled.readyForPickup = isReady;
+    this.orders[index].view.completed.readyForPickup = isReady;
+    this.orders[index].view.incomplete.readyForPickup = isReady;
+    this.orders[index].view.history.readyForPickup = isReady;
+
+    // Update the selected order for details
+    this.selectedOrderForDetails = structuredClone(this.orders[index]);
+  }
+
+  updateReadyForPickupFromRow(orderId: string, isReady: boolean): void {
+    this.readyForPickupMap.set(orderId, isReady);
+
+    const index = this.orders.findIndex(o => o.id === orderId);
+    if (index === -1) return;
+
+    this.orders[index].view.current.readyForPickup = isReady;
+    this.orders[index].view.scheduled.readyForPickup = isReady;
+    this.orders[index].view.completed.readyForPickup = isReady;
+    this.orders[index].view.incomplete.readyForPickup = isReady;
+    this.orders[index].view.history.readyForPickup = isReady;
+  }
+
+  getReadyForPickupStatus(orderId: string): boolean {
+    return this.readyForPickupMap.get(orderId) || false;
+  }
+
+  // -------------------------
+  // PDF DOWNLOAD
+  // -------------------------
+  async downloadOrderPdf(order: OrderEntity): Promise<void> {
+    const printContent = this.generatePrintHTML(order);
+
+    const element = document.createElement('div');
+    element.innerHTML = printContent;
+    element.style.position = 'absolute';
+    element.style.left = '-9999px';
+    element.style.width = '210mm';
+    element.style.height = 'auto';
+    element.style.padding = '0';
+    element.style.margin = '0';
+    document.body.appendChild(element);
+
+    try {
+      // Wait for images and fonts to load
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff'
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Handle multi-page PDFs
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+
+      while (heightLeft >= pageHeight) {
+        position = heightLeft - pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, -position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`order-${order.full.orderNumber}.pdf`);
+    } finally {
+      document.body.removeChild(element);
+    }
+  }
+
+  // -------------------------
+  // OPEN / CLOSE
+  // -------------------------
+  openNewOrder(): void {
+    this.newOrderValue = this.createDefaultNewOrder();
+    this.editingOrderId = null;
+    this.formSubmitted.set(false);
+    this.isNewOrderOpen = true;
+  }
+
+  closeNewOrder(): void {
+    this.isNewOrderOpen = false;
+  }
+
+  closeDetails(): void {
+    this.isDetailsOpen = false;
+    this.selectedOrderForDetails = null;
+  }
+
+  maskCard(card: string = ''): string {
+    if (!card) return '';
+    return card.replace(/\d(?=\d{4})/g, '*');
+  }
+
+  // -------------------------
+  // SAVE (CREATE + EDIT)
+  // -------------------------
+  saveNewOrder(): void {
+    this.formSubmitted.set(true);
+
+    if (this.checkFormErrors()) return;
+
+    const v = this.newOrderValue;
+
+    const isToday = this.isToday(v.delivery.deliveryDate);
+    const diff = this.getTimeDiffHours(v.pickup.pickupTime, v.delivery.deliveryTime);
+
+    // -------------------- UNIFIED VIEW --------------------
+    const view: OrderView = {
+      orderNo: v.orderNumber,
+      customerName: v.delivery.name,
+      vendorName: v.pickup.name,
+      amount: `C$ ${v.details.total}`,
+      distance: '—',
+      orderPlacedTime: this.formatDateTime(v.delivery.deliveryDate, v.pickup.pickupTime),
+      pickupTime: this.formatTime(v.pickup.pickupTime),
+      estDeliveryTime: this.formatDateTime(v.delivery.deliveryDate, v.delivery.deliveryTime),
+      readyForPickup: false,
+      driver: '',
+      orderStatus: this.getStatus(''),
+      trackingStatus: 'Inactive'
+    };
+
+    const tab: OrderTab =
+      isToday && diff < 3 ? 'current' : 'scheduled';
+
+    const id = this.editingOrderId ?? crypto.randomUUID();
+
+    const entity: OrderEntity = {
+      id,
+      full: structuredClone(v),
+      tab,
+      view: {
+        current: structuredClone(view),
+        scheduled: structuredClone(view),
+        completed: structuredClone(view),
+        incomplete: structuredClone(view),
+        history: structuredClone(view)
+      }
+    };
+
+    // Initialize ready for pickup state for this order
+    this.readyForPickupMap.set(id, true);
+
+    if (this.editingOrderId) {
+      const index = this.orders.findIndex(o => o.id === this.editingOrderId);
+      this.orders[index] = entity;
+      this.editingOrderId = null;
+    } else {
+      this.orders.unshift(entity);
+    }
+
+    this.closeNewOrder();
+    this.formSubmitted.set(false);
+  }
+
+  // -------------------------
+  // EDIT
+  // -------------------------
+  editOrder(order: OrderEntity): void {
+    this.newOrderValue = structuredClone(order.full);
+    this.editingOrderId = order.id;
+    this.isNewOrderOpen = true;
+  }
+
+  // -------------------------
+  // ROWS
+  // -------------------------
   get rows(): any[] {
-    if (this.activeTab === 'Scheduled') return this.scheduledOrders;
-    if (this.activeTab === 'Completed') return this.completedOrders;
-    if (this.activeTab === 'Incomplete') return this.incompleteOrders;
-    if (this.activeTab === 'History') return this.historyOrders;
-    return this.currentOrders;
+    const tabKey = this.getTabKey(this.activeTab);
+    const q = this.searchQuery.trim().toLowerCase();
+
+    return this.orders
+      .filter(o => {
+        if (tabKey === 'history') return true;
+        return o.tab === tabKey;
+      })
+      .filter(o => {
+        if (!q) return true;
+        const v = o.view.current;
+        return (
+          v.orderNo?.toLowerCase().includes(q) ||
+          v.customerName?.toLowerCase().includes(q) ||
+          v.vendorName?.toLowerCase().includes(q)
+        );
+      })
+      .map(o => ({ ...o.view.current, id: o.id }));
   }
 
-  get emptyTitle(): string {
-    return 'No data available';
+  private getTabKey(tab: string): OrderTab {
+    switch (tab) {
+      case 'Scheduled': return 'scheduled';
+      case 'Completed': return 'completed';
+      case 'Incomplete': return 'incomplete';
+      case 'History': return 'history';
+      default: return 'current';
+    }
   }
 
-  get emptySubtitle(): string {
-    return this.activeTab === 'History'
-      ? 'Use date range and filters to see history'
-      : '';
+  // Get dynamic menu items based on active tab
+  getContextMenuItems(): any[] {
+    const baseItems = [
+      { label: 'Details', action: 'details', icon: 'ph ph-eye' },
+      { label: 'Edit', action: 'edit', icon: 'ph ph-pencil-simple' },
+      { label: 'Print Order', action: 'print', icon: 'ph ph-printer' }
+    ];
+
+    if (this.activeTab === 'Scheduled') {
+      baseItems.push({ label: 'Move to Current', action: 'moveToCurrent', icon: 'ph ph-arrow-up-right' });
+    }
+
+    // Add Redrop option for Incomplete and Completed tabs
+    if (this.activeTab === 'Incomplete' || this.activeTab === 'Completed') {
+      return [
+        { label: 'Details', action: 'details', icon: 'ph ph-eye' },
+        { label: 'Redrop', action: 'moveToCurrent', icon: 'ph ph-arrow-up-right' }
+      ];
+    }
+
+    return baseItems;
   }
+
+  // -------------------------
+  // COLUMNS GETTER
+  // -------------------------
+  get columns(): TableColumn[] {
+    const showPickupAndDriver = this.activeTab === 'Current' || this.activeTab === 'Scheduled';
+
+    if (showPickupAndDriver) {
+      return this.unifiedColumns;
+    }
+
+    return this.unifiedColumns.filter(
+      c => c.key !== 'readyForPickup' && c.key !== 'driver'
+    );
+  }
+
+  // -------------------------
+  // UTILITIES
+  // -------------------------
+  private getStatus(driver?: string): 'Assigned' | 'Unassigned' {
+    return driver?.trim() ? 'Assigned' : 'Unassigned';
+  }
+
+  private toMinutes(t: string): number {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m;
+  }
+
+  private isToday(date: string): boolean {
+    return date === this.todayYYYYMMDD();
+  }
+
+  private getTimeDiffHours(p: string, d: string): number {
+    return (this.toMinutes(d) - this.toMinutes(p)) / 60;
+  }
+
+  private formatTime(t: string): string {
+    const [h, m] = t.split(':').map(Number);
+    const period = h >= 12 ? 'pm' : 'am';
+    return `${h % 12 || 12}:${m.toString().padStart(2, '0')}${period}`;
+  }
+
+  private formatDateTime(dateStr: string, time: string): string {
+    const date = new Date(dateStr);
+    return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${this.formatTime(time)}`;
+  }
+
+  private checkFormErrors(): boolean {
+    const v = this.newOrderValue;
+
+    if (!v.orderNumber.trim()) return true;
+    if (!v.pickup.name.trim()) return true;
+    if (!v.delivery.name.trim()) return true;
+
+    const p = v.pickup.pickupTime;
+    const d = v.delivery.deliveryTime;
+
+    if (p && d && d <= p) return true;
+
+    // Validate at least 1 valid item exists
+    const items = v.details.items || [];
+    const hasValidItem = items.some(item => {
+      const nameFilled = !!item.itemName?.trim();
+      const price = this.toNumber(item.itemPrice);
+      const qty = this.toNumber(item.itemQty);
+      return nameFilled && price > 0 && qty > 0;
+    });
+
+    return !hasValidItem;
+  }
+
+  private toNumber(v: unknown): number {
+    const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').trim());
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  private todayYYYYMMDD(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  private createDefaultNewOrder(): NewOrderFormValue {
+    return {
+      orderNumber: '',
+      pickup: {
+        name: '',
+        phone: { countryCode: '+1', number: '' },
+        address: '',
+        pickupTime: ''
+      },
+      delivery: {
+        name: '',
+        phone: { countryCode: '+1', number: '' },
+        email: '',
+        address: '',
+        deliveryDate: this.todayYYYYMMDD(),
+        deliveryTime: ''
+      },
+      details: {
+        items: [{ itemName: '', itemPrice: '', itemQty: '' }],
+        taxRate: 0,
+        deliveryFees: 0,
+        deliveryTips: 0,
+        discount: 0,
+        subtotal: 0,
+        taxAmount: 0,
+        total: 0,
+        instructions: '',
+        payment: { method: 'cash_on_delivery' }
+      }
+    };
+  }
+
+  private updateOrderTab(id: string, tab: OrderTab): void {
+    const index = this.orders.findIndex(o => o.id === id);
+    if (index === -1) return;
+
+    this.orders[index].tab = tab;
+    this.closeDetails();
+  }
+
+  private openPrintWindow(order: OrderEntity): void {
+    const printContent = this.generatePrintHTML(order);
+    const printWindow = window.open('', '', 'height=600,width=800');
+
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+    }
+  }
+
+  private generatePrintHTML(order: OrderEntity): string {
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Order #${order.full.orderNumber}</title>
+      <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h2 { text-align: center; margin-bottom: 30px; }
+        .section { margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 15px; }
+        .section h3 { font-weight: bold; margin-bottom: 10px; }
+        .row { display: flex; justify-content: space-between; margin: 5px 0; }
+        .total { font-weight: bold; font-size: 16px; margin-top: 20px; }
+        @media print { body { margin: 0; } }
+      </style>
+    </head>
+    <body>
+      <h2>Order #${order.full.orderNumber}</h2>
+      
+      <div class="section">
+        <h3>Pickup Information</h3>
+        <p><strong>${order.full.pickup.name}</strong></p>
+        <p>${order.full.pickup.phone.countryCode} ${order.full.pickup.phone.number}</p>
+        <p>${order.full.pickup.address}</p>
+        <p>Time: ${order.full.pickup.pickupTime}</p>
+      </div>
+      
+      <div class="section">
+        <h3>Delivery Information</h3>
+        <p><strong>${order.full.delivery.name}</strong></p>
+        <p>${order.full.delivery.phone.countryCode} ${order.full.delivery.phone.number}</p>
+        <p>${order.full.delivery.email}</p>
+        <p>${order.full.delivery.address}</p>
+        <p>${order.full.delivery.deliveryDate} • ${order.full.delivery.deliveryTime}</p>
+      </div>
+      
+      <div class="section">
+        <h3>Items</h3>
+        ${order.full.details.items.map(item => `
+          <div class="row">
+            <span>${item.itemName} × ${item.itemQty}</span>
+            <span>C$ ${item.itemPrice}</span>
+          </div>
+        `).join('')}
+      </div>
+      
+      <div class="section">
+        <div class="row">
+          <span>Subtotal</span>
+          <span>C$ ${order.full.details.subtotal}</span>
+        </div>
+        <div class="row">
+          <span>Tax (${order.full.details.taxRate}%)</span>
+          <span>C$ ${order.full.details.taxAmount}</span>
+        </div>
+        <div class="row">
+          <span>Delivery Fees</span>
+          <span>C$ ${order.full.details.deliveryFees}</span>
+        </div>
+        <div class="row">
+          <span>Tips</span>
+          <span>C$ ${order.full.details.deliveryTips}</span>
+        </div>
+        <div class="row">
+          <span>Discount</span>
+          <span>C$ ${order.full.details.discount}</span>
+        </div>
+      </div>
+      
+      <div class="total">
+        <div class="row">
+          <span>Total</span>
+          <span>C$ ${order.full.details.total}</span>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+  }
+
+  emptyTitle = 'No data available';
+  emptySubtitle = '';
 }

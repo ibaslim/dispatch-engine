@@ -1,0 +1,136 @@
+<section class="space-y-7">
+    <div class="flex items-center gap-2">
+        <h3 class="text-md font-semibold text-gray-900 dark:text-gray-100">Order Details</h3>
+        <span class="text-xs text-gray-400 dark:text-gray-300">(Required)</span>
+    </div>
+
+    <div class="space-y-7">
+
+        <!-- ITEMS -->
+        <div>
+            <div class="flex justify-between items-center mb-2">
+                <p class="text-sm text-gray-600 dark:text-gray-200">Items: <span class="text-red-600">*</span></p>
+
+                <app-button variant="primary" label="+ Add another Item" (onClick)="addItem()"
+                    [extraClasses]="'bg-[#91D06C] text-black hover:bg-[#6FAF4F] px-3 py-2 rounded-md text-sm'">
+                </app-button>
+            </div>
+
+            <!-- ITEM LOOP -->
+            <div *ngFor="let item of value.items; let i = index; trackBy: trackByIndex" class="mb-4">
+
+                <!-- ITEM ROW -->
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+
+                    <!-- NAME -->
+                    <div class="sm:col-span-5">
+                        <app-base-input [showLabel]="false" placeholder="Name" [value]="item.itemName"
+                            (valueChange)="updateItem(i, 'itemName', $event)"
+                            [showSubmitValidation]="showSubmitValidation">
+                        </app-base-input>
+                    </div>
+
+                    <!-- PRICE -->
+                    <div class="sm:col-span-3">
+                        <app-base-input type="text" [showLabel]="false" placeholder="Price" [value]="item.itemPrice"
+                            (valueChange)="updateItem(i, 'itemPrice', $event)"
+                            [showSubmitValidation]="showSubmitValidation"
+                            [inputClasses]="'[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&[type=number]]:appearance-none'">
+                        </app-base-input>
+                    </div>
+
+                    <!-- QTY -->
+                    <div class="sm:col-span-2">
+                        <app-base-input type="text" [showLabel]="false" placeholder="Qty" [value]="item.itemQty"
+                            (valueChange)="updateItem(i, 'itemQty', $event)"
+                            [showSubmitValidation]="showSubmitValidation"
+                            [inputClasses]="'[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&[type=number]]:appearance-none'">
+                        </app-base-input>
+                    </div>
+
+                    <!-- DELETE -->
+                    <div class="sm:col-span-2 flex items-center gap-2">
+                        <app-button variant="icon" type="button" (onClick)="removeItem(i)" ariaLabel="Delete item"
+                            extraClasses="text-red-600 hover:text-red-700 hover:scale-110 transition-transform duration-200">
+
+                            <i class="ph ph-trash text-lg text-red-600"></i>
+                        </app-button>
+                    </div>
+
+                </div>
+
+                <!-- ERROR BOX (USING COMPONENT) -->
+                <div *ngIf="itemErrors[i]?.length"
+                    class="border border-red-500 bg-red-50 dark:bg-red-900/10 rounded-md p-2 mt-2">
+
+                    <app-error-message [show]="true" [messages]="itemErrors[i]">
+                    </app-error-message>
+
+                </div>
+
+            </div>
+
+            <!-- ITEMS VALIDATION ERROR (GLOBAL) -->
+            <div *ngIf="showSubmitValidation && !hasValidItems()"
+                class="border border-red-500 bg-red-50 dark:bg-red-900/10 rounded-md p-2">
+                <app-error-message [show]="true" [messages]="[getItemsValidationError()]">
+                </app-error-message>
+            </div>
+        </div>
+
+        <!-- TAX + SUBTOTAL -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+            <app-base-input label="Tax Rate %" placeholder="Enter tax rate" [value]="value.taxRate"
+                (valueChange)="patch({ taxRate: $event })">
+            </app-base-input>
+
+            <div class="rounded-md border border-gray-300 dark:border-[#5a5d5a] px-4 py-2.5">
+                <p class="text-sm text-gray-600 dark:text-gray-200">Subtotal (C$):</p>
+                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {{ money(value.subtotal || 0) }}
+                </p>
+            </div>
+        </div>
+
+        <!-- TAX -->
+        <div class="rounded-md border border-gray-300 dark:border-[#5a5d5a] px-4 py-2.5">
+            <p class="text-sm text-gray-600 dark:text-gray-200">Tax (C$):</p>
+            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                {{ money(value.taxAmount) }}
+            </p>
+        </div>
+
+        <!-- DELIVERY FEE -->
+        <app-base-input label="Delivery Fees (C$)" [value]="value.deliveryFees"
+            (valueChange)="patch({ deliveryFees: $event })">
+        </app-base-input>
+
+        <!-- DELIVERY TIP -->
+        <app-base-input label="Delivery Tips (C$)" [value]="value.deliveryTips"
+            (valueChange)="patch({ deliveryTips: $event })">
+        </app-base-input>
+
+        <!-- DISCOUNT -->
+        <app-base-input label="Discount (C$)" [value]="value.discount" (valueChange)="patch({ discount: $event })">
+        </app-base-input>
+
+        <!-- TOTAL -->
+        <div class="rounded-md border border-gray-300 dark:border-[#5a5d5a] px-4 py-2.5">
+            <p class="text-sm text-gray-600 dark:text-gray-200">Total (C$):</p>
+            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                {{ money(value.total) }}
+            </p>
+        </div>
+
+        <!-- INSTRUCTIONS -->
+        <app-textarea label="Delivery Instruction" [value]="value.instructions"
+            (valueChange)="patch({ instructions: $event })">
+        </app-textarea>
+
+        <!-- PAYMENT -->
+        <app-payment-method [required]="true" [value]="value.payment" (valueChange)="patch({ payment: $event })"
+            [showSubmitValidation]="showSubmitValidation">
+        </app-payment-method>
+
+    </div>
+</section>

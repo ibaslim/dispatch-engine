@@ -1,0 +1,5 @@
+<div *ngIf="show">
+    <ng-container *ngFor="let msg of uniqueMessages">
+        <p *ngIf="msg" class="text-xs text-red-500 mt-2">{{ msg }}</p>
+    </ng-container>
+</div>
