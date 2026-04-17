@@ -1,7 +1,7 @@
 <section class="space-y-7">
     <div class="flex items-center gap-2">
         <h3 class="text-md font-semibold text-gray-900 dark:text-gray-100">Order Details</h3>
-        <span class="text-xs text-gray-400 dark:text-gray-300">(Optional)</span>
+        <span class="text-xs text-gray-400 dark:text-gray-300">(Required)</span>
     </div>
 
     <div class="space-y-7">
@@ -9,7 +9,7 @@
         <!-- ITEMS -->
         <div>
             <div class="flex justify-between items-center mb-2">
-                <p class="text-sm text-gray-600 dark:text-gray-200">Items:</p>
+                <p class="text-sm text-gray-600 dark:text-gray-200">Items: <span class="text-red-600">*</span></p>
 
                 <app-button variant="primary" label="+ Add another Item" (onClick)="addItem()"
                     [extraClasses]="'bg-[#91D06C] text-black hover:bg-[#6FAF4F] px-3 py-2 rounded-md text-sm'">
@@ -32,17 +32,19 @@
 
                     <!-- PRICE -->
                     <div class="sm:col-span-3">
-                        <app-base-input type="number" [showLabel]="false" placeholder="Price" [value]="item.itemPrice"
+                        <app-base-input type="text" [showLabel]="false" placeholder="Price" [value]="item.itemPrice"
                             (valueChange)="updateItem(i, 'itemPrice', $event)"
-                            [showSubmitValidation]="showSubmitValidation">
+                            [showSubmitValidation]="showSubmitValidation"
+                            [inputClasses]="'[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&[type=number]]:appearance-none'">
                         </app-base-input>
                     </div>
 
                     <!-- QTY -->
                     <div class="sm:col-span-2">
-                        <app-base-input type="number" [showLabel]="false" placeholder="Qty" [value]="item.itemQty"
+                        <app-base-input type="text" [showLabel]="false" placeholder="Qty" [value]="item.itemQty"
                             (valueChange)="updateItem(i, 'itemQty', $event)"
-                            [showSubmitValidation]="showSubmitValidation">
+                            [showSubmitValidation]="showSubmitValidation"
+                            [inputClasses]="'[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&[type=number]]:appearance-none'">
                         </app-base-input>
                     </div>
 
@@ -66,6 +68,13 @@
 
                 </div>
 
+            </div>
+
+            <!-- ITEMS VALIDATION ERROR (GLOBAL) -->
+            <div *ngIf="showSubmitValidation && !hasValidItems()"
+                class="border border-red-500 bg-red-50 dark:bg-red-900/10 rounded-md p-2">
+                <app-error-message [show]="true" [messages]="[getItemsValidationError()]">
+                </app-error-message>
             </div>
         </div>
 

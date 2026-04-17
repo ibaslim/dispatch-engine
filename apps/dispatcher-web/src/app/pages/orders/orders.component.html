@@ -21,7 +21,8 @@
 
     <app-table [columns]="columns" [rows]="rows" [emptyTitle]="emptyTitle" [emptySubtitle]="emptySubtitle"
         [activeMenuRow]="activeMenuRow" [menuItems]="getContextMenuItems()" (actionClick)="toggleMenu($event)"
-        (menuSelect)="handleMenuAction($event.item, $event.row)">
+        (menuSelect)="handleMenuAction($event.item, $event.row)"
+        (readyForPickupChange)="updateReadyForPickupFromRow($event.id, $event.value)">
     </app-table>
 
     <!-- New Order Modal -->
@@ -193,13 +194,25 @@
 
                     <div class="grid grid-cols-2 gap-2">
                         <p>Placed</p>
-                        <p>{{ order.view.current?.placed }}</p>
+                        <p>{{ order.view.current?.orderPlacedTime }}</p>
 
                         <p>Driver</p>
                         <p>{{ order.view.current?.driver || '—' }}</p>
 
                         <p>Status</p>
-                        <p>{{ order.view.current?.status }}</p>
+                        <p>{{ order.view.current?.orderStatus }}</p>
+                    </div>
+                </div>
+
+                <!-- SECTION 6.5 - READY FOR PICKUP TOGGLE -->
+                <div class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                            Ready for Pickup
+                        </h3>
+                        <app-toggle-button [value]="getReadyForPickupStatus(order.id)"
+                            (valueChange)="updateReadyForPickup($event)">
+                        </app-toggle-button>
                     </div>
                 </div>
 

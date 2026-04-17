@@ -31,9 +31,11 @@
                         <input type="checkbox" class="h-4 w-4 accent-[#3ddc97]" />
                     </ng-container>
 
-                    <!-- READY TO PICKUP TOGGLE -->
-                    <ng-container *ngSwitchCase="'ready'">
-                        <app-toggle-button [value]="row.ready" (valueChange)="row.ready = $event"></app-toggle-button>
+                    <!-- READY FOR PICKUP TOGGLE -->
+                    <ng-container *ngSwitchCase="'readyForPickup'">
+                        <app-toggle-button [value]="row.readyForPickup"
+                            (valueChange)="readyForPickupChange.emit({ id: row.id, value: $event })">
+                        </app-toggle-button>
                     </ng-container>
 
                     <!-- DRIVER COLUMN -->
@@ -63,7 +65,7 @@
                                     class="ph ph-dots-three text-xl text-gray-900 dark:text-gray-200 transition-transform duration-150 group-hover:scale-125"></i>
                             </app-button>
 
-                            <app-menu [items]="menuItems" [visible]="activeMenuRow === row"
+                            <app-menu [items]="menuItems" [visible]="activeMenuRow?.id === row.id"
                                 (select)="menuSelect.emit({ item: $event, row })">
                             </app-menu>
 
@@ -99,7 +101,7 @@
         <div class="w-12 h-12 rounded-full bg-green-100 dark:bg-[#143628] flex items-center justify-center mb-3">
             <svg class="w-6 h-6 text-[#3ddc97]" viewBox="0 0 256 256" fill="currentColor">
                 <path
-                    d="M208 40H64a16 16 0 00-16 16v144a16 16 0 0016 16h144a16 16 0 0016-16V56a16 16 0 00-16-16zm0 160H64V56h144zM96 104h64a8 8 0 010 16H96a8 8 0 010-16zm0 32h64a8 8 0 010 16H96a8 8 0 010-16z">
+                    d="M208 40H64a16 16 0 00-16 16v144a16 16 0 0016 16h144a16 16 0 0016-16V56a16 16 0 00-16-16zm0 160H64V56h144zM96 104h64a8 8 0 010 16H96a8 0 010-16zm0 32h64a8 8 0 010 16H96a8 0 010-16z">
                 </path>
             </svg>
         </div>

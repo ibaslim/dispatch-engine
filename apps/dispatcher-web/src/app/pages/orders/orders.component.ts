@@ -14,6 +14,7 @@ import { NewOrderFormValue } from '../../models/new-order-form/new-order-form.mo
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { OrderView } from '../../models/orders/order-tabs.model';
+import { ToggleButtonComponent } from '../../components/toggle-button/toggle-button.component';
 
 @Component({
   selector: 'app-orders',
@@ -25,7 +26,8 @@ import { OrderView } from '../../models/orders/order-tabs.model';
     SearchBarComponent,
     ButtonComponent,
     PopupComponent,
-    NewOrderFormComponent
+    NewOrderFormComponent,
+    ToggleButtonComponent
   ],
   templateUrl: './orders.component.html'
 })
@@ -48,6 +50,7 @@ export class OrdersComponent {
 
   orders: OrderEntity[] = [];
   editingOrderId: string | null = null;
+  readyForPickupMap: Map<string, boolean> = new Map();
 
   isNewOrderOpen = false;
   newOrderValue: NewOrderFormValue = this.createDefaultNewOrder();
@@ -94,7 +97,7 @@ export class OrdersComponent {
   // MENU
   // -------------------------
   toggleMenu(row: any): void {
-    this.activeMenuRow = this.activeMenuRow === row ? null : row;
+    this.activeMenuRow = this.activeMenuRow?.id === row.id ? null : row;
   }
 
   handleMenuAction(event: any, row: any): void {
@@ -153,6 +156,45 @@ export class OrdersComponent {
     if (action === 'pdf') {
       await this.downloadOrderPdf(this.selectedOrderForDetails);
     }
+  }
+
+  updateReadyForPickup(isReady: boolean): void {
+    if (!this.selectedOrderForDetails) return;
+
+    const id = this.selectedOrderForDetails.id;
+
+    // Update the map
+    this.readyForPickupMap.set(id, isReady);
+
+    // Update the view object
+    const index = this.orders.findIndex(o => o.id === id);
+    if (index === -1) return;
+
+    this.orders[index].view.current.readyForPickup = isReady;
+    this.orders[index].view.scheduled.readyForPickup = isReady;
+    this.orders[index].view.completed.readyForPickup = isReady;
+    this.orders[index].view.incomplete.readyForPickup = isReady;
+    this.orders[index].view.history.readyForPickup = isReady;
+
+    // Update the selected order for details
+    this.selectedOrderForDetails = structuredClone(this.orders[index]);
+  }
+
+  updateReadyForPickupFromRow(orderId: string, isReady: boolean): void {
+    this.readyForPickupMap.set(orderId, isReady);
+
+    const index = this.orders.findIndex(o => o.id === orderId);
+    if (index === -1) return;
+
+    this.orders[index].view.current.readyForPickup = isReady;
+    this.orders[index].view.scheduled.readyForPickup = isReady;
+    this.orders[index].view.completed.readyForPickup = isReady;
+    this.orders[index].view.incomplete.readyForPickup = isReady;
+    this.orders[index].view.history.readyForPickup = isReady;
+  }
+
+  getReadyForPickupStatus(orderId: string): boolean {
+    return this.readyForPickupMap.get(orderId) || false;
   }
 
   // -------------------------
@@ -260,7 +302,7 @@ export class OrdersComponent {
       orderPlacedTime: this.formatDateTime(v.delivery.deliveryDate, v.pickup.pickupTime),
       pickupTime: this.formatTime(v.pickup.pickupTime),
       estDeliveryTime: this.formatDateTime(v.delivery.deliveryDate, v.delivery.deliveryTime),
-      readyForPickup: false,
+      readyForPickup: true,
       driver: '',
       orderStatus: this.getStatus(''),
       trackingStatus: 'Inactive'
@@ -283,6 +325,9 @@ export class OrdersComponent {
         history: structuredClone(view)
       }
     };
+
+    // Initialize ready for pickup state for this order
+    this.readyForPickupMap.set(id, true);
 
     if (this.editingOrderId) {
       const index = this.orders.findIndex(o => o.id === this.editingOrderId);
@@ -316,7 +361,7 @@ export class OrdersComponent {
         if (tabKey === 'history') return true;
         return o.tab === tabKey;
       })
-      .map(o => o.view.current);
+      .map(o => ({ ...o.view.current, id: o.id }));
   }
 
   private getTabKey(tab: string): OrderTab {
@@ -400,7 +445,23 @@ export class OrdersComponent {
     const p = v.pickup.pickupTime;
     const d = v.delivery.deliveryTime;
 
-    return p && d ? d <= p : false;
+    if (p && d && d <= p) return true;
+
+    // Validate at least 1 valid item exists
+    const items = v.details.items || [];
+    const hasValidItem = items.some(item => {
+      const nameFilled = !!item.itemName?.trim();
+      const price = this.toNumber(item.itemPrice);
+      const qty = this.toNumber(item.itemQty);
+      return nameFilled && price > 0 && qty > 0;
+    });
+
+    return !hasValidItem;
+  }
+
+  private toNumber(v: unknown): number {
+    const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').trim());
+    return Number.isFinite(n) ? n : 0;
   }
 
   private todayYYYYMMDD(): string {
@@ -426,7 +487,7 @@ export class OrdersComponent {
         deliveryTime: ''
       },
       details: {
-        items: [{ itemName: '', itemPrice: 0, itemQty: 0 }],
+        items: [{ itemName: '', itemPrice: '', itemQty: '' }],
         taxRate: 0,
         deliveryFees: 0,
         deliveryTips: 0,

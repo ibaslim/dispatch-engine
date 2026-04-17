@@ -27,19 +27,15 @@ export class TableComponent {
   // action button click
   @Output() actionClick = new EventEmitter<any>();
 
+  @Output() readyForPickupChange = new EventEmitter<{ id: string; value: boolean }>();
+
   onActionClick(row: any, event?: MouseEvent): void {
     event?.stopPropagation(); // prevent bubbling
-
-    // Only toggle menu for the three-dot actions button
-    this.activeMenuRow = this.activeMenuRow === row ? null : row;
-
     this.actionClick.emit(row);
   }
 
   onAssignClick(row: any, event?: MouseEvent): void {
     event?.stopPropagation(); // prevent bubbling
-
-    // Just emit the event, don't toggle the menu
     this.actionClick.emit(row);
   }
 

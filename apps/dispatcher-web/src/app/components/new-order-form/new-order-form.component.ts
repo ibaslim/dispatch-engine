@@ -55,8 +55,8 @@ export class NewOrderFormComponent {
         items: [
           {
             itemName: '',
-            itemPrice: 0,
-            itemQty: 0
+            itemPrice: '',
+            itemQty: ''
           }
         ],
         taxRate: 0,

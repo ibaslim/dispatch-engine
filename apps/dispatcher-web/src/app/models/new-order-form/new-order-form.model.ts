@@ -37,8 +37,8 @@ export interface NewOrderFormValue {
     details: {
         items: {
             itemName: string;
-            itemPrice: number;
-            itemQty: number;
+            itemPrice: string;
+            itemQty: string;
         }[];
 
         taxRate: number;
