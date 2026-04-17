@@ -61,6 +61,8 @@ export class OrdersComponent {
   selectedOrderForDetails: OrderEntity | null = null;
   isDetailsMenuOpen = false;
 
+  searchQuery = '';
+
   menuItems = [
     { label: 'Details', action: 'details', icon: 'ph ph-eye' },
     { label: 'Edit', action: 'edit', icon: 'ph ph-pencil-simple' },
@@ -355,11 +357,21 @@ export class OrdersComponent {
   // -------------------------
   get rows(): any[] {
     const tabKey = this.getTabKey(this.activeTab);
+    const q = this.searchQuery.trim().toLowerCase();
 
     return this.orders
       .filter(o => {
         if (tabKey === 'history') return true;
         return o.tab === tabKey;
+      })
+      .filter(o => {
+        if (!q) return true;
+        const v = o.view.current;
+        return (
+          v.orderNo?.toLowerCase().includes(q) ||
+          v.customerName?.toLowerCase().includes(q) ||
+          v.vendorName?.toLowerCase().includes(q)
+        );
       })
       .map(o => ({ ...o.view.current, id: o.id }));
   }
