@@ -46,7 +46,7 @@
 
                             <ng-template #assignBtn>
                                 <app-button variant="ghost-outline" label="+ Assign"
-                                    (onClick)="onActionClick(row)"></app-button>
+                                    (onClick)="onAssignClick(row, $event)"></app-button>
                             </ng-template>
 
                         </div>
@@ -57,7 +57,7 @@
                         <div class="relative flex justify-center w-full">
 
                             <app-button variant="icon"
-                                class="group rounded-md hover:bg-gray-100 dark:hover:bg-[#2a2d2a] transition"
+                                class="row-action-button group rounded-md hover:bg-gray-100 dark:hover:bg-[#2a2d2a] transition"
                                 (onClick)="onActionClick(row, $event)" ariaLabel="Row actions">
                                 <i
                                     class="ph ph-dots-three text-xl text-gray-900 dark:text-gray-200 transition-transform duration-150 group-hover:scale-125"></i>

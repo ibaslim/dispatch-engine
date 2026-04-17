@@ -10,14 +10,10 @@ import { NewOrderFormComponent } from '../../components/new-order-form/new-order
 
 import { TableColumn } from '../../models/table.model';
 import { OrderEntity, OrderTab } from '../../models/orders/order-entity.model';
-import { Order } from '../../models/orders/current-orders.model';
-import { ScheduledOrder } from '../../models/orders/scheduled-orders.model';
-import { CompletedOrder } from '../../models/orders/completed-orders.model';
-import { IncompleteOrder } from '../../models/orders/incomplete-orders.model';
-import { HistoryOrder } from '../../models/orders/history-orders.model';
 import { NewOrderFormValue } from '../../models/new-order-form/new-order-form.model';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { OrderView } from '../../models/orders/order-tabs.model';
 
 @Component({
   selector: 'app-orders',
@@ -76,6 +72,25 @@ export class OrdersComponent {
   ];
 
   // -------------------------
+  // COLUMNS (UNIFIED)
+  // -------------------------
+  unifiedColumns: TableColumn[] = [
+    { key: 'orderNo', label: 'Order Number', sortable: true },
+    { key: 'customerName', label: 'Customer Name', sortable: true },
+    { key: 'vendorName', label: 'Vendor Name', sortable: true },
+    { key: 'amount', label: 'Amount', sortable: true },
+    { key: 'distance', label: 'Distance', sortable: true },
+    { key: 'orderPlacedTime', label: 'Order Placed Time', sortable: true },
+    { key: 'pickupTime', label: 'Pickup Time', sortable: true },
+    { key: 'estDeliveryTime', label: 'Est. Delivery Time', sortable: true },
+    { key: 'readyForPickup', label: 'Ready for Pickup', sortable: true },
+    { key: 'driver', label: 'Driver', sortable: true },
+    { key: 'orderStatus', label: 'Order Status', sortable: true },
+    { key: 'trackingStatus', label: 'Tracking Status', sortable: true },
+    { key: 'actions', label: '', sortable: false }
+  ];
+
+  // -------------------------
   // MENU
   // -------------------------
   toggleMenu(row: any): void {
@@ -84,49 +99,19 @@ export class OrdersComponent {
 
   handleMenuAction(event: any, row: any): void {
     if (event.action === 'moveToCurrent') {
-      const order = this.orders.find(o => {
-        const v = o.view;
-        return (
-          v.current?.orderNo === row.orderNo ||
-          v.scheduled?.orderNo === row.orderNo ||
-          v.completed?.orderNo === row.orderNo ||
-          v.incomplete?.orderNo === row.orderNo ||
-          v.history?.orderNo === row.orderNo
-        );
-      });
-
+      const order = this.findOrderByOrderNo(row.orderNo);
       if (order) {
         this.updateOrderTab(order.id, 'current');
       }
     }
 
     if (event.action === 'edit') {
-      const order = this.orders.find(o => {
-        const v = o.view;
-        return (
-          v.current?.orderNo === row.orderNo ||
-          v.scheduled?.orderNo === row.orderNo ||
-          v.completed?.orderNo === row.orderNo ||
-          v.incomplete?.orderNo === row.orderNo ||
-          v.history?.orderNo === row.orderNo
-        );
-      });
-
+      const order = this.findOrderByOrderNo(row.orderNo);
       if (order) this.editOrder(order);
     }
 
     if (event.action === 'details') {
-      const order = this.orders.find(o => {
-        const v = o.view;
-        return (
-          v.current?.orderNo === row.orderNo ||
-          v.scheduled?.orderNo === row.orderNo ||
-          v.completed?.orderNo === row.orderNo ||
-          v.incomplete?.orderNo === row.orderNo ||
-          v.history?.orderNo === row.orderNo
-        );
-      });
-
+      const order = this.findOrderByOrderNo(row.orderNo);
       if (order) {
         this.selectedOrderForDetails = order;
         this.isDetailsOpen = true;
@@ -144,16 +129,7 @@ export class OrdersComponent {
   }
 
   private findOrderByOrderNo(orderNo: string): OrderEntity | undefined {
-    return this.orders.find(o => {
-      const v = o.view;
-      return (
-        v.current?.orderNo === orderNo ||
-        v.scheduled?.orderNo === orderNo ||
-        v.completed?.orderNo === orderNo ||
-        v.incomplete?.orderNo === orderNo ||
-        v.history?.orderNo === orderNo
-      );
-    });
+    return this.orders.find(o => o.view.current.orderNo === orderNo);
   }
 
   async handleDetailsMenu(action: string): Promise<void> {
@@ -180,9 +156,8 @@ export class OrdersComponent {
   }
 
   // -------------------------
-  // OPEN / CLOSE
+  // PDF DOWNLOAD
   // -------------------------
-
   async downloadOrderPdf(order: OrderEntity): Promise<void> {
     const printContent = this.generatePrintHTML(order);
 
@@ -275,91 +250,20 @@ export class OrdersComponent {
     const isToday = this.isToday(v.delivery.deliveryDate);
     const diff = this.getTimeDiffHours(v.pickup.pickupTime, v.delivery.deliveryTime);
 
-    const base = {
+    // -------------------- UNIFIED VIEW --------------------
+    const view: OrderView = {
       orderNo: v.orderNumber,
-      customer: v.delivery.name,
-      pickup: v.pickup.name,
+      customerName: v.delivery.name,
+      vendorName: v.pickup.name,
       amount: `C$ ${v.details.total}`,
       distance: '—',
-      driver: '',
-      status: this.getStatus('')
-    };
-
-    // ---------------- CURRENT ----------------
-    const currentView: Order = {
-      ...base,
-      placed: this.formatDateTime(v.delivery.deliveryDate, v.pickup.pickupTime),
-      reqPickup: this.formatTime(v.pickup.pickupTime),
-      reqDelivery: this.formatTime(v.delivery.deliveryTime),
-      ready: false,
-      tracking: 'Inactive'
-    };
-
-    // ---------------- SCHEDULED ----------------
-    const scheduledView: ScheduledOrder = {
-      select: false,
-      orderNo: base.orderNo,
-      customerName: base.customer,
-      pickup: base.pickup,
-      amount: base.amount,
-      distance: base.distance,
-      placementTime: currentView.placed,
+      orderPlacedTime: this.formatDateTime(v.delivery.deliveryDate, v.pickup.pickupTime),
+      pickupTime: this.formatTime(v.pickup.pickupTime),
       estDeliveryTime: this.formatDateTime(v.delivery.deliveryDate, v.delivery.deliveryTime),
-      elapsedTime: '—',
-      driver: base.driver,
-      status: base.status
-    };
-
-    // ---------------- COMPLETED ----------------
-    const completedView: CompletedOrder = {
-      select: false,
-      date: v.delivery.deliveryDate,
-      orderNo: base.orderNo,
-      customerName: base.customer,
-      pickup: base.pickup,
-      amount: base.amount,
-      distance: base.distance,
-      placementTime: currentView.placed,
-      startTime: '—',
-      pickupTime: '—',
-      reqDeliveryTime: this.formatTime(v.delivery.deliveryTime),
-      deliveryTime: this.formatTime(v.delivery.deliveryTime),
-      driver: base.driver,
-      feedback: ''
-    };
-
-    // ---------------- INCOMPLETE ----------------
-    const incompleteView: IncompleteOrder = {
-      select: false,
-      date: v.delivery.deliveryDate,
-      orderNo: base.orderNo,
-      customerName: base.customer,
-      pickup: base.pickup,
-      amount: base.amount,
-      distance: base.distance,
-      placementTime: currentView.placed,
-      startTime: 'N/A',
-      pickupTime: '',
-      deliveryTime: '',
-      driver: base.driver,
-      status: base.status,
-      actions: ''
-    };
-
-    // ---------------- HISTORY ----------------
-    const historyView: HistoryOrder = {
-      date: v.delivery.deliveryDate,
-      orderNo: base.orderNo,
-      customerName: base.customer,
-      pickup: base.pickup,
-      amount: base.amount,
-      distance: base.distance,
-      placementTime: currentView.placed,
-      startTime: '',
-      pickupTime: '',
-      deliveryTime: '',
-      driver: base.driver,
-      status: base.status
+      readyForPickup: false,
+      driver: '',
+      orderStatus: this.getStatus(''),
+      trackingStatus: 'Inactive'
     };
 
     const tab: OrderTab =
@@ -372,11 +276,11 @@ export class OrdersComponent {
       full: structuredClone(v),
       tab,
       view: {
-        current: currentView,
-        scheduled: scheduledView,
-        completed: completedView,
-        incomplete: incompleteView,
-        history: historyView
+        current: structuredClone(view),
+        scheduled: structuredClone(view),
+        completed: structuredClone(view),
+        incomplete: structuredClone(view),
+        history: structuredClone(view)
       }
     };
 
@@ -412,15 +316,7 @@ export class OrdersComponent {
         if (tabKey === 'history') return true;
         return o.tab === tabKey;
       })
-      .map(o => {
-        switch (tabKey) {
-          case 'scheduled': return o.view.scheduled;
-          case 'completed': return o.view.completed;
-          case 'incomplete': return o.view.incomplete;
-          case 'history': return o.view.history;
-          default: return o.view.current;
-        }
-      });
+      .map(o => o.view.current);
   }
 
   private getTabKey(tab: string): OrderTab {
@@ -445,7 +341,7 @@ export class OrdersComponent {
       baseItems.push({ label: 'Move to Current', action: 'moveToCurrent', icon: 'ph ph-arrow-up-right' });
     }
 
-    // Add Redrop option for Incomplete and Incomplete tabs
+    // Add Redrop option for Incomplete and Completed tabs
     if (this.activeTab === 'Incomplete' || this.activeTab === 'Completed') {
       return [
         { label: 'Details', action: 'details', icon: 'ph ph-eye' },
@@ -457,103 +353,11 @@ export class OrdersComponent {
   }
 
   // -------------------------
-  // COLUMNS
+  // COLUMNS GETTER
   // -------------------------
   get columns(): TableColumn[] {
-    switch (this.activeTab) {
-      case 'Scheduled':
-        return this.scheduledColumns;
-      case 'Completed':
-        return this.completedColumns;
-      case 'Incomplete':
-        return this.incompleteColumns;
-      case 'History':
-        return this.historyColumns;
-      default:
-        return this.currentColumns;
-    }
+    return this.unifiedColumns;
   }
-
-  currentColumns: TableColumn[] = [
-    { key: 'orderNo', label: 'Order No.', sortable: true },
-    { key: 'customer', label: 'C. Name', sortable: true },
-    { key: 'pickup', label: 'Pick-up', sortable: true },
-    { key: 'amount', label: 'Amount', sortable: true },
-    { key: 'distance', label: 'Distance', sortable: true },
-    { key: 'placed', label: 'Order placed', sortable: true },
-    { key: 'reqPickup', label: 'Req. Pickup Time', sortable: true },
-    { key: 'reqDelivery', label: 'Req. Delivery Time', sortable: true },
-    { key: 'ready', label: 'Ready for pick-up', sortable: true },
-    { key: 'driver', label: 'Driver', sortable: true },
-    { key: 'status', label: 'Status', sortable: true },
-    { key: 'tracking', label: 'Tracking', sortable: true },
-    { key: 'actions', label: '', sortable: false }
-  ];
-
-  scheduledColumns: TableColumn[] = [
-    { key: 'select', label: '', sortable: false },
-    { key: 'orderNo', label: 'Order No.', sortable: true },
-    { key: 'customerName', label: 'Customer Name', sortable: true },
-    { key: 'pickup', label: 'Pick-up', sortable: true },
-    { key: 'amount', label: 'Amount', sortable: true },
-    { key: 'distance', label: 'Distance', sortable: true },
-    { key: 'placementTime', label: 'Placement Time', sortable: true },
-    { key: 'estDeliveryTime', label: 'Est. Delivery Time', sortable: true },
-    { key: 'elapsedTime', label: 'Elapsed Time', sortable: true },
-    { key: 'driver', label: 'Driver', sortable: true },
-    { key: 'status', label: 'Status', sortable: true },
-    { key: 'actions', label: '', sortable: false }
-  ];
-
-  completedColumns: TableColumn[] = [
-    { key: 'select', label: '', sortable: false },
-    { key: 'date', label: 'Date', sortable: true },
-    { key: 'orderNo', label: 'Order No.', sortable: true },
-    { key: 'customerName', label: 'C. Name', sortable: true },
-    { key: 'pickup', label: 'Pick-up', sortable: true },
-    { key: 'amount', label: 'Amount', sortable: true },
-    { key: 'distance', label: 'Distance', sortable: true },
-    { key: 'placementTime', label: 'Placement Time', sortable: true },
-    { key: 'startTime', label: 'Start Time', sortable: true },
-    { key: 'pickupTime', label: 'Pick up Time', sortable: true },
-    { key: 'reqDeliveryTime', label: 'Req. Delivery Time', sortable: true },
-    { key: 'deliveryTime', label: 'Delivery Time', sortable: true },
-    { key: 'driver', label: 'Driver', sortable: true },
-    { key: 'feedback', label: 'Feedback', sortable: true },
-    { key: 'actions', label: '', sortable: false }
-  ];
-
-  incompleteColumns: TableColumn[] = [
-    { key: 'select', label: '', sortable: false },
-    { key: 'date', label: 'Date', sortable: true },
-    { key: 'orderNo', label: 'Order No.', sortable: true },
-    { key: 'customerName', label: 'C. Name', sortable: true },
-    { key: 'pickup', label: 'Pick-up', sortable: true },
-    { key: 'amount', label: 'Amount', sortable: true },
-    { key: 'distance', label: 'Distance', sortable: true },
-    { key: 'placementTime', label: 'Placement Time', sortable: true },
-    { key: 'startTime', label: 'Start Time', sortable: true },
-    { key: 'pickupTime', label: 'Pick up Time', sortable: true },
-    { key: 'deliveryTime', label: 'Delivery Time', sortable: true },
-    { key: 'driver', label: 'Driver', sortable: true },
-    { key: 'status', label: 'Status', sortable: true },
-    { key: 'actions', label: '', sortable: false },
-  ];
-
-  historyColumns: TableColumn[] = [
-    { key: 'date', label: 'Date', sortable: true },
-    { key: 'orderNo', label: 'Order No.', sortable: true },
-    { key: 'customerName', label: 'C. Name', sortable: true },
-    { key: 'pickup', label: 'Pick-up', sortable: true },
-    { key: 'amount', label: 'Amount', sortable: true },
-    { key: 'distance', label: 'Distance', sortable: true },
-    { key: 'placementTime', label: 'Placement Time', sortable: true },
-    { key: 'startTime', label: 'Start Time', sortable: true },
-    { key: 'pickupTime', label: 'Pick up Time', sortable: true },
-    { key: 'deliveryTime', label: 'Delivery Time', sortable: true },
-    { key: 'driver', label: 'Driver', sortable: true },
-    { key: 'status', label: 'Status', sortable: true },
-  ];
 
   // -------------------------
   // UTILITIES

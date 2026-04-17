@@ -1,9 +1,5 @@
 import { NewOrderFormValue } from '../new-order-form/new-order-form.model';
-import { Order } from './current-orders.model';
-import { ScheduledOrder } from './scheduled-orders.model';
-import { CompletedOrder } from './completed-orders.model';
-import { IncompleteOrder } from './incomplete-orders.model';
-import { HistoryOrder } from './history-orders.model';
+import { OrderView } from './order-tabs.model';
 
 export type OrderTab =
     | 'current'
@@ -18,10 +14,10 @@ export interface OrderEntity {
     full: NewOrderFormValue;
 
     view: {
-        current?: Order;
-        scheduled?: ScheduledOrder;
-        completed?: CompletedOrder;
-        incomplete?: IncompleteOrder;
-        history?: HistoryOrder;
+        current: OrderView;
+        scheduled: OrderView;
+        completed: OrderView;
+        incomplete: OrderView;
+        history: OrderView;
     };
 }

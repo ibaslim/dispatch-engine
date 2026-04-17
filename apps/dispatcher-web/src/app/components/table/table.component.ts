@@ -28,10 +28,18 @@ export class TableComponent {
   @Output() actionClick = new EventEmitter<any>();
 
   onActionClick(row: any, event?: MouseEvent): void {
-    event?.stopPropagation(); // important
+    event?.stopPropagation(); // prevent bubbling
 
+    // Only toggle menu for the three-dot actions button
     this.activeMenuRow = this.activeMenuRow === row ? null : row;
 
+    this.actionClick.emit(row);
+  }
+
+  onAssignClick(row: any, event?: MouseEvent): void {
+    event?.stopPropagation(); // prevent bubbling
+
+    // Just emit the event, don't toggle the menu
     this.actionClick.emit(row);
   }
 
@@ -46,11 +54,11 @@ export class TableComponent {
   onOutsideClick(event: MouseEvent): void {
     const target = event.target as HTMLElement;
 
-    // If click is inside menu OR button → do nothing
+    // Only close menu if clicking outside menu and outside action buttons
     const clickedInsideMenu = target.closest('app-menu');
-    const clickedInsideButton = target.closest('app-button');
+    const clickedInsideActionButton = target.closest('.row-action-button');
 
-    if (clickedInsideMenu || clickedInsideButton) return;
+    if (clickedInsideMenu || clickedInsideActionButton) return;
 
     // Otherwise close menu
     this.activeMenuRow = null;
