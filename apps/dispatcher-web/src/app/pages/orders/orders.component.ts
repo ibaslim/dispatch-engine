@@ -15,6 +15,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { OrderView } from '../../models/orders/order-tabs.model';
 import { ToggleButtonComponent } from '../../components/toggle-button/toggle-button.component';
+import { OrdersService } from '../../services/orders/orders.service';
 
 @Component({
   selector: 'app-orders',
@@ -48,7 +49,7 @@ export class OrdersComponent {
   // -------------------------
   formSubmitted = signal(false);
 
-  orders: OrderEntity[] = [];
+  orders: any[] = [];
   editingOrderId: string | null = null;
   readyForPickupMap: Map<string, boolean> = new Map();
 
@@ -75,6 +76,77 @@ export class OrdersComponent {
     { label: 'Mark as Failed', action: 'failed', icon: 'ph ph-x', danger: true },
     { label: 'Delete', action: 'delete', icon: 'ph ph-trash', danger: true }
   ];
+
+  constructor(private ordersService: OrdersService) { }
+
+  ngOnInit(): void {
+    this.loadOrders();
+  }
+
+  loadOrders(): void {
+    this.ordersService.getOrders().subscribe(res => {
+      this.orders = res.map((o: any) => {
+
+        const view = {
+          orderNo: o.order_number,
+          customerName: o.delivery_name,
+          vendorName: o.pickup_name,
+          amount: `C$ ${o.total ?? 0}`,
+          distance: '—',
+          orderPlacedTime: '',
+          pickupTime: o.pickup_time,
+          estDeliveryTime: o.delivery_time,
+          readyForPickup: o.ready_for_pickup ?? false,
+          driver: '',
+          orderStatus: o.status,
+          trackingStatus: 'Inactive'
+        };
+
+        return {
+          id: o.id,
+          full: {
+            orderNumber: o.order_number,
+            pickup: {
+              name: o.pickup_name,
+              phone: { countryCode: '', number: o.pickup_phone },
+              address: o.pickup_address,
+              pickupTime: o.pickup_time
+            },
+            delivery: {
+              name: o.delivery_name,
+              phone: { countryCode: '', number: o.delivery_phone },
+              email: o.delivery_email,
+              address: o.delivery_address,
+              deliveryDate: o.delivery_date,
+              deliveryTime: o.delivery_time
+            },
+            details: {
+              items: o.items,
+              subtotal: o.subtotal,
+              taxRate: o.tax_rate,
+              taxAmount: o.tax_amount,
+              deliveryFees: o.delivery_fees,
+              deliveryTips: o.delivery_tips,
+              discount: o.discount,
+              total: o.total,
+              instructions: o.instructions,
+              payment: { method: o.payment_method }
+            }
+          },
+
+          tab: o.status, // keep backend source of truth
+
+          view: {
+            current: view,
+            scheduled: view,
+            completed: view,
+            incomplete: view,
+            history: view
+          }
+        };
+      });
+    });
+  }
 
   // -------------------------
   // COLUMNS (UNIFIED)
@@ -103,31 +175,35 @@ export class OrdersComponent {
   }
 
   handleMenuAction(event: any, row: any): void {
-    if (event.action === 'moveToCurrent') {
-      const order = this.findOrderByOrderNo(row.orderNo);
-      if (order) {
-        this.updateOrderTab(order.id, 'current');
-      }
-    }
+    const order = this.findOrderByOrderNo(row.orderNo);
+    if (!order) return;
 
-    if (event.action === 'edit') {
-      const order = this.findOrderByOrderNo(row.orderNo);
-      if (order) this.editOrder(order);
-    }
+    switch (event.action) {
 
-    if (event.action === 'details') {
-      const order = this.findOrderByOrderNo(row.orderNo);
-      if (order) {
+      case 'moveToCurrent':
+        this.ordersService.updateStatus(order.id, 'current').subscribe(() => {
+          this.loadOrders();
+        });
+        break;
+
+      case 'edit':
+        this.editOrder(order);
+        break;
+
+      case 'details':
         this.selectedOrderForDetails = order;
         this.isDetailsOpen = true;
-      }
-    }
+        break;
 
-    if (event.action === 'print') {
-      const order = this.findOrderByOrderNo(row.orderNo);
-      if (order) {
+      case 'print':
         this.openPrintWindow(order);
-      }
+        break;
+
+      case 'delete':
+        this.ordersService.deleteOrder(order.id).subscribe(() => {
+          this.loadOrders();
+        });
+        break;
     }
 
     this.activeMenuRow = null;
@@ -143,11 +219,15 @@ export class OrdersComponent {
     const id = this.selectedOrderForDetails.id;
 
     if (action === 'done') {
-      this.updateOrderTab(id, 'completed');
+      this.ordersService.updateStatus(id, 'completed').subscribe(() => {
+        this.loadOrders();
+      });
     }
 
     if (action === 'failed') {
-      this.updateOrderTab(id, 'incomplete');
+      this.ordersService.updateStatus(id, 'incomplete').subscribe(() => {
+        this.loadOrders();
+      });
     }
 
     if (action === 'delete') {
@@ -166,7 +246,9 @@ export class OrdersComponent {
     const id = this.selectedOrderForDetails.id;
 
     // Update the map
-    this.readyForPickupMap.set(id, isReady);
+    this.ordersService.toggleReady(id, isReady).subscribe(() => {
+      this.loadOrders();
+    });
 
     // Update the view object
     const index = this.orders.findIndex(o => o.id === id);
@@ -285,63 +367,138 @@ export class OrdersComponent {
   // SAVE (CREATE + EDIT)
   // -------------------------
   saveNewOrder(): void {
-    this.formSubmitted.set(true);
+  this.formSubmitted.set(true);
 
-    if (this.checkFormErrors()) return;
+  if (this.checkFormErrors()) return;
 
-    const v = this.newOrderValue;
+  const v = this.newOrderValue;
 
-    const isToday = this.isToday(v.delivery.deliveryDate);
-    const diff = this.getTimeDiffHours(v.pickup.pickupTime, v.delivery.deliveryTime);
+  const isToday = this.isToday(v.delivery.deliveryDate);
+  const diff = this.getTimeDiffHours(v.pickup.pickupTime, v.delivery.deliveryTime);
 
-    // -------------------- UNIFIED VIEW --------------------
-    const view: OrderView = {
-      orderNo: v.orderNumber,
-      customerName: v.delivery.name,
-      vendorName: v.pickup.name,
-      amount: `C$ ${v.details.total}`,
-      distance: '—',
-      orderPlacedTime: this.formatDateTime(v.delivery.deliveryDate, v.pickup.pickupTime),
-      pickupTime: this.formatTime(v.pickup.pickupTime),
-      estDeliveryTime: this.formatDateTime(v.delivery.deliveryDate, v.delivery.deliveryTime),
-      readyForPickup: false,
-      driver: '',
-      orderStatus: this.getStatus(''),
-      trackingStatus: 'Inactive'
-    };
+  // -------------------- UNIFIED VIEW --------------------
+  const view: OrderView = {
+    orderNo: v.orderNumber,
+    customerName: v.delivery.name,
+    vendorName: v.pickup.name,
+    amount: `C$ ${v.details.total}`,
+    distance: '—',
+    orderPlacedTime: this.formatDateTime(v.delivery.deliveryDate, v.pickup.pickupTime),
+    pickupTime: this.formatTime(v.pickup.pickupTime),
+    estDeliveryTime: this.formatDateTime(v.delivery.deliveryDate, v.delivery.deliveryTime),
+    readyForPickup: false,
+    driver: '',
+    orderStatus: this.getStatus(''),
+    trackingStatus: 'Inactive'
+  };
 
-    const tab: OrderTab =
-      isToday && diff < 3 ? 'current' : 'scheduled';
+  const tab: OrderTab =
+    isToday && diff < 3 ? 'current' : 'scheduled';
 
-    const id = this.editingOrderId ?? crypto.randomUUID();
+  const id = this.editingOrderId ?? crypto.randomUUID();
 
-    const entity: OrderEntity = {
-      id,
-      full: structuredClone(v),
-      tab,
-      view: {
-        current: structuredClone(view),
-        scheduled: structuredClone(view),
-        completed: structuredClone(view),
-        incomplete: structuredClone(view),
-        history: structuredClone(view)
-      }
-    };
-
-    // Initialize ready for pickup state for this order
-    this.readyForPickupMap.set(id, true);
-
-    if (this.editingOrderId) {
-      const index = this.orders.findIndex(o => o.id === this.editingOrderId);
-      this.orders[index] = entity;
-      this.editingOrderId = null;
-    } else {
-      this.orders.unshift(entity);
+  const entity: OrderEntity = {
+    id,
+    full: structuredClone(v),
+    tab,
+    view: {
+      current: structuredClone(view),
+      scheduled: structuredClone(view),
+      completed: structuredClone(view),
+      incomplete: structuredClone(view),
+      history: structuredClone(view)
     }
+  };
 
-    this.closeNewOrder();
-    this.formSubmitted.set(false);
+  // Initialize ready for pickup state for this order
+  this.readyForPickupMap.set(id, true);
+
+  if (this.editingOrderId) {
+    const index = this.orders.findIndex(o => o.id === this.editingOrderId);
+    this.orders[index] = entity;
+
+    // ADDED: update backend when editing
+    const payload = {
+      order_number: v.orderNumber,
+      pickup_name: v.pickup.name,
+      pickup_phone: `${v.pickup.phone.countryCode}${v.pickup.phone.number}`,
+      pickup_address: v.pickup.address,
+      pickup_time: v.pickup.pickupTime,
+      delivery_name: v.delivery.name,
+      delivery_phone: `${v.delivery.phone.countryCode}${v.delivery.phone.number}`,
+      delivery_email: v.delivery.email,
+      delivery_address: v.delivery.address,
+      delivery_date: v.delivery.deliveryDate,
+      delivery_time: v.delivery.deliveryTime,
+      items: v.details.items.map(i => ({
+        itemName: i.itemName,
+        itemPrice: Number(i.itemPrice),
+        itemQty: Number(i.itemQty)
+      })),
+      subtotal: v.details.subtotal,
+      tax_rate: v.details.taxRate,
+      tax_amount: v.details.taxAmount,
+      delivery_fees: v.details.deliveryFees,
+      delivery_tips: v.details.deliveryTips,
+      discount: v.details.discount,
+      total: v.details.total,
+      instructions: v.details.instructions,
+      payment_method: v.details.payment.method,
+      payment_details: {}
+    };
+
+    this.ordersService.updateOrder(this.editingOrderId, payload).subscribe({
+      next: () => this.loadOrders(),
+      error: (err) => console.error(err)
+    });
+
+    this.editingOrderId = null;
+
+  } else {
+
+    const payload = {
+      order_number: v.orderNumber,
+      pickup_name: v.pickup.name,
+      pickup_phone: `${v.pickup.phone.countryCode}${v.pickup.phone.number}`,
+      pickup_address: v.pickup.address,
+      pickup_time: v.pickup.pickupTime,
+      delivery_name: v.delivery.name,
+      delivery_phone: `${v.delivery.phone.countryCode}${v.delivery.phone.number}`,
+      delivery_email: v.delivery.email,
+      delivery_address: v.delivery.address,
+      delivery_date: v.delivery.deliveryDate,
+      delivery_time: v.delivery.deliveryTime,
+      items: v.details.items.map(i => ({
+        itemName: i.itemName,
+        itemPrice: Number(i.itemPrice),
+        itemQty: Number(i.itemQty)
+      })),
+      subtotal: v.details.subtotal,
+      tax_rate: v.details.taxRate,
+      tax_amount: v.details.taxAmount,
+      delivery_fees: v.details.deliveryFees,
+      delivery_tips: v.details.deliveryTips,
+      discount: v.details.discount,
+      total: v.details.total,
+      instructions: v.details.instructions,
+      payment_method: v.details.payment.method,
+      payment_details: {}
+    };
+
+    this.ordersService.createOrder(payload).subscribe({
+      next: () => {
+        this.loadOrders();
+      },
+      error: (err) => {
+        console.error('Order creation failed:', err);
+        alert(err.error?.detail || 'Failed to create order');
+      }
+    });
   }
+
+  this.closeNewOrder();
+  this.formSubmitted.set(false);
+}
 
   // -------------------------
   // EDIT
@@ -373,7 +530,10 @@ export class OrdersComponent {
           v.vendorName?.toLowerCase().includes(q)
         );
       })
-      .map(o => ({ ...o.view.current, id: o.id }));
+      .map(o => ({
+        ...(o.view?.current ?? {}),
+        id: o.id
+      }));
   }
 
   private getTabKey(tab: string): OrderTab {
