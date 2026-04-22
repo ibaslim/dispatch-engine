@@ -231,8 +231,10 @@ export class OrdersComponent {
     }
 
     if (action === 'delete') {
-      this.orders = this.orders.filter(o => o.id !== id);
-      this.closeDetails();
+      this.ordersService.deleteOrder(id).subscribe(() => {
+        this.loadOrders();
+        this.closeDetails();
+      });
     }
 
     if (action === 'pdf') {
@@ -275,6 +277,11 @@ export class OrdersComponent {
     this.orders[index].view.completed.readyForPickup = isReady;
     this.orders[index].view.incomplete.readyForPickup = isReady;
     this.orders[index].view.history.readyForPickup = isReady;
+
+    // persist to backend
+    this.ordersService.toggleReady(orderId, isReady).subscribe(() => {
+      this.loadOrders();
+    });
   }
 
   getReadyForPickupStatus(orderId: string): boolean {
@@ -367,138 +374,138 @@ export class OrdersComponent {
   // SAVE (CREATE + EDIT)
   // -------------------------
   saveNewOrder(): void {
-  this.formSubmitted.set(true);
+    this.formSubmitted.set(true);
 
-  if (this.checkFormErrors()) return;
+    if (this.checkFormErrors()) return;
 
-  const v = this.newOrderValue;
+    const v = this.newOrderValue;
 
-  const isToday = this.isToday(v.delivery.deliveryDate);
-  const diff = this.getTimeDiffHours(v.pickup.pickupTime, v.delivery.deliveryTime);
+    const isToday = this.isToday(v.delivery.deliveryDate);
+    const diff = this.getTimeDiffHours(v.pickup.pickupTime, v.delivery.deliveryTime);
 
-  // -------------------- UNIFIED VIEW --------------------
-  const view: OrderView = {
-    orderNo: v.orderNumber,
-    customerName: v.delivery.name,
-    vendorName: v.pickup.name,
-    amount: `C$ ${v.details.total}`,
-    distance: '—',
-    orderPlacedTime: this.formatDateTime(v.delivery.deliveryDate, v.pickup.pickupTime),
-    pickupTime: this.formatTime(v.pickup.pickupTime),
-    estDeliveryTime: this.formatDateTime(v.delivery.deliveryDate, v.delivery.deliveryTime),
-    readyForPickup: false,
-    driver: '',
-    orderStatus: this.getStatus(''),
-    trackingStatus: 'Inactive'
-  };
-
-  const tab: OrderTab =
-    isToday && diff < 3 ? 'current' : 'scheduled';
-
-  const id = this.editingOrderId ?? crypto.randomUUID();
-
-  const entity: OrderEntity = {
-    id,
-    full: structuredClone(v),
-    tab,
-    view: {
-      current: structuredClone(view),
-      scheduled: structuredClone(view),
-      completed: structuredClone(view),
-      incomplete: structuredClone(view),
-      history: structuredClone(view)
-    }
-  };
-
-  // Initialize ready for pickup state for this order
-  this.readyForPickupMap.set(id, true);
-
-  if (this.editingOrderId) {
-    const index = this.orders.findIndex(o => o.id === this.editingOrderId);
-    this.orders[index] = entity;
-
-    // ADDED: update backend when editing
-    const payload = {
-      order_number: v.orderNumber,
-      pickup_name: v.pickup.name,
-      pickup_phone: `${v.pickup.phone.countryCode}${v.pickup.phone.number}`,
-      pickup_address: v.pickup.address,
-      pickup_time: v.pickup.pickupTime,
-      delivery_name: v.delivery.name,
-      delivery_phone: `${v.delivery.phone.countryCode}${v.delivery.phone.number}`,
-      delivery_email: v.delivery.email,
-      delivery_address: v.delivery.address,
-      delivery_date: v.delivery.deliveryDate,
-      delivery_time: v.delivery.deliveryTime,
-      items: v.details.items.map(i => ({
-        itemName: i.itemName,
-        itemPrice: Number(i.itemPrice),
-        itemQty: Number(i.itemQty)
-      })),
-      subtotal: v.details.subtotal,
-      tax_rate: v.details.taxRate,
-      tax_amount: v.details.taxAmount,
-      delivery_fees: v.details.deliveryFees,
-      delivery_tips: v.details.deliveryTips,
-      discount: v.details.discount,
-      total: v.details.total,
-      instructions: v.details.instructions,
-      payment_method: v.details.payment.method,
-      payment_details: {}
+    // -------------------- UNIFIED VIEW --------------------
+    const view: OrderView = {
+      orderNo: v.orderNumber,
+      customerName: v.delivery.name,
+      vendorName: v.pickup.name,
+      amount: `C$ ${v.details.total}`,
+      distance: '—',
+      orderPlacedTime: this.formatDateTime(v.delivery.deliveryDate, v.pickup.pickupTime),
+      pickupTime: this.formatTime(v.pickup.pickupTime),
+      estDeliveryTime: this.formatDateTime(v.delivery.deliveryDate, v.delivery.deliveryTime),
+      readyForPickup: false,
+      driver: '',
+      orderStatus: this.getStatus(''),
+      trackingStatus: 'Inactive'
     };
 
-    this.ordersService.updateOrder(this.editingOrderId, payload).subscribe({
-      next: () => this.loadOrders(),
-      error: (err) => console.error(err)
-    });
+    const tab: OrderTab =
+      isToday && diff < 3 ? 'current' : 'scheduled';
 
-    this.editingOrderId = null;
+    const id = this.editingOrderId ?? crypto.randomUUID();
 
-  } else {
-
-    const payload = {
-      order_number: v.orderNumber,
-      pickup_name: v.pickup.name,
-      pickup_phone: `${v.pickup.phone.countryCode}${v.pickup.phone.number}`,
-      pickup_address: v.pickup.address,
-      pickup_time: v.pickup.pickupTime,
-      delivery_name: v.delivery.name,
-      delivery_phone: `${v.delivery.phone.countryCode}${v.delivery.phone.number}`,
-      delivery_email: v.delivery.email,
-      delivery_address: v.delivery.address,
-      delivery_date: v.delivery.deliveryDate,
-      delivery_time: v.delivery.deliveryTime,
-      items: v.details.items.map(i => ({
-        itemName: i.itemName,
-        itemPrice: Number(i.itemPrice),
-        itemQty: Number(i.itemQty)
-      })),
-      subtotal: v.details.subtotal,
-      tax_rate: v.details.taxRate,
-      tax_amount: v.details.taxAmount,
-      delivery_fees: v.details.deliveryFees,
-      delivery_tips: v.details.deliveryTips,
-      discount: v.details.discount,
-      total: v.details.total,
-      instructions: v.details.instructions,
-      payment_method: v.details.payment.method,
-      payment_details: {}
-    };
-
-    this.ordersService.createOrder(payload).subscribe({
-      next: () => {
-        this.loadOrders();
-      },
-      error: (err) => {
-        console.error('Order creation failed:', err);
-        alert(err.error?.detail || 'Failed to create order');
+    const entity: OrderEntity = {
+      id,
+      full: structuredClone(v),
+      tab,
+      view: {
+        current: structuredClone(view),
+        scheduled: structuredClone(view),
+        completed: structuredClone(view),
+        incomplete: structuredClone(view),
+        history: structuredClone(view)
       }
-    });
-  }
+    };
 
-  this.closeNewOrder();
-  this.formSubmitted.set(false);
-}
+    // Initialize ready for pickup state for this order
+    this.readyForPickupMap.set(id, true);
+
+    if (this.editingOrderId) {
+      const index = this.orders.findIndex(o => o.id === this.editingOrderId);
+      this.orders[index] = entity;
+
+      // ADDED: update backend when editing
+      const payload = {
+        order_number: v.orderNumber,
+        pickup_name: v.pickup.name,
+        pickup_phone: `${v.pickup.phone.countryCode}${v.pickup.phone.number}`,
+        pickup_address: v.pickup.address,
+        pickup_time: v.pickup.pickupTime,
+        delivery_name: v.delivery.name,
+        delivery_phone: `${v.delivery.phone.countryCode}${v.delivery.phone.number}`,
+        delivery_email: v.delivery.email,
+        delivery_address: v.delivery.address,
+        delivery_date: v.delivery.deliveryDate,
+        delivery_time: v.delivery.deliveryTime,
+        items: v.details.items.map(i => ({
+          itemName: i.itemName,
+          itemPrice: Number(i.itemPrice),
+          itemQty: Number(i.itemQty)
+        })),
+        subtotal: v.details.subtotal,
+        tax_rate: v.details.taxRate,
+        tax_amount: v.details.taxAmount,
+        delivery_fees: v.details.deliveryFees,
+        delivery_tips: v.details.deliveryTips,
+        discount: v.details.discount,
+        total: v.details.total,
+        instructions: v.details.instructions,
+        payment_method: v.details.payment.method,
+        payment_details: {}
+      };
+
+      this.ordersService.updateOrder(this.editingOrderId, payload).subscribe({
+        next: () => this.loadOrders(),
+        error: (err) => console.error(err)
+      });
+
+      this.editingOrderId = null;
+
+    } else {
+
+      const payload = {
+        order_number: v.orderNumber,
+        pickup_name: v.pickup.name,
+        pickup_phone: `${v.pickup.phone.countryCode}${v.pickup.phone.number}`,
+        pickup_address: v.pickup.address,
+        pickup_time: v.pickup.pickupTime,
+        delivery_name: v.delivery.name,
+        delivery_phone: `${v.delivery.phone.countryCode}${v.delivery.phone.number}`,
+        delivery_email: v.delivery.email,
+        delivery_address: v.delivery.address,
+        delivery_date: v.delivery.deliveryDate,
+        delivery_time: v.delivery.deliveryTime,
+        items: v.details.items.map(i => ({
+          itemName: i.itemName,
+          itemPrice: Number(i.itemPrice),
+          itemQty: Number(i.itemQty)
+        })),
+        subtotal: v.details.subtotal,
+        tax_rate: v.details.taxRate,
+        tax_amount: v.details.taxAmount,
+        delivery_fees: v.details.deliveryFees,
+        delivery_tips: v.details.deliveryTips,
+        discount: v.details.discount,
+        total: v.details.total,
+        instructions: v.details.instructions,
+        payment_method: v.details.payment.method,
+        payment_details: {}
+      };
+
+      this.ordersService.createOrder(payload).subscribe({
+        next: () => {
+          this.loadOrders();
+        },
+        error: (err) => {
+          console.error('Order creation failed:', err);
+          alert(err.error?.detail || 'Failed to create order');
+        }
+      });
+    }
+
+    this.closeNewOrder();
+    this.formSubmitted.set(false);
+  }
 
   // -------------------------
   // EDIT
