@@ -49,4 +49,6 @@ class Order(Base):
     status = Column(Enum(OrderStatus), default=OrderStatus.current)
     ready_for_pickup = Column(Boolean, default=False)
 
+    order_placed_time = Column(String)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())

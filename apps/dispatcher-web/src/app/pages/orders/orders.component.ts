@@ -93,9 +93,12 @@ export class OrdersComponent {
           vendorName: o.pickup_name,
           amount: `C$ ${o.total ?? 0}`,
           distance: '—',
-          orderPlacedTime: '',
-          pickupTime: o.pickup_time,
-          estDeliveryTime: o.delivery_time,
+
+          orderPlacedTime: o.order_placed_time || '',
+
+          pickupTime: this.formatTime(o.pickup_time),
+          estDeliveryTime: this.formatTime(o.delivery_time),
+
           readyForPickup: o.ready_for_pickup ?? false,
           driver: '',
           orderStatus: o.status,
@@ -133,9 +136,7 @@ export class OrdersComponent {
               payment: { method: o.payment_method }
             }
           },
-
-          tab: o.status, // keep backend source of truth
-
+          tab: o.status,
           view: {
             current: view,
             scheduled: view,
@@ -390,9 +391,13 @@ export class OrdersComponent {
       vendorName: v.pickup.name,
       amount: `C$ ${v.details.total}`,
       distance: '—',
-      orderPlacedTime: this.formatDateTime(v.delivery.deliveryDate, v.pickup.pickupTime),
+      orderPlacedTime: '',
       pickupTime: this.formatTime(v.pickup.pickupTime),
-      estDeliveryTime: this.formatDateTime(v.delivery.deliveryDate, v.delivery.deliveryTime),
+      estDeliveryTime: this.formatDateTime(
+        v.delivery.deliveryDate,
+        v.delivery.deliveryTime
+      ),
+
       readyForPickup: false,
       driver: '',
       orderStatus: this.getStatus(''),

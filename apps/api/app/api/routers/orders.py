@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from app.db.session import get_db
 from app.models.order import Order
 from app.schemas.order import OrderCreate, OrderResponse, OrderUpdate
+from datetime import datetime
 
 router = APIRouter(tags=["Orders"])
 
@@ -26,7 +27,12 @@ async def get_orders(db: AsyncSession = Depends(get_db)):
 @router.post("/", response_model=OrderResponse)
 async def create_order(payload: OrderCreate, db: AsyncSession = Depends(get_db)):
     try:
-        order = Order(**payload.model_dump())
+        data = payload.model_dump()
+
+        # ADD THIS LINE (order placed time in AM/PM)
+        data["order_placed_time"] = datetime.now().strftime("%I:%M %p")
+
+        order = Order(**data)
 
         db.add(order)
         await db.commit()

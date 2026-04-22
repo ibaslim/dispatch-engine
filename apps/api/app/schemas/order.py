@@ -40,6 +40,8 @@ class OrderCreate(BaseModel):
 
     instructions: Optional[str] = None
 
+    order_placed_time: Optional[str] = None
+
     payment_method: str
     payment_details: Optional[Dict[str, Any]] = None
 
@@ -74,6 +76,8 @@ class OrderUpdate(BaseModel):
 
     instructions: Optional[str] = None
 
+    order_placed_time: Optional[str] = None
+
     payment_method: Optional[str] = None
     payment_details: Optional[Dict[str, Any]] = None
 
@@ -88,6 +92,7 @@ class OrderResponse(OrderCreate):
     id: UUID
     status: OrderStatus
     ready_for_pickup: bool
+    order_placed_time: Optional[str] = None
 
     class Config:
         from_attributes = True
