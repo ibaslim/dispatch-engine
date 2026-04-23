@@ -22,6 +22,7 @@ export interface NewOrderFormValue {
         name: string;
         phone: PhoneValue;
         address: string;
+        pickupDate: string; 
         pickupTime: string;
     };
 

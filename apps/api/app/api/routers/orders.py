@@ -7,10 +7,23 @@ from sqlalchemy.exc import IntegrityError
 from app.db.session import get_db
 from app.models.order import Order
 from app.schemas.order import OrderCreate, OrderResponse, OrderUpdate
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 router = APIRouter(tags=["Orders"])
 
+
+def get_order_status(pickup_time: str, delivery_time: str):
+    from datetime import datetime
+
+    fmt = "%H:%M"
+
+    p = datetime.strptime(pickup_time, fmt)
+    d = datetime.strptime(delivery_time, fmt)
+
+    diff_hours = (d - p).total_seconds() / 3600
+
+    return "current" if diff_hours < 3 else "scheduled"
 
 # -------------------------
 # GET ORDERS
@@ -30,8 +43,12 @@ async def create_order(payload: OrderCreate, db: AsyncSession = Depends(get_db))
         data = payload.model_dump()
 
         # ADD THIS LINE (order placed time in AM/PM)
-        data["order_placed_time"] = datetime.now().strftime("%I:%M %p")
+        data["order_placed_time"] = datetime.now().astimezone(ZoneInfo("Asia/Karachi")).strftime("%I:%M %p")
 
+        data["status"] = get_order_status(
+            data["pickup_time"],
+            data["delivery_time"])
+        
         order = Order(**data)
 
         db.add(order)

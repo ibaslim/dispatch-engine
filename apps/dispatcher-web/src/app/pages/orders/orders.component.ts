@@ -81,6 +81,10 @@ export class OrdersComponent {
 
   ngOnInit(): void {
     this.loadOrders();
+
+    setInterval(() => {
+      this.checkAndUpdateScheduledOrders();
+    }, 60000); // every 1 min
   }
 
   loadOrders(): void {
@@ -113,6 +117,7 @@ export class OrdersComponent {
               name: o.pickup_name,
               phone: { countryCode: '', number: o.pickup_phone },
               address: o.pickup_address,
+              pickupDate: o.pickup_date,
               pickupTime: o.pickup_time
             },
             delivery: {
@@ -289,6 +294,27 @@ export class OrdersComponent {
     return this.readyForPickupMap.get(orderId) || false;
   }
 
+  checkAndUpdateScheduledOrders(): void {
+    const now = new Date();
+
+    this.orders.forEach(order => {
+      if (order.tab !== 'scheduled') return;
+
+      const deliveryTime = order.full.delivery.deliveryTime; // "HH:mm"
+      const deliveryDate = order.full.delivery.deliveryDate;
+
+      const deliveryDateTime = new Date(`${deliveryDate}T${deliveryTime}`);
+
+      const diffHours = (deliveryDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+      if (diffHours < 3) {
+        this.ordersService.updateStatus(order.id, 'current').subscribe(() => {
+          this.loadOrders();
+        });
+      }
+    });
+  }
+
   // -------------------------
   // PDF DOWNLOAD
   // -------------------------
@@ -435,6 +461,7 @@ export class OrdersComponent {
         pickup_name: v.pickup.name,
         pickup_phone: `${v.pickup.phone.countryCode}${v.pickup.phone.number}`,
         pickup_address: v.pickup.address,
+        pickup_date: v.pickup.pickupDate,
         pickup_time: v.pickup.pickupTime,
         delivery_name: v.delivery.name,
         delivery_phone: `${v.delivery.phone.countryCode}${v.delivery.phone.number}`,
@@ -473,6 +500,7 @@ export class OrdersComponent {
         pickup_name: v.pickup.name,
         pickup_phone: `${v.pickup.phone.countryCode}${v.pickup.phone.number}`,
         pickup_address: v.pickup.address,
+        pickup_date: v.pickup.pickupDate,
         pickup_time: v.pickup.pickupTime,
         delivery_name: v.delivery.name,
         delivery_phone: `${v.delivery.phone.countryCode}${v.delivery.phone.number}`,
@@ -637,7 +665,8 @@ export class OrdersComponent {
     const p = v.pickup.pickupTime;
     const d = v.delivery.deliveryTime;
 
-    if (p && d && d <= p) return true;
+    const sameDate = v.pickup.pickupDate === v.delivery.deliveryDate;
+    if (sameDate && p && d && d <= p) return true;
 
     // Validate at least 1 valid item exists
     const items = v.details.items || [];
@@ -668,6 +697,7 @@ export class OrdersComponent {
         name: '',
         phone: { countryCode: '+1', number: '' },
         address: '',
+        pickupDate: this.todayYYYYMMDD(),
         pickupTime: ''
       },
       delivery: {

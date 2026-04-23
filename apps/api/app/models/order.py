@@ -23,6 +23,7 @@ class Order(Base):
     pickup_name = Column(String)
     pickup_phone = Column(String)
     pickup_address = Column(String)
+    pickup_date = Column(String)
     pickup_time = Column(String)
 
     delivery_name = Column(String)
