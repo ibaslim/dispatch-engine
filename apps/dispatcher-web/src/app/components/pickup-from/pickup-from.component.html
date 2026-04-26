@@ -15,8 +15,17 @@
         [value]="value.address" (valueChange)="patch({ address: $event })" (pinClick)="pinClick.emit()"
         name="pickupAddress" [showSubmitValidation]="showSubmitValidation"></app-address-input>
 
-    <app-time-picker label="Pickup Time" [required]="true" [value]="value.pickupTime"
-        (valueChange)="patch({ pickupTime: $event })" name="pickupTime" [externalError]="pickupTimeError"
-        [showExternalError]="showPickupTimeError" [showSubmitValidation]="showSubmitValidation">
-    </app-time-picker>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+
+        <app-date-picker label="Pickup Date" [required]="true" [value]="value.pickupDate"
+            (valueChange)="patch({ pickupDate: $event })" name="pickupDate"
+            [showSubmitValidation]="showSubmitValidation">
+        </app-date-picker>
+
+        <app-time-picker label="Pickup Time" [required]="true" [value]="value.pickupTime"
+            (valueChange)="patch({ pickupTime: $event })" name="pickupTime" [externalError]="pickupTimeError"
+            [showExternalError]="showPickupTimeError" [showSubmitValidation]="showSubmitValidation">
+        </app-time-picker>
+
+    </div>
 </section>

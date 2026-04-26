@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { PhoneValue } from '../../models/phone-input/phone-input.model';
 import { ErrorMessageComponent } from '../error-message/error-message.component';
@@ -29,8 +29,8 @@ export class PhoneInputComponent implements OnChanges {
   private interacted = false;
   private invalidChars = false;
 
-  ngOnChanges(): void {
-    if (!this.showSubmitValidation) {
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['showSubmitValidation'] && !this.showSubmitValidation) {
       this.interacted = false;
       this.invalidChars = false;
     }

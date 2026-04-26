@@ -9,6 +9,7 @@ import { DatePickerComponent } from '../date-picker/date-picker.component';
 
 @Component({
   selector: 'app-deliver-to',
+  standalone: true,
   imports: [CommonModule, BaseInputComponent, AddressInputComponent, PhoneInputComponent, TimePickerComponent, DatePickerComponent],
   templateUrl: './deliver-to.component.html'
 })

@@ -5,11 +5,12 @@ import { AddressInputComponent } from '../address-input/address-input.component'
 import { BaseInputComponent } from '../base-input/base-input.component';
 import { PhoneInputComponent } from '../phone-input/phone-input.component';
 import { TimePickerComponent } from '../time-picker/time-picker.component';
+import { DatePickerComponent } from '../date-picker/date-picker.component';
 
 @Component({
   selector: 'app-pickup-from',
   standalone: true,
-  imports: [CommonModule, BaseInputComponent, AddressInputComponent, PhoneInputComponent, TimePickerComponent],
+  imports: [CommonModule, BaseInputComponent, AddressInputComponent, PhoneInputComponent, TimePickerComponent, DatePickerComponent],
   templateUrl: './pickup-from.component.html'
 })
 export class PickupFromComponent {

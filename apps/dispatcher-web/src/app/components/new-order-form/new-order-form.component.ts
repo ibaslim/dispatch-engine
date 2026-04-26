@@ -41,6 +41,7 @@ export class NewOrderFormComponent {
         name: '',
         phone: { countryCode: '+1', number: '' },
         address: '',
+        pickupDate: this.todayYYYYMMDD(),
         pickupTime: ''
       },
       delivery: {
@@ -94,6 +95,12 @@ export class NewOrderFormComponent {
 
   get showDeliveryTimeError(): boolean {
     if (!this.pickupTime || !this.deliveryTime) return false;
+
+    const pickupDate = this.value.pickup?.pickupDate || '';
+    const deliveryDate = this.value.delivery?.deliveryDate || '';
+
+    if (pickupDate && deliveryDate && pickupDate !== deliveryDate) return false;
+
     return this.isDeliveryBeforeOrEqualPickup;
   }
 

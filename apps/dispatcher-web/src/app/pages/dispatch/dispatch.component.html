@@ -2,7 +2,25 @@
     containerClass="w-full px-4 py-6 sm:px-6 lg:px-8 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]"
     contentClass="w-full h-[calc(100vh-6rem)] flex flex-col gap-3">
 
-    <!-- Header row aligned to columns -->
+    <div page-actions class="flex items-center justify-end gap-2">
+        <app-button variant="ghost" label="Refresh" [loading]="isLoading" (onClick)="refreshDispatchState()"
+            [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-3 py-2 rounded-md text-sm'">
+        </app-button>
+
+        <app-button *ngIf="showLocalDemoTools" variant="ghost-danger" label="Reset Demo Cache"
+            [disabled]="isLoading" (onClick)="resetLocalDemoCache()">
+        </app-button>
+    </div>
+
+    <div *ngIf="isLoading"
+        class="mx-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:border-blue-900 dark:bg-[#132033] dark:text-blue-200">
+        Loading dispatch board. Orders and assignments are being fetched.
+    </div>
+
+    <p *ngIf="feedbackMessage && !isLoading" class="text-sm text-gray-600 dark:text-gray-300 px-2">
+        {{ feedbackMessage }}
+    </p>
+
     <div
         class="grid grid-cols-1 lg:grid-cols-[280px_1fr_380px] text-sm font-medium text-gray-700 dark:text-gray-300 px-2">
         <span>Assigned orders by driver</span>
@@ -10,11 +28,46 @@
         <span class="text-left">New Orders</span>
     </div>
 
-    <!-- Split layout (full height) -->
-    <div
+    <div *ngIf="isLoading"
+        class="grid grid-cols-1 lg:grid-cols-[280px_1fr_380px] gap-0 border border-gray-200 dark:border-[#2a2d2a] rounded-md overflow-hidden flex-1 animate-pulse">
+        <div class="bg-gray-50 dark:bg-[#151a18] border-r border-gray-200 dark:border-[#2a2d2a] p-4 space-y-4">
+            <div class="h-20 rounded-lg bg-gray-200 dark:bg-[#232623]"></div>
+            <div class="h-20 rounded-lg bg-gray-200 dark:bg-[#232623]"></div>
+            <div class="h-20 rounded-lg bg-gray-200 dark:bg-[#232623]"></div>
+        </div>
+
+        <div class="bg-white dark:bg-[#1E201E] p-6 space-y-4">
+            <div class="h-7 w-48 rounded bg-gray-200 dark:bg-[#232623]"></div>
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="space-y-3">
+                    <div class="h-4 w-28 rounded bg-gray-200 dark:bg-[#232623]"></div>
+                    <div class="h-4 w-full rounded bg-gray-200 dark:bg-[#232623]"></div>
+                    <div class="h-4 w-4/5 rounded bg-gray-200 dark:bg-[#232623]"></div>
+                    <div class="h-4 w-3/5 rounded bg-gray-200 dark:bg-[#232623]"></div>
+                </div>
+                <div class="space-y-3">
+                    <div class="h-4 w-28 rounded bg-gray-200 dark:bg-[#232623]"></div>
+                    <div class="h-4 w-full rounded bg-gray-200 dark:bg-[#232623]"></div>
+                    <div class="h-4 w-4/5 rounded bg-gray-200 dark:bg-[#232623]"></div>
+                    <div class="h-4 w-3/5 rounded bg-gray-200 dark:bg-[#232623]"></div>
+                </div>
+            </div>
+            <div class="h-4 w-24 rounded bg-gray-200 dark:bg-[#232623]"></div>
+            <div class="h-4 w-full rounded bg-gray-200 dark:bg-[#232623]"></div>
+            <div class="h-4 w-5/6 rounded bg-gray-200 dark:bg-[#232623]"></div>
+        </div>
+
+        <div class="bg-white dark:bg-[#1E201E] border-l border-gray-200 dark:border-[#2a2d2a] p-4 space-y-3">
+            <div class="h-5 w-24 rounded bg-gray-200 dark:bg-[#232623]"></div>
+            <div class="h-16 rounded-lg bg-gray-200 dark:bg-[#232623]"></div>
+            <div class="h-16 rounded-lg bg-gray-200 dark:bg-[#232623]"></div>
+            <div class="h-16 rounded-lg bg-gray-200 dark:bg-[#232623]"></div>
+        </div>
+    </div>
+
+    <div *ngIf="!isLoading"
         class="grid grid-cols-1 lg:grid-cols-[280px_1fr_380px] gap-0 border border-gray-200 dark:border-[#2a2d2a] rounded-md overflow-hidden flex-1">
 
-        <!-- Left column -->
         <div
             class="bg-gray-50 dark:bg-[#151a18] border-r border-gray-200 dark:border-[#2a2d2a] p-4 space-y-4 overflow-auto">
             <div *ngFor="let driver of assignedDrivers"
@@ -24,60 +77,75 @@
                     <span class="text-xs text-emerald-500">{{ driver.status }}</span>
                 </div>
                 <div class="space-y-2">
-                    <div *ngFor="let order of driver.orders" class="text-xs text-gray-600 dark:text-gray-400">
-                        <div class="font-medium text-gray-800 dark:text-gray-200">{{ order.id }}</div>
+                    <button *ngFor="let order of driver.orders" type="button"
+                        class="w-full rounded-md px-2 py-2 text-left text-xs text-gray-600 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-[#232623]"
+                        (click)="selectOrder(order.id)">
+                        <div class="font-medium text-gray-800 dark:text-gray-200">{{ order.label }}</div>
                         <div>{{ order.pickup }} → {{ order.dropoff }}</div>
                         <div class="text-[11px]">{{ order.time }}</div>
-                    </div>
+                    </button>
                 </div>
+            </div>
+
+            <div *ngIf="assignedDrivers.length === 0"
+                class="rounded-lg border border-dashed border-gray-300 dark:border-[#3a3d3a] p-4 text-sm text-gray-500 dark:text-gray-400">
+                Assigned drivers and active jobs will appear here.
             </div>
         </div>
 
-        <!-- Middle column -->
         <div class="bg-white dark:bg-[#1E201E] p-6 overflow-auto">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Order {{ selectedOrder.id }}</h3>
+            <ng-container *ngIf="selectedOrder as order; else emptySelection">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Order {{ order.orderNumber }}</h3>
 
-            <div class="grid md:grid-cols-2 gap-6">
-                <div>
-                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Pick-up From</h4>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ selectedOrder.pickup.name }}</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ selectedOrder.pickup.phone }}</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ selectedOrder.pickup.address }}</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">Pickup: {{ selectedOrder.pickup.time }}</p>
-                </div>
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Pick-up From</h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">{{ order.pickup.name }}</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">{{ order.pickup.phone }}</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">{{ order.pickup.address }}</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Pickup: {{ order.pickup.date }} • {{
+                            order.pickup.time }}</p>
+                    </div>
 
-                <div>
-                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Deliver To</h4>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ selectedOrder.delivery.name }}</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ selectedOrder.delivery.phone }}</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">{{ selectedOrder.delivery.address }}</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">Delivery: {{ selectedOrder.delivery.date }} • {{
-                        selectedOrder.delivery.time }}</p>
-                </div>
-            </div>
-
-            <div class="mt-6">
-                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Items</h4>
-                <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                    <div *ngFor="let item of selectedOrder.items" class="flex justify-between">
-                        <span>{{ item.name }} × {{ item.qty }}</span>
-                        <span>${{ item.price }}</span>
+                    <div>
+                        <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Deliver To</h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">{{ order.delivery.name }}</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">{{ order.delivery.phone }}</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">{{ order.delivery.address }}</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Delivery: {{ order.delivery.date }} • {{
+                            order.delivery.time }}</p>
                     </div>
                 </div>
-            </div>
 
-            <div class="mt-6 grid md:grid-cols-2 gap-4 text-sm text-gray-600 dark:text-gray-400">
-                <div>Tax Rate: {{ selectedOrder.taxRate }}%</div>
-                <div>Delivery Fee: ${{ selectedOrder.deliveryFee }}</div>
-                <div>Tip: ${{ selectedOrder.tip }}</div>
-                <div>Discount: ${{ selectedOrder.discount }}</div>
-                <div>Payment: {{ selectedOrder.payment }}</div>
-            </div>
+                <div class="mt-6">
+                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Items</h4>
+                    <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                        <div *ngFor="let item of order.items" class="flex justify-between">
+                            <span>{{ item.name }} × {{ item.qty }}</span>
+                            <span>C$ {{ item.price.toFixed(2) }}</span>
+                        </div>
+                    </div>
+                </div>
 
-            <p class="mt-4 text-sm text-gray-600 dark:text-gray-400">Instruction: {{ selectedOrder.instructions }}</p>
+                <div class="mt-6 grid md:grid-cols-2 gap-4 text-sm text-gray-600 dark:text-gray-400">
+                    <div>Tax Rate: {{ order.taxRate }}%</div>
+                    <div>Delivery Fee: C$ {{ order.deliveryFee.toFixed(2) }}</div>
+                    <div>Tip: C$ {{ order.tip.toFixed(2) }}</div>
+                    <div>Discount: C$ {{ order.discount.toFixed(2) }}</div>
+                    <div>Payment: {{ order.payment }}</div>
+                    <div>Total: C$ {{ order.total.toFixed(2) }}</div>
+                </div>
+
+                <p class="mt-4 text-sm text-gray-600 dark:text-gray-400">Instruction: {{ order.instructions || 'No instructions provided.' }}</p>
+            </ng-container>
+
+            <ng-template #emptySelection>
+                <div class="h-full flex items-center justify-center text-sm text-gray-500 dark:text-gray-400">
+                    Select an assigned order to inspect its details.
+                </div>
+            </ng-template>
         </div>
 
-        <!-- Right column -->
         <div class="bg-white dark:bg-[#1E201E] border-l border-gray-200 dark:border-[#2a2d2a] p-4 overflow-auto">
             <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">New Orders</h4>
             <div class="space-y-3">
@@ -88,6 +156,11 @@
                     <div class="text-[11px] text-gray-500 dark:text-gray-400">ETA: {{ order.eta }} · {{ order.total }}
                     </div>
                 </div>
+            </div>
+
+            <div *ngIf="newOrders.length === 0"
+                class="mt-2 rounded-lg border border-dashed border-gray-300 dark:border-[#3a3d3a] p-4 text-sm text-gray-500 dark:text-gray-400">
+                No unassigned current or scheduled orders right now.
             </div>
 
             <div class="mt-6 flex items-center justify-center">

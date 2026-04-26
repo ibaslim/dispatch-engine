@@ -4,12 +4,24 @@
     <div page-actions class="flex items-center gap-2">
         <app-search-bar [value]="searchQuery" (valueChange)="searchQuery = $event"></app-search-bar>
 
-        <app-button variant="ghost-outline" label="CSV upload"></app-button>
+        <app-button *ngIf="showLocalDemoButton" variant="ghost-success" label="Seed Demo Orders"
+            [loading]="isSeedingDemoOrders" [disabled]="isSavingOrder"
+            (onClick)="seedDemoOrders()"></app-button>
 
         <app-button variant="primary" label="+ New order" (onClick)="openNewOrder()"
+            [disabled]="isSeedingDemoOrders"
             [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-3 py-2 rounded-md text-sm'">
         </app-button>
     </div>
+
+    <p *ngIf="feedbackMessage" [class]="'text-sm ' +
+        (feedbackTone === 'error'
+        ? 'text-red-600 dark:text-red-400'
+        : feedbackTone === 'success'
+        ? 'text-green-700 dark:text-green-400'
+        : 'text-gray-600 dark:text-gray-300')">
+        {{ feedbackMessage }}
+    </p>
 
     <div
         class="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-[#2a2d2a] pb-2 mt-2">
@@ -21,6 +33,7 @@
 
     <app-table [columns]="columns" [rows]="rows" [emptyTitle]="emptyTitle" [emptySubtitle]="emptySubtitle"
         [activeMenuRow]="activeMenuRow" [menuItems]="getContextMenuItems()" (actionClick)="toggleMenu($event)"
+        (assignClick)="openAssignDriver($event)"
         (menuSelect)="handleMenuAction($event.item, $event.row)"
         (readyForPickupChange)="updateReadyForPickupFromRow($event.id, $event.value)">
     </app-table>
@@ -32,11 +45,75 @@
         </app-new-order-form>
 
         <div modal-footer class="flex items-center justify-end gap-3">
+            <app-button *ngIf="showLocalDemoButton" variant="ghost-success" label="Fill Demo Data"
+                [disabled]="isSavingOrder || isSeedingDemoOrders" (onClick)="fillNewOrderWithDummyData()">
+            </app-button>
+
             <app-button variant="ghost" label="Cancel" (onClick)="closeNewOrder()"
                 [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm'"></app-button>
 
             <app-button variant="primary" label="Save" (onClick)="saveNewOrder()"
+                [loading]="isSavingOrder" [disabled]="isSeedingDemoOrders"
                 [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-6 py-2 rounded-md text-sm'"></app-button>
+        </div>
+    </app-popup>
+
+    <app-popup [open]="isAssignDriverOpen" title="Assign Driver" widthClass="max-w-3xl" (close)="closeAssignDriver()">
+        <ng-container *ngIf="selectedOrderForAssignment as order">
+            <div class="space-y-4">
+                <div class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Assigning driver to</p>
+                    <p class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                        {{ order.full.orderNumber }} • {{ order.full.delivery.name }}
+                    </p>
+                    <p class="text-sm text-gray-600 dark:text-gray-300">
+                        {{ order.full.delivery.address }}
+                    </p>
+                </div>
+
+                <app-search-bar [value]="assignDriverQuery" (valueChange)="assignDriverQuery = $event"></app-search-bar>
+
+                <div class="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+                    <button *ngFor="let driver of assignableDrivers" type="button"
+                        class="w-full rounded-lg border px-4 py-3 text-left transition"
+                        [class]="selectedDriverId === driver.id
+                            ? 'border-[#3ddc97] bg-[#3ddc97]/10'
+                            : 'border-gray-200 dark:border-[#5a5d5a] hover:bg-gray-50 dark:hover:bg-[#232623]'"
+                        (click)="selectedDriverId = driver.id">
+                        <div class="flex items-center justify-between gap-4">
+                            <div>
+                                <p class="font-medium text-gray-900 dark:text-gray-100">{{ driver.name }}</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-300">{{ driver.email }}</p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">
+                                    {{ driver.phoneCountryCode }}{{ driver.phoneNumber }} • {{ driver.vehicle }}
+                                </p>
+                            </div>
+                            <div class="text-right text-sm">
+                                <p class="text-gray-900 dark:text-gray-100">{{ driver.status }}</p>
+                                <p class="text-gray-500 dark:text-gray-400">Rating {{ driver.rating.toFixed(1) }}</p>
+                            </div>
+                        </div>
+                    </button>
+                </div>
+
+                <p *ngIf="assignableDrivers.length === 0" class="text-sm text-gray-500 dark:text-gray-400">
+                    No drivers match this search.
+                </p>
+            </div>
+        </ng-container>
+
+        <div modal-footer class="flex items-center justify-end gap-3">
+            <app-button *ngIf="selectedOrderForAssignment?.view?.current?.driver" variant="ghost-danger"
+                label="Unassign" (onClick)="unassignSelectedDriver()">
+            </app-button>
+
+            <app-button variant="ghost" label="Cancel" (onClick)="closeAssignDriver()"
+                [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm'">
+            </app-button>
+
+            <app-button variant="primary" label="Assign Driver" (onClick)="assignSelectedDriver()"
+                [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-6 py-2 rounded-md text-sm'">
+            </app-button>
         </div>
     </app-popup>
 
@@ -223,18 +300,20 @@
                     </h3>
 
                     <p class="font-medium mb-2">
-                        {{ order.full.details.payment.method }}
+                        {{ formatPaymentMethod(order.full.details.payment.method) }}
                     </p>
 
-                    <div *ngIf="order.full.details.payment.method === 'credit_card'" class="space-y-1">
-                        <p>Cardholder: {{ order.full.details.payment.cardholderName }}</p>
-                        <p>Card: {{ maskCard(order.full.details.payment.cardNumber) }}</p>
-                        <p>
-                            Expiry:
-                            {{ order.full.details.payment.expiryMonth }}/{{ order.full.details.payment.expiryYear }}
-                        </p>
-                        <p>CVC: ***</p>
-                    </div>
+                    <ng-container *ngIf="order.full.details.payment.method === 'credit_card'">
+                        <div *ngIf="order.full.details.payment.creditCard as creditCard" class="space-y-1">
+                            <p>Cardholder: {{ creditCard.cardholderName }}</p>
+                            <p>Card: {{ maskCard(creditCard.cardNumber) }}</p>
+                            <p>
+                                Expiry:
+                                {{ creditCard.expiryMonth }}/{{ creditCard.expiryYear }}
+                            </p>
+                            <p>CVC: ***</p>
+                        </div>
+                    </ng-container>
                 </div>
 
             </div>
