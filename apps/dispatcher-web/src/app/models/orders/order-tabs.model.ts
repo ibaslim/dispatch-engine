@@ -9,6 +9,6 @@ export interface OrderView {
     estDeliveryTime: string;
     readyForPickup: boolean | string;
     driver: string;
-    orderStatus: 'Assigned' | 'Unassigned';
+    orderStatus: string;
     trackingStatus: string;
 }

@@ -7,6 +7,7 @@ import { MenuComponent } from '../menu/menu.component';
 
 @Component({
   selector: 'app-table',
+  standalone: true,
   imports: [CommonModule, ToggleButtonComponent, ButtonComponent, MenuComponent],
   templateUrl: './table.component.html',
 })
@@ -26,6 +27,7 @@ export class TableComponent {
 
   // action button click
   @Output() actionClick = new EventEmitter<any>();
+  @Output() assignClick = new EventEmitter<any>();
 
   @Output() readyForPickupChange = new EventEmitter<{ id: string; value: boolean }>();
 
@@ -36,7 +38,7 @@ export class TableComponent {
 
   onAssignClick(row: any, event?: MouseEvent): void {
     event?.stopPropagation(); // prevent bubbling
-    this.actionClick.emit(row);
+    this.assignClick.emit(row);
   }
 
   getInitials(name: string): string {

@@ -4,6 +4,7 @@ import { ButtonComponent } from '../button/button.component';
 
 @Component({
   selector: 'app-popup',
+  standalone: true,
   imports: [CommonModule, ButtonComponent],
   templateUrl: './popup.component.html'
 })
