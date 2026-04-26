@@ -61,6 +61,7 @@
   "nxCloudId": "69bc16b1cb7c5471a4a1ee69",
   "generators": {
     "@nx/angular:component": {
+      "style": "css",
       "type": "component"
     },
     "@schematics/angular:component": {

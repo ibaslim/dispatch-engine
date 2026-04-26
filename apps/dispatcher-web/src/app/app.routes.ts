@@ -4,7 +4,7 @@ import { authGuard } from './core/auth/auth.guard';
 export const routes: Routes = [
   {
     path: '',
-    redirectTo: '/dashboard',
+    redirectTo: '/orders',
     pathMatch: 'full',
   },
   {
@@ -20,29 +20,79 @@ export const routes: Routes = [
       ),
   },
   {
-    path: 'dashboard',
+    path: 'orders',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./pages/dashboard/dashboard.component').then(
-        (m) => m.DashboardComponent
+      import('./pages/orders/orders.component').then(
+        (m) => m.OrdersComponent
       ),
   },
   {
-    path: 'platform-admin',
+    path: 'dispatch',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./pages/platform-admin/platform-admin.component').then(
-        (m) => m.PlatformAdminComponent
+      import('./pages/dispatch/dispatch.component').then(
+        (m) => m.DispatchComponent
       ),
   },
   {
-    path: 'posts',
+    path: 'drivers',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./pages/posts/posts.component').then((m) => m.PostsComponent),
+      import('./pages/drivers/drivers.component').then(
+        (m) => m.DriversComponent
+      ),
+  },
+  {
+    path: 'reviews',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/reviews/reviews.component').then(
+        (m) => m.ReviewsComponent
+      ),
+  },
+  {
+    path: 'reports',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/reports/reports.component').then(
+        (m) => m.ReportsComponent
+      ),
+  },
+  {
+    path: 'my-account',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/my-account/my-account.component').then(
+        (m) => m.MyAccountComponent
+      ),
+  },
+  {
+    path: 'settings',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/setting/setting.component').then(
+        (m) => m.SettingComponent
+      ),
+  },
+  {
+    path: 'online-order-forms',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/online-order-forms/online-order-forms.component').then(
+        (m) => m.OnlineOrderFormsComponent
+      ),
+  },
+  {
+    path: 'map',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/map/map.component').then(
+        (m) => m.MapComponent
+      ),
   },
   {
     path: '**',
-    redirectTo: '/dashboard',
+    redirectTo: '/orders',
   },
 ];

@@ -1,0 +1,31 @@
+<section class="space-y-6">
+    <h3 class="text-md font-semibold text-gray-900 dark:text-gray-100 mb-3">Pick-up From:</h3>
+
+    <app-base-input label="Name" placeholder="Enter store name" [required]="true" pattern="^[A-Za-z\s.'-]+$"
+        [value]="value.name" (valueChange)="patch({ name: $event })" [errorMessages]="{
+    required: 'Name is required.',
+    pattern: 'Only alphabets allowed.'
+  }" [showSubmitValidation]="showSubmitValidation">
+    </app-base-input>
+
+    <app-phone-input label="Phone No." [required]="true" [value]="value.phone" (valueChange)="patch({ phone: $event })"
+        [showSubmitValidation]="showSubmitValidation"></app-phone-input>
+
+    <app-address-input label="Address" placeholder="Enter a location" [required]="true" pattern="^[A-Za-z0-9\s.,#\-/]+$"
+        [value]="value.address" (valueChange)="patch({ address: $event })" (pinClick)="pinClick.emit()"
+        name="pickupAddress" [showSubmitValidation]="showSubmitValidation"></app-address-input>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+
+        <app-date-picker label="Pickup Date" [required]="true" [value]="value.pickupDate"
+            (valueChange)="patch({ pickupDate: $event })" name="pickupDate"
+            [showSubmitValidation]="showSubmitValidation">
+        </app-date-picker>
+
+        <app-time-picker label="Pickup Time" [required]="true" [value]="value.pickupTime"
+            (valueChange)="patch({ pickupTime: $event })" name="pickupTime" [externalError]="pickupTimeError"
+            [showExternalError]="showPickupTimeError" [showSubmitValidation]="showSubmitValidation">
+        </app-time-picker>
+
+    </div>
+</section>

@@ -1,0 +1,13 @@
+<div [class]="containerClass">
+    <div [class]="contentClass">
+        <div *ngIf="title || subtitle" [class]="headerClass">
+            <div>
+                <h1 *ngIf="title" [class]="titleClass">{{ title }}</h1>
+                <p *ngIf="subtitle" [class]="subtitleClass">{{ subtitle }}</p>
+            </div>
+            <ng-content select="[page-actions]"></ng-content>
+        </div>
+
+        <ng-content></ng-content>
+    </div>
+</div>

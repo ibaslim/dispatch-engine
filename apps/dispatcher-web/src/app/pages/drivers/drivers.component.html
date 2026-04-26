@@ -1,0 +1,98 @@
+<app-page title="Drivers" titleClass="text-2xl font-semibold text-gray-900 dark:text-gray-100"
+    containerClass="w-full px-4 py-8 sm:px-6 lg:px-8 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]"
+    contentClass="w-full space-y-6">
+
+    <div page-actions class="flex items-center gap-2">
+        <app-search-bar [value]="searchQuery" (valueChange)="searchQuery = $event"></app-search-bar>
+
+        <app-button *ngIf="showLocalDemoButton" variant="ghost-success" label="Seed Drivers"
+            (onClick)="seedDrivers()">
+        </app-button>
+
+        <app-button variant="ghost" label="Get the app"
+            [extraClasses]="'border border-gray-300 dark:border-grey-100 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-3 py-2 rounded-md text-sm'">
+        </app-button>
+
+        <app-button variant="primary" label="+ New Driver" (onClick)="openNewDriver()"
+            [extraClasses]="'px-3 py-2 rounded-md text-sm h-9'">
+        </app-button>
+    </div>
+
+    <p *ngIf="feedbackMessage" [class]="'text-sm ' +
+        (feedbackTone === 'error'
+        ? 'text-red-600 dark:text-red-400'
+        : feedbackTone === 'success'
+        ? 'text-green-700 dark:text-green-400'
+        : 'text-gray-600 dark:text-gray-300')">
+        {{ feedbackMessage }}
+    </p>
+
+    <div class="flex items-center gap-6 text-sm text-gray-500 border-b pb-2 mt-2">
+        <app-button *ngFor="let tab of tabs" variant="tab" [label]="tab" (onClick)="setActiveTab(tab)" [extraClasses]="activeTab === tab 
+              ? 'text-[#32C896] border-b-2 border-[#32C896]' 
+              : 'text-gray-500'">
+        </app-button>
+    </div>
+
+    <app-table [columns]="columns" [rows]="rows" [columnTemplate]="columnTemplate" [emptyTitle]="emptyTitle"
+        [emptySubtitle]="emptySubtitle">
+    </app-table>
+
+    <app-popup [open]="isNewDriverOpen" title="New Driver" widthClass="max-w-3xl" (close)="closeNewDriver()">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <app-base-input label="Full Name" [required]="true" [value]="driverFormValue.name"
+                (valueChange)="patchDriverForm({ name: $event })">
+            </app-base-input>
+
+            <app-base-input label="Email" type="email" [required]="true" [value]="driverFormValue.email"
+                (valueChange)="patchDriverForm({ email: $event })">
+            </app-base-input>
+
+            <app-phone-input label="Phone Number" [required]="true" [value]="driverFormValue.phone"
+                (valueChange)="patchDriverPhone($event)">
+            </app-phone-input>
+
+            <app-base-input label="Vehicle" [required]="true" [value]="driverFormValue.vehicle"
+                (valueChange)="patchDriverForm({ vehicle: $event })">
+            </app-base-input>
+
+            <app-base-input label="Rating" [value]="driverFormValue.rating"
+                (valueChange)="patchDriverForm({ rating: $event })">
+            </app-base-input>
+
+            <app-dropdown-selector label="Status" [options]="driverStatusOptions" [value]="driverFormValue.status"
+                (valueChange)="patchDriverForm({ status: $event || 'On Duty' })">
+            </app-dropdown-selector>
+
+            <app-base-input label="Completed Deliveries" [value]="driverFormValue.completedDeliveries"
+                (valueChange)="patchDriverForm({ completedDeliveries: $event })">
+            </app-base-input>
+
+            <app-base-input label="Base Driver Pay (C$)" [value]="driverFormValue.basePay"
+                (valueChange)="patchDriverForm({ basePay: $event })">
+            </app-base-input>
+
+            <app-base-input label="Online Tips (C$)" [value]="driverFormValue.tips"
+                (valueChange)="patchDriverForm({ tips: $event })">
+            </app-base-input>
+
+            <app-base-input label="Adjustments (C$)" [value]="driverFormValue.adjustments"
+                (valueChange)="patchDriverForm({ adjustments: $event })">
+            </app-base-input>
+        </div>
+
+        <div modal-footer class="flex items-center justify-end gap-3">
+            <app-button *ngIf="showLocalDemoButton" variant="ghost-success" label="Fill Demo Data"
+                (onClick)="fillDriverDummyData()">
+            </app-button>
+
+            <app-button variant="ghost" label="Cancel" (onClick)="closeNewDriver()"
+                [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm'">
+            </app-button>
+
+            <app-button variant="primary" label="Save Driver" (onClick)="saveDriver()"
+                [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-6 py-2 rounded-md text-sm'">
+            </app-button>
+        </div>
+    </app-popup>
+</app-page>
