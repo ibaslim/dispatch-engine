@@ -58,8 +58,14 @@ export const routes: Routes = [
       import('./pages/reports/reports.component').then(
         (m) => m.ReportsComponent
       ),
-  },
-  {
+  },{
+  path: 'my-cruds',
+  canActivate: [authGuard],
+  loadComponent: () =>
+    import('./components/my-cruds/my-cruds.component').then(
+      (m) => m.MyCrudsComponent
+    )
+  }, {
     path: 'my-account',
     canActivate: [authGuard],
     loadComponent: () =>

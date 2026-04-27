@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CRUD</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100 p-6">
+
+  <div class="max-w-xl mx-auto bg-white p-6 rounded-xl shadow">
+
+    <h1 class="text-2xl font-bold mb-4 text-center">Basic CRUD App</h1>
+
+    <!-- Input Section -->
+    <div class="flex gap-2 mb-4">
+      <input
+        id="nameInput"
+        type="text"
+        placeholder="Enter name..."
+        class="flex-1 border p-2 rounded"
+      />
+      <button
+        onclick="addName()"
+        class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+      >
+        Add
+      </button>
+    </div>
+
+    <!-- List -->
+    <ul id="list" class="space-y-2"></ul>
+
+  </div>
+
+  <script>
+    let editIndex = null;
+    let data = [];
+
+    function render() {
+      const list = document.getElementById("list");
+      list.innerHTML = "";
+
+      data.forEach((item, index) => {
+        list.innerHTML += `
+          <li class="flex justify-between items-center bg-gray-50 p-2 rounded border">
+            <span>${item}</span>
+
+            <div class="flex gap-2">
+              <button onclick="editItem(${index})"
+                class="bg-yellow-400 px-2 py-1 rounded text-white hover:bg-yellow-500">
+                Edit
+              </button>
+
+              <button onclick="deleteItem(${index})"
+                class="bg-red-500 px-2 py-1 rounded text-white hover:bg-red-600">
+                Delete
+              </button>
+            </div>
+          </li>
+        `;
+      });
+    }
+
+    function addName() {
+      const input = document.getElementById("nameInput");
+      const value = input.value.trim();
+
+      if (!value) return;
+
+      if (editIndex !== null) {
+        data[editIndex] = value;
+        editIndex = null;
+      } else {
+        data.push(value);
+      }
+
+      input.value = "";
+      render();
+    }
+
+    function deleteItem(index) {
+      data.splice(index, 1);
+      render();
+    }
+
+    function editItem(index) {
+      const input = document.getElementById("nameInput");
+      input.value = data[index];
+      editIndex = index;
+    }
+
+    render();
+  </script>
+
+</body>
+</html>
