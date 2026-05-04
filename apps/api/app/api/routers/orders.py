@@ -45,7 +45,7 @@ def get_order_status(
 # -------------------------
 # GET ORDERS
 # -------------------------
-@router.get("/", response_model=list[OrderResponse])
+@router.get("", response_model=list[OrderResponse])
 async def get_orders(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Order))
     return result.scalars().all()
@@ -54,7 +54,7 @@ async def get_orders(db: AsyncSession = Depends(get_db)):
 # -------------------------
 # CREATE ORDER
 # -------------------------
-@router.post("/", response_model=OrderResponse)
+@router.post("", response_model=OrderResponse)
 async def create_order(payload: OrderCreate, db: AsyncSession = Depends(get_db)):
     try:
         data = payload.model_dump()

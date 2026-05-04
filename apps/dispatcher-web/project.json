@@ -63,7 +63,7 @@
       "defaultConfiguration": "development",
       "options": {
         "port": 4200,
-        "proxyConfig": "proxy.conf.json"
+        "proxyConfig": "apps/dispatcher-web/proxy.conf.json"
       },
       "continuous": true
     },
