@@ -28,7 +28,8 @@ export class NavbarComponent implements OnInit, OnDestroy {
     { label: 'Drivers', route: '/drivers' },
     { label: 'Map', route: '/map' },
     { label: 'Reviews', route: '/reviews' },
-    { label: 'Reports', route: '/reports' }
+    { label: 'Reports', route: '/reports' },
+    {label: 'Tenant Management', route:'/tenants'}
   ];
 
   appName = 'Dispatch Engine';

@@ -59,6 +59,14 @@ export const routes: Routes = [
         (m) => m.ReportsComponent
       ),
   },
+    {
+    path: 'tenants',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./components/tenant-management/tenant-management.component').then(
+        (m) => m.TenantManagementComponent
+      ),
+  },
   {
     path: 'my-account',
     canActivate: [authGuard],
