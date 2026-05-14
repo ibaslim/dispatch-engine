@@ -252,6 +252,9 @@ export class OrdersComponent implements OnInit, OnDestroy {
       case 'print':
         this.openPrintWindow(order);
         break;
+      case 'printLabel':
+        this.openPrintLabelWindow(order);
+        break;
       case 'delete':
         if (this.isLocalOnlyOrder(order.id)) {
           this.deleteLocalOrder(order.id);
@@ -688,7 +691,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (this.isReadOnlyTenant) {
       return [
         { label: 'Details', action: 'details', icon: 'ph ph-eye' },
-        { label: 'Print Order', action: 'print', icon: 'ph ph-printer' }
+        { label: 'Print Order', action: 'print', icon: 'ph ph-printer' },
+        { label: 'Print Label', action: 'printLabel', icon: 'ph ph-tag' },
       ];
     }
     if (this.activeTab === 'Completed' || this.activeTab === 'Incomplete') {
@@ -697,7 +701,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
         { label: 'Assign Driver', action: 'assignDriver', icon: 'ph ph-user-plus' },
         { label: 'Redrop', action: 'moveToCurrent', icon: 'ph ph-arrow-up-right' },
         { label: 'Move to History', action: 'moveToHistory', icon: 'ph ph-archive-box' },
-        { label: 'Print Order', action: 'print', icon: 'ph ph-printer' }
+        { label: 'Print Order', action: 'print', icon: 'ph ph-printer' },
+          { label: 'Print Label', action: 'printLabel', icon: 'ph ph-tag' },
       ];
     }
 
@@ -705,7 +710,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
       { label: 'Details', action: 'details', icon: 'ph ph-eye' },
       { label: 'Assign Driver', action: 'assignDriver', icon: 'ph ph-user-plus' },
       { label: 'Edit', action: 'edit', icon: 'ph ph-pencil-simple' },
-      { label: 'Print Order', action: 'print', icon: 'ph ph-printer' }
+      { label: 'Print Order', action: 'print', icon: 'ph ph-printer' },
+        { label: 'Print Label', action: 'printLabel', icon: 'ph ph-tag' },
     ];
 
     if (this.activeTab === 'Scheduled') {
@@ -715,7 +721,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (this.activeTab === 'History') {
       return [
         { label: 'Details', action: 'details', icon: 'ph ph-eye' },
-        { label: 'Print Order', action: 'print', icon: 'ph ph-printer' }
+        { label: 'Print Order', action: 'print', icon: 'ph ph-printer' },
+          { label: 'Print Label', action: 'printLabel', icon: 'ph ph-tag' },
       ];
     }
 
@@ -1323,6 +1330,237 @@ export class OrdersComponent implements OnInit, OnDestroy {
     printWindow.focus();
     printWindow.print();
   }
+
+  private openPrintLabelWindow(order: OrderEntity): void {
+  const orderNumber = order.full.orderNumber;
+  const senderName = order.full.pickup.name;
+  const senderAddress = order.full.pickup.address;
+  const recipientName = order.full.delivery.name;
+  const recipientAddress = order.full.delivery.address;
+
+  const printContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Label - ${this.escapeHtml(orderNumber)}</title>
+      <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: Arial, sans-serif;
+          width: 4in;
+          padding: 0.15in;
+          font-size: 11px;
+        }
+        .label-wrapper {
+          border: 2px solid #000;
+          width: 100%;
+        }
+
+        /* TOP SECTION */
+        .top-section {
+          display: flex;
+          border-bottom: 2px solid #000;
+          padding: 6px 8px;
+          gap: 8px;
+          align-items: flex-start;
+        }
+        .service-letter {
+          font-size: 52px;
+          font-weight: 900;
+          line-height: 1;
+          flex-shrink: 0;
+          width: 60px;
+          text-align: center;
+        }
+        .postage-info {
+          flex: 1;
+          font-size: 9px;
+          line-height: 1.5;
+        }
+        .postage-info .postage-title {
+          font-weight: bold;
+          font-size: 10px;
+        }
+        .qr-box {
+          flex-shrink: 0;
+        }
+        .qr-box canvas, .qr-box img {
+          width: 70px;
+          height: 70px;
+          display: block;
+        }
+        .service-label-container {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .rotate-text {
+          font-size: 8px;
+          writing-mode: vertical-rl;
+          transform: rotate(180deg);
+          white-space: nowrap;
+          letter-spacing: 1px;
+        }
+
+        /* SERVICE BANNER */
+        .service-banner {
+          text-align: center;
+          font-size: 15px;
+          font-weight: 900;
+          padding: 4px 8px;
+          border-bottom: 2px solid #000;
+          letter-spacing: 1px;
+        }
+
+        /* ADDRESS SECTION */
+        .address-section {
+          display: flex;
+          padding: 8px;
+          gap: 12px;
+          border-bottom: 2px solid #000;
+        }
+        .sender-block {
+          font-size: 9px;
+          line-height: 1.5;
+          flex: 1;
+        }
+        .sender-block .label {
+          font-weight: bold;
+          font-size: 8px;
+          text-transform: uppercase;
+          color: #555;
+          margin-bottom: 2px;
+        }
+        .order-ref {
+          text-align: right;
+          font-size: 9px;
+          color: #333;
+          flex-shrink: 0;
+          align-self: flex-start;
+        }
+        .recipient-block {
+          font-size: 12px;
+          line-height: 1.7;
+          padding: 6px 8px 8px;
+          border-bottom: 2px solid #000;
+        }
+        .recipient-block .name {
+          font-weight: bold;
+          font-size: 14px;
+        }
+
+        /* BARCODE SECTION */
+        .tracking-section {
+          padding: 8px;
+          text-align: center;
+        }
+        .tracking-title {
+          font-weight: 900;
+          font-size: 13px;
+          letter-spacing: 1px;
+          margin-bottom: 4px;
+        }
+        svg#barcode {
+          width: 100%;
+          height: 60px;
+        }
+        .tracking-number {
+          font-size: 11px;
+          letter-spacing: 3px;
+          margin-top: 2px;
+        }
+
+        @media print {
+          html, body { width: 4in; }
+          @page { margin: 0; size: 4in auto; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="label-wrapper">
+
+        <!-- TOP -->
+        <div class="top-section">
+          <div class="service-letter">D</div>
+          <div class="postage-info">
+            <div class="postage-title">DISPATCH DELIVERY</div>
+            <div>Order: ${this.escapeHtml(orderNumber)}</div>
+            <div>Placed: ${this.escapeHtml(order.view.current.orderPlacedTime || '')}</div>
+            <div>Est. Delivery: ${this.escapeHtml(order.view.current.estDeliveryTime || '')}</div>
+            <div style="margin-top:4px; font-size:8px; color:#555">CommercialBasePrice</div>
+          </div>
+          <div class="service-label-container">
+            <span class="rotate-text">dispatch.local</span>
+            <div class="qr-box">
+              <canvas id="qrcode"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- BANNER -->
+        <div class="service-banner">DISPATCH FIRST-CLASS PKG</div>
+
+        <!-- SENDER -->
+        <div class="address-section">
+          <div class="sender-block">
+            <div class="label">From</div>
+            <div>${this.escapeHtml(senderName)}</div>
+            <div>${this.escapeHtml(senderAddress)}</div>
+          </div>
+          <div class="order-ref">Order: ${this.escapeHtml(orderNumber)}</div>
+        </div>
+
+        <!-- RECIPIENT -->
+        <div class="recipient-block">
+          <div class="name">${this.escapeHtml(recipientName)}</div>
+          <div>${this.escapeHtml(recipientAddress)}</div>
+        </div>
+
+        <!-- TRACKING / BARCODE -->
+        <div class="tracking-section">
+          <div class="tracking-title">TRACKING #</div>
+          <svg id="barcode"></svg>
+          <div class="tracking-number">${this.escapeHtml(orderNumber)}</div>
+        </div>
+
+      </div>
+
+      <script>
+        // QR Code — encodes the order number
+        QRCode.toCanvas(
+          document.getElementById('qrcode'),
+          ${JSON.stringify(orderNumber)},
+          { width: 70, margin: 1 },
+          function(err) { if (err) console.error(err); }
+        );
+
+        // Barcode — encodes the order number
+        JsBarcode('#barcode', ${JSON.stringify(orderNumber)}, {
+          format: 'CODE128',
+          displayValue: false,
+          margin: 0,
+          width: 2,
+          height: 60
+        });
+
+        window.onload = function() {
+          setTimeout(function() { window.print(); }, 600);
+        };
+      </script>
+    </body>
+    </html>
+  `;
+
+  const win = window.open('', '', 'height=700,width=450');
+  if (!win) {
+    this.setFeedback('Popup blocked. Allow popups to print the label.', 'error');
+    return;
+  }
+  win.document.write(printContent);
+  win.document.close();
+}
 
   private money(amount: number): string {
     return `C$ ${this.toNumber(amount).toFixed(2)}`;
