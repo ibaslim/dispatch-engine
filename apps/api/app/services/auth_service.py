@@ -1,6 +1,5 @@
 import hashlib
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -9,12 +8,13 @@ from app.core.security import (
     verify_password,
     create_access_token,
     generate_secure_token,
-    hash_password,
 )
 from app.core.config import settings
 from app.models.user import User
 from app.models.token import RefreshToken
-from app.schemas.auth import TokenResponse
+from app.models.onboarding_application import OnboardingApplication, ApplicationStatus
+from app.schemas.auth import TokenResponse, PendingApprovalResponse
+from app.models.tenant import Tenant
 
 
 def _hash_token(raw: str) -> str:
@@ -28,7 +28,62 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> User
         return None
     if not verify_password(password, user.hashed_password):
         return None
+
+    # Prevent users belonging to suspended tenants from logging in
+    if user.tenant_id:
+        tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
+        tenant = tenant_result.scalar_one_or_none()
+        if tenant is not None and not tenant.is_active:
+            # Treat as authentication failure so UI shows invalid credentials
+            return None
+
+    # Check if user has a pending onboarding application
+    app_result = await db.execute(
+        select(OnboardingApplication).where(
+            OnboardingApplication.user_id == user.id,
+            OnboardingApplication.status == ApplicationStatus.pending,
+        )
+    )
+    pending_app = app_result.scalar_one_or_none()
+    if pending_app is not None:
+        # User has pending approval, return None to signal blocked login
+        # The auth endpoint should handle this
+        return None
+
+    if not user.is_active:
+        approved_result = await db.execute(
+            select(OnboardingApplication).where(
+                OnboardingApplication.user_id == user.id,
+                OnboardingApplication.status == ApplicationStatus.approved,
+            )
+        )
+        if approved_result.scalar_one_or_none() is not None:
+            user.is_active = True
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+
     return user
+
+
+async def check_pending_approval(db: AsyncSession, email: str) -> PendingApprovalResponse | None:
+    """Check if a user with given email has pending approval. Returns PendingApprovalResponse if pending."""
+    result = await db.execute(select(User).where(User.email == email.lower()))
+    user = result.scalar_one_or_none()
+    if user is None:
+        return None
+
+    app_result = await db.execute(
+        select(OnboardingApplication).where(
+            OnboardingApplication.user_id == user.id,
+            OnboardingApplication.status == ApplicationStatus.pending,
+        )
+    )
+    pending_app = app_result.scalar_one_or_none()
+    if pending_app is not None:
+        return PendingApprovalResponse()
+
+    return None
 
 
 async def create_token_pair(db: AsyncSession, user: User) -> TokenResponse:
@@ -67,8 +122,19 @@ async def refresh_access_token(db: AsyncSession, raw_refresh: str) -> TokenRespo
 
     user_result = await db.execute(select(User).where(User.id == record.user_id))
     user = user_result.scalar_one_or_none()
-    if user is None or not user.is_active:
+    if user is None:
         return None
+    if not user.is_active:
+        pending_result = await db.execute(
+            select(OnboardingApplication).where(
+                OnboardingApplication.user_id == user.id,
+                OnboardingApplication.status.in_(
+                    [ApplicationStatus.pre_pending, ApplicationStatus.pending]
+                ),
+            )
+        )
+        if pending_result.scalar_one_or_none() is None:
+            return None
 
     return await create_token_pair(db, user)
 

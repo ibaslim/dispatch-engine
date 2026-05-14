@@ -53,10 +53,63 @@ async def _get_current_user(
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise exc
+    # If user belongs to a tenant, ensure tenant is active
+    if user.tenant_id:
+        from app.models.tenant import Tenant
+
+        tenant_result = await db.execute(
+            select(Tenant).where(Tenant.id == user.tenant_id)
+        )
+        tenant = tenant_result.scalar_one_or_none()
+        if tenant is not None and not tenant.is_active:
+            raise exc
     return user
 
 
 CurrentUser = Annotated[User, Depends(_get_current_user)]
+
+
+async def _get_current_user_allow_inactive(
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(bearer_scheme)],
+    db: DBSession,
+) -> User:
+    exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if credentials is None:
+        raise exc
+    try:
+        payload = decode_access_token(credentials.credentials)
+        user_id: str = payload.get("sub", "")
+        if not user_id:
+            raise exc
+    except JWTError:
+        raise exc
+
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.roles))
+        .where(User.id == UUID(user_id))
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise exc
+    # Keep tenant suspension enforced even for inactive users
+    if user.tenant_id:
+        from app.models.tenant import Tenant
+
+        tenant_result = await db.execute(
+            select(Tenant).where(Tenant.id == user.tenant_id)
+        )
+        tenant = tenant_result.scalar_one_or_none()
+        if tenant is not None and not tenant.is_active:
+            raise exc
+    return user
+
+
+CurrentUserAllowInactive = Annotated[User, Depends(_get_current_user_allow_inactive)]
 
 
 def require_platform_admin(current_user: CurrentUser) -> User:
@@ -74,7 +127,7 @@ PlatformAdmin = Annotated[User, Depends(require_platform_admin)]
 def require_tenant_admin(current_user: CurrentUser) -> User:
     from app.models.user import UserRole as UserRoleModel
     has_role = any(
-        r.role in ("tenant_admin",)
+        r.role in ("tenant_admin", "vendor")
         for r in current_user.roles
     )
     if not has_role and not current_user.is_platform_admin:

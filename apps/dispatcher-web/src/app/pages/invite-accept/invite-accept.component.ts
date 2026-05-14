@@ -5,6 +5,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import type { AcceptInvitationRequest, LoginResponse } from '@dispatch/shared/contracts';
+import { TenantRole } from '@dispatch/shared/domain';
+import { AuthService } from '../../core/auth/auth.service';
 
 @Component({
   selector: 'app-invite-accept',
@@ -18,14 +20,14 @@ import type { AcceptInvitationRequest, LoginResponse } from '@dispatch/shared/co
             Accept Invitation
           </h2>
           <p class="mt-2 text-center text-sm text-gray-600">
-            Set your password to activate your account
+            Create your account to get started
           </p>
         </div>
 
         @if (success()) {
           <div class="rounded-md bg-green-50 p-4">
             <p class="text-sm text-green-800">
-              Account activated! Redirecting to dashboard&hellip;
+              Account created! Redirecting to login&hellip;
             </p>
           </div>
         } @else {
@@ -38,17 +40,28 @@ import type { AcceptInvitationRequest, LoginResponse } from '@dispatch/shared/co
 
             <div class="space-y-4">
               <div>
-                <label for="name" class="block text-sm font-medium text-gray-700">
-                  Full name
+                <label for="username" class="block text-sm font-medium text-gray-700">
+                  Username <span class="text-red-500">*</span>
                 </label>
                 <input
-                  id="name"
-                  name="name"
+                  id="username"
+                  name="username"
                   type="text"
-                  [(ngModel)]="name"
+                  [(ngModel)]="username"
+                  (blur)="checkUsernameAvailability()"
+                  required
                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="Your name"
+                  placeholder="Choose a unique username"
                 />
+                @if (usernameChecking()) {
+                  <p class="mt-1 text-sm text-gray-500">Checking availability...</p>
+                }
+                @if (usernameError()) {
+                  <p class="mt-1 text-sm text-red-600">{{ usernameError() }}</p>
+                }
+                @if (usernameAvailable()) {
+                  <p class="mt-1 text-sm text-green-600">✓ Username available</p>
+                }
               </div>
 
               <div>
@@ -83,7 +96,7 @@ import type { AcceptInvitationRequest, LoginResponse } from '@dispatch/shared/co
 
             <button
               type="submit"
-              [disabled]="isLoading() || !token()"
+              [disabled]="isLoading() || !token() || !username || !usernameAvailable()"
               class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {{ isLoading() ? 'Activating\u2026' : 'Activate account' }}
@@ -98,25 +111,71 @@ export class InviteAcceptComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthService);
 
   token = signal<string | null>(null);
-  name = '';
+  role = signal<string | null>(null);
+  username = '';
   password = '';
   confirmPassword = '';
   isLoading = signal(false);
   errorMessage = signal<string | null>(null);
   success = signal(false);
+  usernameChecking = signal(false);
+  usernameError = signal<string | null>(null);
+  usernameAvailable = signal(false);
 
   ngOnInit(): void {
     const t = this.route.snapshot.queryParamMap.get('token');
+    const r = this.route.snapshot.queryParamMap.get('role');
     this.token.set(t);
+    this.role.set(r);
     if (!t) {
       this.errorMessage.set('Invalid or missing invitation token.');
     }
   }
 
+  async checkUsernameAvailability(): Promise<void> {
+    if (!this.username || this.username.length === 0) {
+      this.usernameAvailable.set(false);
+      this.usernameError.set(null);
+      return;
+    }
+
+    this.usernameChecking.set(true);
+    this.usernameError.set(null);
+
+    try {
+      const res = await firstValueFrom(
+        this.http.get<{ available: boolean }>(
+          `/api/v1/tenants/check-username/${encodeURIComponent(this.username)}`
+        )
+      );
+      if (res.available) {
+        this.usernameAvailable.set(true);
+        this.usernameError.set(null);
+      } else {
+        this.usernameAvailable.set(false);
+        this.usernameError.set('This username is already taken.');
+      }
+    } catch {
+      this.usernameAvailable.set(false);
+      this.usernameError.set('Error checking username availability.');
+    } finally {
+      this.usernameChecking.set(false);
+    }
+  }
+
   async onSubmit(): Promise<void> {
     if (!this.token()) return;
+    if (!this.username) {
+      this.errorMessage.set('Username is required.');
+      return;
+    }
+    if (!this.usernameAvailable()) {
+      this.errorMessage.set('Please choose an available username.');
+      return;
+    }
     if (this.password !== this.confirmPassword) {
       this.errorMessage.set('Passwords do not match.');
       return;
@@ -133,15 +192,17 @@ export class InviteAcceptComponent implements OnInit {
       const req: AcceptInvitationRequest = {
         token: this.token()!,
         password: this.password,
-        name: this.name || undefined,
+        username: this.username,
       };
       const res = await firstValueFrom(
         this.http.post<LoginResponse>('/api/v1/invitations/accept', req)
       );
-      localStorage.setItem('dispatch:access_token', res.access_token);
-      localStorage.setItem('dispatch:refresh_token', res.refresh_token);
+      this.auth.storeTokens(res.access_token, res.refresh_token);
       this.success.set(true);
-      setTimeout(() => this.router.navigate(['/dashboard']), 1500);
+      setTimeout(() => {
+        // Redirect to login instead of onboarding
+        this.router.navigate(['/login']);
+      }, 1500);
     } catch (err: unknown) {
       this.errorMessage.set(
         err instanceof Error ? err.message : 'Failed to accept invitation.'

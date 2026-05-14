@@ -2,7 +2,7 @@ import { Injectable, inject, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import type { MeResponse, LoginRequest, LoginResponse } from '@dispatch/shared/contracts';
+import type { MeResponse, LoginRequest } from '@dispatch/shared/contracts';
 
 const ACCESS_KEY = 'dispatch:access_token';
 const REFRESH_KEY = 'dispatch:refresh_token';
@@ -23,15 +23,28 @@ export class AuthService {
     return localStorage.getItem(ACCESS_KEY);
   }
 
+  storeTokens(accessToken: string, refreshToken: string): void {
+    localStorage.setItem(ACCESS_KEY, accessToken);
+    localStorage.setItem(REFRESH_KEY, refreshToken);
+  }
+
   async login(email: string, password: string): Promise<void> {
     const req: LoginRequest = { email, password };
     const res = await firstValueFrom(
-      this.http.post<LoginResponse>('/api/v1/auth/login', req)
+      this.http.post<any>('/api/v1/auth/login', req)
     );
+
+    // Check if response indicates pending approval
+    if (res.status === 'pending_approval') {
+      await this.router.navigate(['/onboarding/pending']);
+      return;
+    }
+
+    // Normal login flow
     localStorage.setItem(ACCESS_KEY, res.access_token);
     localStorage.setItem(REFRESH_KEY, res.refresh_token);
     await this.loadCurrentUser();
-    await this.router.navigate(['/dashboard']);
+    await this.router.navigate(['/orders']);
   }
 
   async loadCurrentUser(): Promise<void> {

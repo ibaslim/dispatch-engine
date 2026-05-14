@@ -1,23 +1,30 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Union
 
-from app.core.deps import get_db, CurrentUser
+from app.core.deps import get_db, CurrentUserAllowInactive
 from app.schemas.auth import (
     LoginRequest, TokenResponse, RefreshRequest,
-    MeResponse, ForgotPasswordRequest, ResetPasswordRequest,
+    MeResponse, ForgotPasswordRequest, ResetPasswordRequest, PendingApprovalResponse,
 )
 from app.services.auth_service import (
     authenticate_user, create_token_pair,
     refresh_access_token, revoke_refresh_token,
+    check_pending_approval,
 )
 
 router = APIRouter()
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=Union[TokenResponse, PendingApprovalResponse])
 async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     user = await authenticate_user(db, req.email, req.password)
     if user is None:
+        # Check if user exists but is pending approval
+        pending = await check_pending_approval(db, req.email)
+        if pending is not None:
+            return pending
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -42,7 +49,7 @@ async def logout(req: RefreshRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/me", response_model=MeResponse)
-async def me(current_user: CurrentUser):
+async def me(current_user: CurrentUserAllowInactive):
     return MeResponse(
         id=str(current_user.id),
         email=current_user.email,

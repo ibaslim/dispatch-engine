@@ -18,6 +18,7 @@ import { OrderEntity, OrderTab } from '../../models/orders/order-entity.model';
 import { OrderView } from '../../models/orders/order-tabs.model';
 import { DemoDriversService } from '../../services/demo-drivers/demo-drivers.service';
 import { OrdersService } from '../../services/orders/orders.service';
+import { AuthService } from '../../core/auth/auth.service';
 
 type BackendOrderItem = {
   itemName: string;
@@ -115,18 +116,30 @@ export class OrdersComponent implements OnInit, OnDestroy {
   private localDemoOrders: OrderEntity[] = [];
   private localOnlyOrderIds = new Set<string>();
 
-  detailsMenuItems = [
-    { label: 'Mark as Done', action: 'done', icon: 'ph ph-check' },
-    { label: 'Move to History', action: 'history', icon: 'ph ph-archive-box' },
-    { label: 'Download PDF', action: 'pdf', icon: 'ph ph-download' },
-    { label: 'Mark as Failed', action: 'failed', icon: 'ph ph-x', danger: true },
-    { label: 'Delete', action: 'delete', icon: 'ph ph-trash', danger: true }
-  ];
+  get detailsMenuItems(): Array<{ label: string; action: string; icon: string; danger?: boolean }> {
+    if (this.isReadOnlyTenant) {
+      return [
+        { label: 'Download PDF', action: 'pdf', icon: 'ph ph-download' }
+      ];
+    }
+    return [
+      { label: 'Mark as Done', action: 'done', icon: 'ph ph-check' },
+      { label: 'Move to History', action: 'history', icon: 'ph ph-archive-box' },
+      { label: 'Download PDF', action: 'pdf', icon: 'ph ph-download' },
+      { label: 'Mark as Failed', action: 'failed', icon: 'ph ph-x', danger: true },
+      { label: 'Delete', action: 'delete', icon: 'ph ph-trash', danger: true }
+    ];
+  }
 
   constructor(
     private readonly ordersService: OrdersService,
-    private readonly demoDriversService: DemoDriversService
+    private readonly demoDriversService: DemoDriversService,
+    private readonly auth: AuthService
   ) { }
+
+  get isReadOnlyTenant(): boolean {
+    return !this.auth.isPlatformAdmin();
+  }
 
   ngOnInit(): void {
     if (this.showLocalDemoButton && this.demoDriversService.listDrivers().length === 0) {
@@ -190,6 +203,12 @@ export class OrdersComponent implements OnInit, OnDestroy {
   handleMenuAction(event: { action: string }, row: { orderNo: string }): void {
     const order = this.findOrderByOrderNo(row.orderNo);
     if (!order) return;
+
+    if (this.isReadOnlyTenant && event.action !== 'details' && event.action !== 'print') {
+      this.setFeedback('Read-only access for tenant users.', 'info');
+      this.activeMenuRow = null;
+      return;
+    }
 
     switch (event.action) {
       case 'moveToCurrent':
@@ -259,6 +278,11 @@ export class OrdersComponent implements OnInit, OnDestroy {
   async handleDetailsMenu(action: string): Promise<void> {
     if (!this.selectedOrderForDetails) return;
 
+    if (this.isReadOnlyTenant && action !== 'pdf') {
+      this.setFeedback('Read-only access for tenant users.', 'info');
+      return;
+    }
+
     const selectedOrder = this.selectedOrderForDetails;
     const id = selectedOrder.id;
 
@@ -313,6 +337,11 @@ export class OrdersComponent implements OnInit, OnDestroy {
   updateReadyForPickup(isReady: boolean): void {
     if (!this.selectedOrderForDetails) return;
 
+    if (this.isReadOnlyTenant) {
+      this.setFeedback('Read-only access for tenant users.', 'info');
+      return;
+    }
+
     const id = this.selectedOrderForDetails.id;
     this.setReadyForPickupLocal(id, isReady);
 
@@ -333,6 +362,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   updateReadyForPickupFromRow(orderId: string, isReady: boolean): void {
+    if (this.isReadOnlyTenant) {
+      this.setFeedback('Read-only access for tenant users.', 'info');
+      return;
+    }
     this.setReadyForPickupLocal(orderId, isReady);
 
     if (this.isLocalOnlyOrder(orderId)) {
@@ -452,6 +485,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   openNewOrder(): void {
+    if (this.isReadOnlyTenant) {
+      this.setFeedback('Read-only access for tenant users.', 'info');
+      return;
+    }
     this.newOrderValue = this.createDefaultNewOrder();
     this.editingOrderId = null;
     this.formSubmitted.set(false);
@@ -475,6 +512,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   async saveNewOrder(): Promise<void> {
+    if (this.isReadOnlyTenant) {
+      this.setFeedback('Read-only access for tenant users.', 'info');
+      return;
+    }
     this.formSubmitted.set(true);
 
     if (this.checkFormErrors() || this.isSavingOrder) return;
@@ -528,6 +569,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   editOrder(order: OrderEntity): void {
+    if (this.isReadOnlyTenant) {
+      this.setFeedback('Read-only access for tenant users.', 'info');
+      return;
+    }
     this.newOrderValue = structuredClone(order.full);
     this.editingOrderId = order.id;
     this.formSubmitted.set(false);
@@ -535,6 +580,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   openAssignDriver(row: { id: string } | OrderEntity): void {
+    if (this.isReadOnlyTenant) {
+      this.setFeedback('Read-only access for tenant users.', 'info');
+      return;
+    }
     const orderId = row.id;
     const order = this.orders.find((item) => item.id === orderId);
     if (!order) return;
@@ -553,6 +602,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   assignSelectedDriver(): void {
+    if (this.isReadOnlyTenant) {
+      this.setFeedback('Read-only access for tenant users.', 'info');
+      return;
+    }
     if (!this.selectedOrderForAssignment || !this.selectedDriverId) {
       this.setFeedback('Select a driver to assign.', 'error');
       return;
@@ -568,6 +621,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   unassignSelectedDriver(): void {
+    if (this.isReadOnlyTenant) {
+      this.setFeedback('Read-only access for tenant users.', 'info');
+      return;
+    }
     if (!this.selectedOrderForAssignment) return;
 
     this.demoDriversService.unassignDriver(this.selectedOrderForAssignment.id);
@@ -605,10 +662,16 @@ export class OrdersComponent implements OnInit, OnDestroy {
           view.vendorName.toLowerCase().includes(q)
         );
       })
-      .map((order) => ({
-        ...order.view.current,
-        id: order.id
-      }));
+      .map((order) => {
+        const row = {
+          ...order.view.current,
+          id: order.id,
+        } as Record<string, unknown>;
+        if (this.isReadOnlyTenant && (!row['driver'] || row['driver'] === '')) {
+          row['driver'] = '—';
+        }
+        return row;
+      });
   }
 
   private getTabKey(tab: string): OrderTab {
@@ -622,6 +685,12 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   getContextMenuItems(): Array<{ label: string; action: string; icon: string }> {
+    if (this.isReadOnlyTenant) {
+      return [
+        { label: 'Details', action: 'details', icon: 'ph ph-eye' },
+        { label: 'Print Order', action: 'print', icon: 'ph ph-printer' }
+      ];
+    }
     if (this.activeTab === 'Completed' || this.activeTab === 'Incomplete') {
       return [
         { label: 'Details', action: 'details', icon: 'ph ph-eye' },
@@ -657,12 +726,17 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const showPickupAndDriver = this.activeTab === 'Current' || this.activeTab === 'Scheduled';
 
     if (showPickupAndDriver) {
-      return this.unifiedColumns;
+      return this.isReadOnlyTenant
+        ? this.unifiedColumns.filter((column) => column.key !== 'readyForPickup' && column.key !== 'actions')
+        : this.unifiedColumns;
     }
 
-    return this.unifiedColumns.filter((column) =>
+    const filtered = this.unifiedColumns.filter((column) =>
       column.key !== 'readyForPickup' && column.key !== 'driver'
     );
+    return this.isReadOnlyTenant
+      ? filtered.filter((column) => column.key !== 'actions')
+      : filtered;
   }
 
   onPickupPin(): void {

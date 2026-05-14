@@ -1,17 +1,21 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-
+from sqlalchemy.orm import selectinload
 from app.core.config import settings
 from app.core.security import generate_secure_token, hash_password
 from app.models.invitation import Invitation
-from app.models.user import User, UserRole
+from app.models.user import User, RoleEnum
 from app.models.tenant import Tenant
+from app.models.onboarding_application import OnboardingApplication, ApplicationStatus
 from app.schemas.auth import TokenResponse
 from app.services.auth_service import create_token_pair
 from app.workers.tasks import send_invitation_email
+import logging
+
+logger = logging.getLogger(__name__)
+from urllib.parse import quote
 
 
 def _slugify(name: str) -> str:
@@ -49,7 +53,7 @@ async def create_tenant_admin_invitation(
         email=email.lower(),
         name=name,
         token=token,
-        role="tenant_admin",
+        role=RoleEnum.vendor.value,
         tenant_id=tenant.id,
         tenant_name=tenant_name,
         expires_at=expires_at,
@@ -67,11 +71,83 @@ async def create_tenant_admin_invitation(
             tenant_name=tenant_name,
             invite_token=token,
             accept_url=(
-                f"{settings.dispatcher_web_base_url}/invite/accept?token={token}"
+                f"{settings.dispatcher_web_base_url}/invite/accept?token={quote(token)}&role={RoleEnum.vendor.value}"
             ),
         )
     except Exception:
         pass  # Don't fail if Celery is unavailable
+
+    return invitation
+
+
+def _normalize_invite_role(role: str) -> str:
+    normalized = role.strip().lower().replace(" ", "_")
+    mapping = {
+        "admin": RoleEnum.vendor.value,
+        "tenant_admin": RoleEnum.vendor.value,
+        "vendor": RoleEnum.vendor.value,
+        "driver": RoleEnum.driver.value,
+        "individual": RoleEnum.individual.value,
+    }
+    if normalized not in mapping:
+        raise ValueError("Unsupported role.")
+    return mapping[normalized]
+
+
+
+async def create_tenant_user_invitation(
+    db: AsyncSession,
+    email: str,
+    role: str,
+    invited_by: User,
+) -> Invitation:
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.tenant))
+        .where(User.id == invited_by.id)
+    )
+    inviter = result.scalar_one_or_none()
+    if inviter is None:
+        raise ValueError("Inviting user not found.")
+
+    tenant = inviter.tenant
+    if inviter.tenant_id and tenant is None:
+        raise ValueError("Tenant not found.")
+
+    normalized_role = _normalize_invite_role(role)
+
+    token = generate_secure_token(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        hours=settings.invitation_token_expire_hours
+    )
+
+    invitation = Invitation(
+        email=email.lower(),
+        name=email.split("@")[0],
+        token=token,
+        role=normalized_role,
+        tenant_id=tenant.id if tenant else None,
+        tenant_name=tenant.name if tenant else None,
+        expires_at=expires_at,
+        invited_by_id=invited_by.id,
+    )
+    db.add(invitation)
+    await db.commit()
+    await db.refresh(invitation)
+
+    try:
+        tenant_name_for_email = tenant.name if tenant else "Dispatch Engine"
+        send_invitation_email.delay(
+            email=email,
+            name=invitation.name,
+            tenant_name=tenant_name_for_email,
+            invite_token=token,
+            accept_url=(
+                f"{settings.dispatcher_web_base_url}/invite/accept?token={quote(token)}&role={normalized_role}"
+            ),
+        )
+    except Exception:
+        pass
 
     return invitation
 
@@ -81,41 +157,121 @@ async def accept_invitation(
     token: str,
     password: str,
     name: Optional[str],
+    username: Optional[str] = None,
 ) -> Optional[TokenResponse]:
     """
-    Accept an invitation: validate token, create user, return token pair.
-    Returns None if token is invalid or expired.
+    Accept an invitation: validate token, create onboarding application (pre-pending).
+    Returns TokenResponse with onboarding access tokens, or None if token is invalid or expired.
     """
+    # Log a short preview of the token for debugging (avoid logging full token in production)
+    if token:
+        preview = (token[:8] + '...' + token[-8:]) if len(token) > 16 else token
+        logger.info("accept_invitation: token preview=%s len=%d", preview, len(token))
+
     result = await db.execute(
         select(Invitation).where(Invitation.token == token)
     )
     invitation = result.scalar_one_or_none()
 
-    if invitation is None or not invitation.is_valid():
+    # Fallbacks for common token mangling (e.g. '+' <-> ' ' issues from forms/clients)
+    if invitation is None:
+        if ' ' in token:
+            alt = token.replace(' ', '+')
+            logger.info('accept_invitation: trying token with spaces->plus preview=%s', (alt[:8] + '...' + alt[-8:]) if len(alt) > 16 else alt)
+            result = await db.execute(select(Invitation).where(Invitation.token == alt))
+            invitation = result.scalar_one_or_none()
+        if invitation is None and '+' in token:
+            alt2 = token.replace('+', ' ')
+            logger.info('accept_invitation: trying token with plus->space preview=%s', (alt2[:8] + '...' + alt2[-8:]) if len(alt2) > 16 else alt2)
+            result = await db.execute(select(Invitation).where(Invitation.token == alt2))
+            invitation = result.scalar_one_or_none()
+
+    if invitation is None:
         return None
 
-    # Create user
-    user = User(
-        email=invitation.email,
-        name=name or invitation.name or invitation.email.split("@")[0],
-        hashed_password=hash_password(password),
-        tenant_id=invitation.tenant_id,
-        is_active=True,
+    existing_user_result = await db.execute(
+        select(User).where(User.email == invitation.email.lower())
     )
-    db.add(user)
-    await db.flush()
+    existing_user = existing_user_result.scalar_one_or_none()
 
-    # Assign role
-    user_role = UserRole(user_id=user.id, role=invitation.role)
-    db.add(user_role)
+    if invitation.is_used:
+        if existing_user is None:
+            return None
+        pending_result = await db.execute(
+            select(OnboardingApplication).where(
+                OnboardingApplication.user_id == existing_user.id,
+                OnboardingApplication.status.in_(
+                    [ApplicationStatus.pre_pending, ApplicationStatus.pending]
+                ),
+            )
+        )
+        if pending_result.scalar_one_or_none() is not None:
+            return await create_token_pair(db, existing_user)
+        return None
 
-    # Mark invitation as used
-    invitation.is_used = True
-    invitation.accepted_at = datetime.now(timezone.utc)
-    db.add(invitation)
+    if not invitation.is_valid():
+        return None
 
-    await db.commit()
-    await db.refresh(user)
-    user.roles  # eager-ish load
+    try:
+        # Keep onboarding payload in application.data while account is pending approval.
+        application_data = {
+            "email": invitation.email,
+            "name": name or invitation.name or invitation.email.split("@")[0],
+            "password_hash": hash_password(password),
+            "username": username,  # Store username for later use
+        }
 
-    return await create_token_pair(db, user)
+        if existing_user is None:
+            existing_user = User(
+                email=invitation.email,
+                name=name or invitation.name or invitation.email.split("@")[0],
+                hashed_password=application_data["password_hash"],
+                tenant_id=invitation.tenant_id,
+                is_active=False,
+            )
+            db.add(existing_user)
+            await db.flush()
+        else:
+            existing_user.name = name or existing_user.name
+            existing_user.hashed_password = application_data["password_hash"]
+            existing_user.tenant_id = invitation.tenant_id
+            existing_user.is_active = False
+            db.add(existing_user)
+
+        latest_app_result = await db.execute(
+            select(OnboardingApplication)
+            .where(OnboardingApplication.user_id == existing_user.id)
+            .order_by(OnboardingApplication.created_at.desc())
+        )
+        latest_app = latest_app_result.scalars().first()
+        if latest_app and latest_app.status in (ApplicationStatus.pre_pending, ApplicationStatus.pending):
+            latest_app.role = invitation.role
+            latest_app.data = application_data
+            latest_app.reviewed_at = None
+            latest_app.reviewed_by_id = None
+            latest_app.decision_reason = None
+            db.add(latest_app)
+        else:
+            db.add(
+                OnboardingApplication(
+                    user_id=existing_user.id,
+                    role=invitation.role,
+                    status=ApplicationStatus.pre_pending,
+                    data=application_data,
+                )
+            )
+
+        # Mark invitation as used
+        invitation.is_used = True
+        invitation.accepted_at = datetime.now(timezone.utc)
+        db.add(invitation)
+
+        await db.commit()
+        logger.info("accept_invitation: pending onboarding application ready for %s", invitation.email)
+
+        return await create_token_pair(db, existing_user)
+
+    except Exception as e:
+        logger.error("accept_invitation: error creating application: %s", str(e), exc_info=True)
+        await db.rollback()
+        return None

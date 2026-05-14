@@ -12,6 +12,12 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class PendingApprovalResponse(BaseModel):
+    """Response when user exists but has pending approval."""
+    status: str = "pending_approval"
+    message: str = "Your account is pending approval from an administrator."
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 

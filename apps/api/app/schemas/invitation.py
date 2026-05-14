@@ -5,6 +5,7 @@ class AcceptInvitationRequest(BaseModel):
     token: str
     password: str
     name: str | None = None
+    username: str | None = None
 
 
 class InvitationResponse(BaseModel):

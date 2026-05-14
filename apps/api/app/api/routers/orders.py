@@ -1,13 +1,14 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.core.deps import CurrentUser
 from app.models.order import Order, OrderStatus
 from app.schemas.order import OrderCreate, OrderResponse, OrderUpdate
 
@@ -46,7 +47,10 @@ def get_order_status(
 # GET ORDERS
 # -------------------------
 @router.get("/", response_model=list[OrderResponse])
-async def get_orders(db: AsyncSession = Depends(get_db)):
+async def get_orders(
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
     result = await db.execute(select(Order))
     return result.scalars().all()
 
@@ -55,7 +59,16 @@ async def get_orders(db: AsyncSession = Depends(get_db)):
 # CREATE ORDER
 # -------------------------
 @router.post("/", response_model=OrderResponse)
-async def create_order(payload: OrderCreate, db: AsyncSession = Depends(get_db)):
+async def create_order(
+    payload: OrderCreate,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    if not current_user.is_platform_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Read-only access for tenant users.",
+        )
     try:
         data = payload.model_dump()
 
@@ -91,8 +104,14 @@ async def create_order(payload: OrderCreate, db: AsyncSession = Depends(get_db))
 async def update_order(
     order_id: str,
     payload: OrderUpdate,
+    current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
+    if not current_user.is_platform_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Read-only access for tenant users.",
+        )
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
 
@@ -135,7 +154,16 @@ async def update_order(
 # DELETE ORDER (NEW)
 # -------------------------
 @router.delete("/{order_id}")
-async def delete_order(order_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_order(
+    order_id: str,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    if not current_user.is_platform_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Read-only access for tenant users.",
+        )
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
 
@@ -159,8 +187,14 @@ class StatusUpdate(BaseModel):
 async def update_status(
     order_id: str,
     payload: StatusUpdate,
+    current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
+    if not current_user.is_platform_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Read-only access for tenant users.",
+        )
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
 
@@ -184,8 +218,14 @@ class ReadyUpdate(BaseModel):
 async def toggle_ready(
     order_id: str,
     payload: ReadyUpdate,
+    current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
+    if not current_user.is_platform_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Read-only access for tenant users.",
+        )
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
 

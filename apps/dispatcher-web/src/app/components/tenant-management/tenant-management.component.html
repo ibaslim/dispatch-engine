@@ -11,7 +11,7 @@
     <app-button
       variant="primary"
       label="+ Add New Tenant"
-      (onClick)="openInviteDrawer()"
+      (onClick)="openInvitePopup()"
       [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-3 py-2 rounded-md text-sm'">
     </app-button>
   </div>
@@ -19,7 +19,7 @@
   <app-table
     [columns]="columns"
     [rows]="tenants"
-    [columnTemplate]="'repeat(5, minmax(0, 1fr))'"
+    [columnTemplate]="'repeat(7, minmax(0, 1fr))'"
     [emptyTitle]="'No tenants found'"
     [emptySubtitle]="'Invite users to start collaborating'"
     (actionClick)="onTableActionClick($event)"
@@ -27,66 +27,59 @@
   </app-table>
 </app-page>
 
-<!-- ── Add New Tenant Drawer ── -->
-<app-side-drawer
-  [open]="inviteDrawerOpen"
-  size="large"
+<!-- ── Add New Tenant Popup ── -->
+<app-popup
+  [open]="invitePopupOpen"
   title="Invite New User"
-  subtitle="Send an invitation to a new team member."
-  (closed)="closeInviteDrawer()"
+  (close)="closeInvitePopup()"
 >
-  <!-- Body -->
   <div class="space-y-6">
-    <div>
-      <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-        Email address
-      </label>
-      <input
-        type="email"
-        [(ngModel)]="inviteEmail"
-        placeholder="name@company.com"
-        class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-[#2a2d2a]
-               bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100
-               focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-      />
+    <p class="text-sm text-gray-500">Send an invitation to a new team member.</p>
+
+    <div *ngIf="inviteError" class="rounded-md bg-red-50 p-3 text-sm text-red-800">
+      {{ inviteError }}
+    </div>
+    <div *ngIf="inviteSuccess" class="rounded-md bg-green-50 p-3 text-sm text-green-800">
+      {{ inviteSuccess }}
     </div>
 
-    <div>
-      <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-        Role
-      </label>
-      <select
-        [(ngModel)]="inviteRole"
-        class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-[#2a2d2a]
-               bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100
-               focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-      >
-        <option *ngFor="let role of roles" [value]="role">{{ role }}</option>
-      </select>
-      <p class="text-xs text-gray-500 mt-2">Roles should match the backend enum.</p>
-    </div>
+    <app-base-input
+      label="Email address"
+      type="email"
+      [required]="true"
+      [value]="inviteEmail"
+      (valueChange)="inviteEmail = $event; clearInviteFeedback()">
+    </app-base-input>
+
+    <app-dropdown-selector
+      label="Role"
+      [required]="true"
+      [options]="roleOptions"
+      [value]="inviteRole"
+      (valueChange)="inviteRole = $event || inviteRole; clearInviteFeedback()">
+    </app-dropdown-selector>
   </div>
 
-  <!-- Footer -->
-  <div data-drawer-footer class="flex justify-end gap-2">
+  <div modal-footer class="flex flex-wrap justify-end gap-2">
     <app-button
-      variant="ghost"
+      variant="ghost-outline"
       label="Cancel"
-      (onClick)="closeInviteDrawer()"
+      [disabled]="isInviting"
+      (onClick)="closeInvitePopup()"
     ></app-button>
     <app-button
       variant="primary"
-      label="Send Invitation"
-      (onClick)="sendInvitation()"
-      [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82]'"
+      label="+ Invite"
+      [disabled]="isInviting"
+      (onClick)="sendInvite()"
     ></app-button>
   </div>
-</app-side-drawer>
+</app-popup>
 
 <!-- ── View User Drawer ── -->
 <app-side-drawer
   [open]="viewDrawerOpen && !!selectedTenant"
-  size="regular"
+  size="large"
   title="User Details"
   subtitle="Read-only view of this tenant's account."
   (closed)="closeViewDrawer()"
@@ -103,7 +96,7 @@
     </div>
     <div>
       <p class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Role</p>
-      <p class="text-base text-gray-900 dark:text-gray-100">{{ selectedTenant.role }}</p>
+      <p class="text-base text-gray-900 dark:text-gray-100">{{ getRoleLabel(selectedTenant.role) }}</p>
     </div>
     <div>
       <p class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Status</p>
@@ -117,14 +110,56 @@
       <p class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Created at</p>
       <p class="text-base text-gray-900 dark:text-gray-100">{{ selectedTenant.createdAt }}</p>
     </div>
+
+    <div *ngIf="selectedApplicationEntries.length" class="pt-3 border-t border-gray-200 dark:border-[#2a2d2a]">
+      <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Application data</p>
+      <div class="space-y-3">
+        <div *ngFor="let entry of selectedApplicationEntries">
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">{{ entry.label }}</p>
+          <div *ngIf="!entry.isFile" class="text-sm text-gray-900 dark:text-gray-100 break-words">{{ entry.value }}</div>
+          <div *ngIf="entry.isFile" class="flex items-center gap-3">
+            <p class="text-sm text-gray-900 dark:text-gray-100">{{ entry.fileName }}</p>
+            <app-button variant="ghost-outline" label="Download" (onClick)="downloadDocument(selectedApplication!.id, entry.fileName!)"></app-button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Footer -->
-  <div data-drawer-footer class="flex justify-end">
+  <div #drawerFooter data-drawer-footer class="flex flex-wrap justify-end gap-2">
     <app-button
+      *ngIf="selectedApplication?.status === 'pending'"
       variant="ghost-outline"
-      label="Close"
-      (onClick)="closeViewDrawer()"
+      label="Reject"
+      [disabled]="isReviewing"
+      (onClick)="rejectSelected()"
     ></app-button>
+    <app-button
+      *ngIf="selectedApplication?.status === 'pending'"
+      variant="primary"
+      label="Approve"
+      [disabled]="isReviewing"
+      (onClick)="approveSelected()"
+    ></app-button>
+    <!-- If approved, allow suspending/unsuspending tenant -->
+    <app-button
+      *ngIf="selectedApplication?.status === 'approved'"
+      variant="ghost-outline"
+      label="Suspend Tenant"
+      (onClick)="suspendTenant()"
+    ></app-button>
+    <app-button
+      *ngIf="selectedApplication?.status === 'approved'"
+      variant="ghost-outline"
+      label="Unsuspend Tenant"
+      (onClick)="unsuspendTenant()"
+    ></app-button>
+    <app-button
+       variant="ghost-outline"
+       label="Close"
+       (onClick)="closeViewDrawer()"
+     ></app-button>
   </div>
 </app-side-drawer>
+

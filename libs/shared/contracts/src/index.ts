@@ -35,6 +35,29 @@ export interface MeResponse {
   roles: string[];
 }
 
+export type OnboardingStatus = 'pre_pending' | 'pending' | 'approved' | 'rejected';
+
+export interface OnboardingApplicationCreateRequest {
+  role: string;
+  data: Record<string, unknown>;
+}
+
+export interface OnboardingApplicationReviewRequest {
+  reason?: string | null;
+}
+
+export interface OnboardingApplicationResponse {
+  id: string;
+  user_id: string;
+  role: string;
+  status: OnboardingStatus;
+  data: Record<string, unknown>;
+  created_at: string;
+  reviewed_at: string | null;
+  reviewed_by_id: string | null;
+  decision_reason: string | null;
+}
+
 export interface InviteTenantAdminRequest {
   email: string;
   name: string;
@@ -45,6 +68,7 @@ export interface AcceptInvitationRequest {
   token: string;
   password: string;
   name?: string;
+  username: string;
 }
 
 export interface StoreResponse {

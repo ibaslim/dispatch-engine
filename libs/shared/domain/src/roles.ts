@@ -5,18 +5,16 @@ export enum PlatformRole {
 
 /** Tenant-level roles */
 export enum TenantRole {
-  TenantAdmin = 'tenant_admin',
-  CentralDispatcher = 'central_dispatcher',
-  StoreDispatcher = 'store_dispatcher',
+  Vendor = 'vendor',
   Driver = 'driver',
+  Individual = 'individual',
 }
 
 export type UserRole = PlatformRole | TenantRole;
 
 export const ALL_ROLES: UserRole[] = [
   PlatformRole.PlatformAdmin,
-  TenantRole.TenantAdmin,
-  TenantRole.CentralDispatcher,
-  TenantRole.StoreDispatcher,
+  TenantRole.Vendor,
   TenantRole.Driver,
+  TenantRole.Individual,
 ];

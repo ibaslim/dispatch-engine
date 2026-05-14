@@ -9,29 +9,30 @@ import {
   ContentChild,
   ElementRef,
   AfterContentInit,
+  inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import {PageComponent} from "../page/page.component";
-import {ButtonComponent} from "../button/button.component";
-import {TableComponent} from "../table/table.component";
-import {FormsModule} from "@angular/forms";
+import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
+import { ButtonComponent } from '../button/button.component';
+import { FormsModule } from '@angular/forms';
 
 export type DrawerSize = 'regular' | 'large' | 'xl';
 
 /**
- * Attribute directive used purely as a content-projection marker.
+ * Attribute marker used for footer slot.
  * Usage: <div data-drawer-footer>...</div>
  */
-@Component({ selector: '[data-drawer-footer]', standalone: true, template: '<ng-content></ng-content>' })
-export class DrawerFooterDirective {}
 
 @Component({
   selector: 'app-side-drawer',
   standalone: true,
-  imports: [CommonModule, DrawerFooterDirective, PageComponent, ButtonComponent, TableComponent, FormsModule],
+  imports: [CommonModule, ButtonComponent, FormsModule],
   templateUrl: './Side-drawer.component.html',
 })
 export class SideDrawerComponent implements OnChanges, AfterContentInit {
+  private readonly http = inject(HttpClient);
+
   /** Controls open/closed state */
   @Input() open: boolean = false;
 
@@ -53,20 +54,28 @@ export class SideDrawerComponent implements OnChanges, AfterContentInit {
   /** Emits when the drawer requests to be closed */
   @Output() closed = new EventEmitter<void>();
 
-  /** Detects whether a [data-drawer-footer] slot was projected */
-  @ContentChild(DrawerFooterDirective) footerContent?: DrawerFooterDirective;
+  /** Optional invite button support */
+  @Input() showInviteButton = false;
+  @Input() inviteButtonLabel = '+ Invite';
+  @Input() inviteEndpoint = '/api/v1/tenants/invite';
+  @Input() inviteEmail = '';
+  @Input() inviteRole = '';
+  @Output() inviteSent = new EventEmitter<void>();
 
-  /** Detects whether a [data-drawer-header] element was projected */
-  @ContentChild('drawerHeader') headerExtra?: ElementRef;
+  /** Detects footer content via template ref (#drawerFooter) */
+  @ContentChild('drawerFooter') footerRef?: ElementRef;
 
   hasFooter = false;
+  isInviting = false;
+  inviteError = '';
+  inviteSuccess = '';
 
   /** Internal animation state */
   isVisible: boolean = false;
   isAnimatingOut: boolean = false;
 
   ngAfterContentInit(): void {
-    this.hasFooter = !!this.footerContent;
+    this.hasFooter = !!this.footerRef;
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -124,5 +133,46 @@ export class SideDrawerComponent implements OnChanges, AfterContentInit {
   getBackdropClasses(): string {
     const base = 'fixed inset-0 z-40 bg-black transition-opacity duration-300 ease-in-out';
     return `${base} ${this.isAnimatingOut ? 'opacity-0' : 'opacity-50'}`;
+  }
+
+  get showFooter(): boolean {
+    return this.hasFooter || this.showInviteButton;
+  }
+
+  async sendInvite(): Promise<void> {
+    this.inviteError = '';
+    this.inviteSuccess = '';
+
+    const email = this.inviteEmail.trim();
+    const role = this.inviteRole.trim();
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      this.inviteError = 'Enter a valid email address.';
+      return;
+    }
+
+    if (!role) {
+      this.inviteError = 'Select a role.';
+      return;
+    }
+
+    this.isInviting = true;
+
+    try {
+      await firstValueFrom(
+        this.http.post(this.inviteEndpoint, { email, role })
+      );
+      this.inviteSuccess = 'Invitation sent successfully.';
+      this.inviteSent.emit();
+    } catch (err: unknown) {
+      this.inviteError = err instanceof Error ? err.message : 'Failed to send invite.';
+    } finally {
+      this.isInviting = false;
+    }
+  }
+
+  clearInviteFeedback(): void {
+    this.inviteError = '';
+    this.inviteSuccess = '';
   }
 }

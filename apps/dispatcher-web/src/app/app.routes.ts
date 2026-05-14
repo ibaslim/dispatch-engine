@@ -20,6 +20,45 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'pending-approval',
+    loadComponent: () =>
+      import('./pages/pending-approval/pending-approval.component').then(
+        (m) => m.PendingApprovalComponent
+      ),
+  },
+  {
+    path: 'onboarding/driver',
+    data: { hideNavbar: true },
+    loadComponent: () =>
+      import('./pages/driver_onboarding/driver.onboarding.component').then(
+        (m) => m.DriverOnboardingComponent
+      ),
+  },
+  {
+    path: 'onboarding/pending',
+    data: { hideNavbar: true },
+    loadComponent: () =>
+      import('./pages/onboarding-pending/onboarding-pending.component').then(
+        (m) => m.OnboardingPendingComponent
+      ),
+  },
+  {
+    path: 'onboarding/vendor',
+    data: { hideNavbar: true },
+    loadComponent: () =>
+      import('./pages/vendor_onboarding/vendor.onboarding.component').then(
+        (m) => m.VendorOnboardingComponent
+      ),
+  },
+  {
+    path: 'onboarding/individual',
+    data: { hideNavbar: true },
+    loadComponent: () =>
+      import('./pages/individual_onboarding/individual.onboarding.component').then(
+        (m) => m.IndividualOnboardingComponent
+      ),
+  },
+  {
     path: 'orders',
     canActivate: [authGuard],
     loadComponent: () =>
@@ -59,7 +98,7 @@ export const routes: Routes = [
         (m) => m.ReportsComponent
       ),
   },
-    {
+  {
     path: 'tenants',
     canActivate: [authGuard],
     loadComponent: () =>
