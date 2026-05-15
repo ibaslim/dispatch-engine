@@ -25,13 +25,13 @@ def send_email_sync(to: str, subject: str, html_body: str) -> None:
         server.sendmail(settings.mail_from, to, msg.as_string())
 
 
-def build_invitation_email(name: str, tenant_name: str, accept_url: str) -> str:
+def build_invitation_email(name: str, tenant_name: str, accept_url: str, role: str) -> str:
     return f"""
     <html>
     <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h2>You've been invited to Dispatch Engine</h2>
         <p>Hi {name},</p>
-        <p>You have been invited to manage <strong>{tenant_name}</strong> on Dispatch Engine.</p>
+        <p>You have been invited to manage <strong>{tenant_name}</strong> on Dispatch Engine as a <strong>{role}</strong>.</p>
         <p>Click the link below to accept your invitation and set your password:</p>
         <p>
             <a href="{accept_url}"
@@ -99,6 +99,25 @@ def build_onboarding_rejected_email(tenant_name: str, reason: str | None = None)
         <p>Thank you for your interest in joining Dispatch Engine. Unfortunately, your application has been <strong>rejected</strong>.</p>
         {reason_text}
         <p>Please contact our support team for more information or to discuss the next steps.</p>
+        <p><strong>Support Email:</strong> support@dispatch.local</p>
+        <br/>
+        <p style="color: #6b7280; font-size: 14px;">
+            This is an automated message. Please do not reply directly to this email.
+        </p>
+    </body>
+    </html>
+    """
+
+
+def build_tenant_suspended_email(tenant_name: str) -> str:
+    """Email sent when a tenant account is suspended."""
+    return f"""
+    <html>
+    <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #ef4444;">Account Suspended</h2>
+        <p>Hi {tenant_name},</p>
+        <p>Your account on Dispatch Engine has been <strong>suspended</strong>.</p>
+        <p>Please contact the platform administrator for more information or to discuss the next steps.</p>
         <p><strong>Support Email:</strong> support@dispatch.local</p>
         <br/>
         <p style="color: #6b7280; font-size: 14px;">

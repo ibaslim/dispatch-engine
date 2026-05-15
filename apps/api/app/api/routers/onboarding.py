@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from app.core.deps import CurrentUserAllowInactive, TenantAdmin, get_db, _get_current_user_allow_inactive
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import desc, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends, UploadFile, File
 from fastapi.responses import FileResponse
@@ -28,6 +29,7 @@ def _to_response(application: OnboardingApplication) -> OnboardingApplicationRes
     return OnboardingApplicationResponse(
         id=str(application.id),
         user_id=str(application.user_id),
+        tenant_id=str(application.user.tenant_id) if application.user and application.user.tenant_id else None,
         role=application.role,
         status=ApplicationStatus(application.status),
         data=application.data,
@@ -149,7 +151,7 @@ async def submit_application(
     # Send submission confirmation email
     tenant_name = (req.data.get("fullName") or current_user.name or current_user.email).strip()
     contact_email = (req.data.get("email") or current_user.email).strip()
-    send_onboarding_submitted_email.delay(tenant_name, contact_email)
+    send_onboarding_submitted_email.delay(tenant_name=tenant_name, contact_email=contact_email)
     
     return _to_response(application)
 
@@ -161,6 +163,7 @@ async def get_my_application(
 ) -> OnboardingApplicationResponse | None:
     result = await db.execute(
         select(OnboardingApplication)
+        .options(selectinload(OnboardingApplication.user))
         .where(OnboardingApplication.user_id == current_user.id)
         .order_by(desc(OnboardingApplication.created_at))
     )
@@ -176,7 +179,11 @@ async def list_applications(
     status_filter: str | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> list[OnboardingApplicationResponse]:
-    stmt = select(OnboardingApplication).join(User, OnboardingApplication.user_id == User.id)
+    stmt = (
+        select(OnboardingApplication)
+        .options(selectinload(OnboardingApplication.user))
+        .join(User, OnboardingApplication.user_id == User.id)
+    )
 
     if status_filter:
         try:
@@ -204,6 +211,7 @@ async def get_application(
 ) -> OnboardingApplicationResponse:
     stmt = (
         select(OnboardingApplication)
+        .options(selectinload(OnboardingApplication.user))
         .join(User, OnboardingApplication.user_id == User.id)
         .where(OnboardingApplication.id == application_id)
     )
@@ -273,7 +281,11 @@ async def approve_application(
     tenant_name = (application.data.get("fullName") or "").strip()
     contact_email = (application.data.get("email") or "").strip()
     if contact_email:
-        send_onboarding_approved_email.delay(tenant_name, contact_email, application.role)
+        send_onboarding_approved_email.delay(
+            tenant_name=tenant_name,
+            contact_email=contact_email,
+            tenant_role=application.role,
+        )
 
     return _to_response(application)
 
@@ -308,7 +320,11 @@ async def reject_application(
     tenant_name = (application.data.get("fullName") or "").strip()
     contact_email = (application.data.get("email") or "").strip()
     if contact_email:
-        send_onboarding_rejected_email.delay(tenant_name, contact_email, req.reason)
+        send_onboarding_rejected_email.delay(
+            tenant_name=tenant_name,
+            contact_email=contact_email,
+            reason=req.reason,
+        )
 
     return _to_response(application)
 

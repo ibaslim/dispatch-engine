@@ -73,6 +73,7 @@ async def create_tenant_admin_invitation(
             accept_url=(
                 f"{settings.dispatcher_web_base_url}/invite/accept?token={quote(token)}&role={RoleEnum.vendor.value}"
             ),
+            role="tenant admin",
         )
     except Exception:
         pass  # Don't fail if Celery is unavailable
@@ -145,6 +146,7 @@ async def create_tenant_user_invitation(
             accept_url=(
                 f"{settings.dispatcher_web_base_url}/invite/accept?token={quote(token)}&role={normalized_role}"
             ),
+            role=normalized_role,
         )
     except Exception:
         pass

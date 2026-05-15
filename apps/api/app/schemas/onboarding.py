@@ -24,6 +24,7 @@ class OnboardingApplicationReviewRequest(BaseModel):
 class OnboardingApplicationResponse(BaseModel):
     id: str
     user_id: str
+    tenant_id: str | None = None
     role: str
     status: ApplicationStatus
     data: dict[str, Any]

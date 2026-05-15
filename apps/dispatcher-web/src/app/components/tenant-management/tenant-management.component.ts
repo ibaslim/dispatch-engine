@@ -33,12 +33,14 @@ interface TenantUser {
   id: string;
   number: number;
   name: string;
+  username: string;
   email: string;
   role: TenantRole;
   status: string;
   phone?: string;
   createdAt?: string;
   applicationId?: string;
+  tenantId?: string | null;
 }
 
 @Component({
@@ -83,17 +85,18 @@ export class TenantManagementComponent implements OnInit {
   isReviewing = false;
 
   columns: TableColumn[] = [
-    { key: 'number', label: '#' },
-    { key: 'name', label: 'Name' },
-    { key: 'email', label: 'Email' },
-    { key: 'role', label: 'Role' },
-    { key: 'status', label: 'Status' },
-    { key: 'createdAt', label: 'Created at' },
-    { key: 'actions', label: 'Actions' },
+    { key: 'number', label: '#', align: 'center' },
+    { key: 'name', label: 'Name', align: 'left' },
+    { key: 'username', label: 'Username', align: 'left' },
+    { key: 'email', label: 'Email', align: 'left' },
+    { key: 'role', label: 'Role', align: 'center' },
+    { key: 'status', label: 'Status', align: 'center' },
+    { key: 'createdAt', label: 'Created at', align: 'center' },
+    { key: 'actions', label: 'Actions', align: 'center' },
   ];
 
   async ngOnInit(): Promise<void> {
-    await this.loadPendingApplications();
+    await this.loadTenants();
   }
 
   openInvitePopup(): void {
@@ -167,7 +170,7 @@ export class TenantManagementComponent implements OnInit {
     this.isReviewing = true;
     try {
       await this.onboarding.approveApplication(this.selectedApplication.id);
-      await this.loadPendingApplications();
+      await this.loadTenants();
       this.closeViewDrawer();
     } finally {
       this.isReviewing = false;
@@ -179,24 +182,32 @@ export class TenantManagementComponent implements OnInit {
     this.isReviewing = true;
     try {
       await this.onboarding.rejectApplication(this.selectedApplication.id, { reason: null });
-      await this.loadPendingApplications();
+      await this.loadTenants();
       this.closeViewDrawer();
     } finally {
       this.isReviewing = false;
     }
   }
 
-  private async loadPendingApplications(): Promise<void> {
+  private async loadTenants(): Promise<void> {
     try {
-      const applications = await this.onboarding.listApplications('pending');
+      const applications = await this.onboarding.listApplications();
       this.pendingApplications = applications;
       this.tenants = applications.map((application, index) => {
         const data = application.data ?? {};
+        const username = (data['username'] as string) || '—';
+        let name = (data['fullName'] as string);
+        if (!name || name === 'Pending Applicant') {
+          name = username !== '—' ? username : 'Pending Applicant';
+        }
+
         return {
           id: application.id,
           number: index + 1,
           applicationId: application.id,
-          name: (data['fullName'] as string) || 'Pending Applicant',
+          tenantId: application.tenant_id,
+          name: name,
+          username: username,
           email: (data['email'] as string) || '—',
           role: (application.role as TenantRole) ?? TenantRole.Driver,
           status: STATUS_LABELS[application.status] ?? application.status,
@@ -260,9 +271,10 @@ export class TenantManagementComponent implements OnInit {
   }
 
   async suspendTenant(): Promise<void> {
+    if (!this.selectedTenant?.tenantId) return;
     try {
-      await firstValueFrom(this.http.post('/api/v1/tenants/suspend', {}));
-      await this.loadPendingApplications();
+      await firstValueFrom(this.http.post(`/api/v1/platform/tenants/${this.selectedTenant.tenantId}/suspend`, {}));
+      await this.loadTenants();
       this.closeViewDrawer();
     } catch (err) {
       console.error('Failed to suspend tenant', err);
@@ -270,9 +282,10 @@ export class TenantManagementComponent implements OnInit {
   }
 
   async unsuspendTenant(): Promise<void> {
+    if (!this.selectedTenant?.tenantId) return;
     try {
-      await firstValueFrom(this.http.post('/api/v1/tenants/unsuspend', {}));
-      await this.loadPendingApplications();
+      await firstValueFrom(this.http.post(`/api/v1/platform/tenants/${this.selectedTenant.tenantId}/unsuspend`, {}));
+      await this.loadTenants();
       this.closeViewDrawer();
     } catch (err) {
       console.error('Failed to unsuspend tenant', err);

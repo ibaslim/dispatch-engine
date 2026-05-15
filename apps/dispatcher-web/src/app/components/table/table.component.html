@@ -4,7 +4,12 @@
     <!-- HEADER -->
     <div class="grid items-center gap-4 px-4 py-3 text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400"
         [style.gridTemplateColumns]="columnTemplate ? columnTemplate : ('repeat(' + columns.length + ', minmax(0, 1fr))')">
-        <div *ngFor="let col of columns" class="flex items-center justify-center gap-2 w-full text-center">
+        <div *ngFor="let col of columns" class="flex items-center gap-2 w-full"
+             [ngClass]="{
+               'justify-start text-left': col.align === 'left',
+               'justify-center text-center': col.align === 'center' || !col.align,
+               'justify-end text-right': col.align === 'right'
+             }">
             <span>{{ col.label }}</span>
 
             <svg *ngIf="col.sortable" class="w-3 h-3 text-gray-400 dark:text-gray-500" viewBox="0 0 256 256"
@@ -22,7 +27,12 @@
         <div *ngFor="let row of rows" class="grid items-center gap-4 px-4 py-3 text-sm"
             [style.gridTemplateColumns]="columnTemplate ? columnTemplate : ('repeat(' + columns.length + ', minmax(0, 1fr))')">
 
-            <div *ngFor="let col of columns" class="flex items-center justify-center w-full">
+            <div *ngFor="let col of columns" class="flex items-center w-full"
+                 [ngClass]="{
+                   'justify-start text-left': col.align === 'left',
+                   'justify-center text-center': col.align === 'center' || !col.align,
+                   'justify-end text-right': col.align === 'right'
+                 }">
 
                 <ng-container [ngSwitch]="col.key">
 
@@ -74,7 +84,12 @@
 
                     <!-- NAME -->
                     <ng-container *ngSwitchCase="'name'">
-                        <div class="flex items-center justify-center gap-3 w-full">
+                        <div class="flex items-center gap-3 w-full"
+                             [ngClass]="{
+                               'justify-start': col.align === 'left',
+                               'justify-center': col.align === 'center' || !col.align,
+                               'justify-end': col.align === 'right'
+                             }">
                             <div
                                 class="w-7 h-7 rounded-full bg-gray-300 dark:bg-[#3a3a3a] text-gray-800 dark:text-gray-100 text-xs flex items-center justify-center font-semibold">
                                 {{ getInitials(row.name) }}
