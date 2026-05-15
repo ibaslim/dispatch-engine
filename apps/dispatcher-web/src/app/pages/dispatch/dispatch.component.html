@@ -7,7 +7,7 @@
             [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-3 py-2 rounded-md text-sm'">
         </app-button>
 
-        <app-button *ngIf="showLocalDemoTools" variant="ghost-danger" label="Reset Demo Cache"
+        <app-button *ngIf="showLocalDemoTools && !isReadOnlyTenant" variant="ghost-danger" label="Reset Demo Cache"
             [disabled]="isLoading" (onClick)="resetLocalDemoCache()">
         </app-button>
     </div>
@@ -163,7 +163,7 @@
                 No unassigned current or scheduled orders right now.
             </div>
 
-            <div class="mt-6 flex items-center justify-center">
+            <div *ngIf="!isReadOnlyTenant" class="mt-6 flex items-center justify-center">
                 <app-button variant="icon" ariaLabel="Add new order" [icon]="'M12 5v14M5 12h14'"
                     [extraClasses]="'w-12 h-12 rounded-md bg-[#2ecc8a] text-white hover:bg-[#27b87b] flex items-center justify-center'">
                 </app-button>

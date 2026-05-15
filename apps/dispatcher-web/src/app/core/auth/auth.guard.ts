@@ -26,9 +26,10 @@ export const authGuard: CanActivateFn = async (_route, state) => {
 
   if (!currentUser.is_platform_admin) {
     const application = await onboarding.loadMyApplication();
-    const tenantRole = currentUser.roles.find((role) =>
+    const tenantRole = (application?.role || currentUser.roles.find((role) =>
       role === 'vendor' || role === 'driver' || role === 'individual'
-    );
+    ))?.toLowerCase();
+
     const isOnboardingRoute = state.url.startsWith('/onboarding');
     const allowedTenantRoutes = ['/orders', '/map', '/onboarding', '/login'];
     const isAllowedTenantRoute = allowedTenantRoutes.some((route) => state.url.startsWith(route));

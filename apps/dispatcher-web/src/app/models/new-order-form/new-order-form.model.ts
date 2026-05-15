@@ -10,6 +10,10 @@ export interface CreditCardDetails {
     cvc: string;
 }
 
+export interface ProofOfDeliveryValue {
+    signature: boolean;
+    picture: boolean;
+}
 export interface PaymentDetails {
     method: PaymentMethodType;
     creditCard?: CreditCardDetails;
@@ -22,7 +26,7 @@ export interface NewOrderFormValue {
         name: string;
         phone: PhoneValue;
         address: string;
-        pickupDate: string; 
+        pickupDate: string;
         pickupTime: string;
     };
 
@@ -53,5 +57,7 @@ export interface NewOrderFormValue {
 
         instructions: string;
         payment: PaymentDetails;
+
+        proofOfDelivery: ProofOfDeliveryValue;
     };
 }

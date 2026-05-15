@@ -195,13 +195,26 @@ export class InviteAcceptComponent implements OnInit {
         username: this.username,
       };
       const res = await firstValueFrom(
-        this.http.post<LoginResponse>('/api/v1/invitations/accept', req)
+        this.http.post<any>('/api/v1/invitations/accept', req)
       );
-      this.auth.storeTokens(res.access_token, res.refresh_token);
+
+      // Store tokens and handle potential pre_pending state
+      if (res.access_token && res.refresh_token) {
+        this.auth.storeTokens(res.access_token, res.refresh_token);
+      }
+
       this.success.set(true);
-      setTimeout(() => {
-        // Redirect to login instead of onboarding
-        this.router.navigate(['/login']);
+
+      setTimeout(async () => {
+        if (res.status === 'pre_pending') {
+          const role = res.role?.toLowerCase() || this.role()?.toLowerCase() || 'vendor';
+          await this.router.navigate([`/onboarding/${role}`]);
+        } else if (res.status === 'pending') {
+          await this.router.navigate(['/onboarding/pending']);
+        } else {
+          // If already approved or no status returned, go to login or orders
+          await this.router.navigate(['/login']);
+        }
       }, 1500);
     } catch (err: unknown) {
       this.errorMessage.set(

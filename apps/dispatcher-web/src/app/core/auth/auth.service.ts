@@ -34,9 +34,21 @@ export class AuthService {
       this.http.post<any>('/api/v1/auth/login', req)
     );
 
-    // Check if response indicates pending approval
-    if (res.status === 'pending_approval') {
+    // Check if response indicates pending onboarding or approval
+    if (res.status === 'pending') {
+      if (res.access_token && res.refresh_token) {
+        this.storeTokens(res.access_token, res.refresh_token);
+      }
       await this.router.navigate(['/onboarding/pending']);
+      return;
+    }
+
+    if (res.status === 'pre_pending') {
+      if (res.access_token && res.refresh_token) {
+        this.storeTokens(res.access_token, res.refresh_token);
+      }
+      const role = res.role?.toLowerCase() || 'vendor';
+      await this.router.navigate([`/onboarding/${role}`]);
       return;
     }
 

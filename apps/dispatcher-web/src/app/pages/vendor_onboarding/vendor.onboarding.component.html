@@ -4,56 +4,21 @@
   containerClass="w-full px-4 py-8 sm:px-6 lg:px-8 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-screen"
   contentClass="w-full">
   <div class="max-w-3xl mx-auto bg-white dark:bg-[#1E201E] border border-gray-200 dark:border-[#2a2d2a] rounded-lg p-6">
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <app-base-input
-        label="Full Name"
-        [required]="true"
-        [value]="form.fullName"
-        (valueChange)="form.fullName = $event">
-      </app-base-input>
-
-      <app-base-input
-        label="Email"
-        type="email"
-        [required]="true"
-        [value]="form.email"
-        [externalError]="emailError"
-        [showSubmitValidation]="showSubmitValidation"
-        (valueChange)="form.email = $event; emailError = ''">
-      </app-base-input>
-
-      <app-phone-input
-        label="Phone Number"
-        [required]="true"
-        [value]="form.phone"
-        [showSubmitValidation]="showSubmitValidation"
-        (valueChange)="form.phone = $event">
-      </app-phone-input>
-
-      <app-address-input
-        label="Address"
-        [required]="true"
-        [value]="form.address"
-        [showSubmitValidation]="showSubmitValidation"
-        (valueChange)="form.address = $event">
-      </app-address-input>
+    <app-onboarding-form
+      [form]="form"
+      [showSubmitValidation]="showSubmitValidation"
+      [emailError]="emailError"
+      [submitMessage]="submitMessage"
+      (onSubmit)="applyForApproval()"
+      (formChange)="form = $event">
 
       <app-base-input
         label="NTN Number"
         [required]="true"
-        [value]="form.ntnNumber"
+        [value]="form.ntnNumber || ''"
         [showSubmitValidation]="showSubmitValidation"
         (valueChange)="form.ntnNumber = $event">
       </app-base-input>
-
-      <div class="md:col-span-2">
-        <app-textarea
-          label="Additional Notes"
-          placeholder="Optional details about your business"
-          [value]="form.notes"
-          (valueChange)="form.notes = $event">
-        </app-textarea>
-      </div>
 
       <div class="md:col-span-2">
         <label class="block text-sm text-gray-600 dark:text-gray-200 mb-2">National Identity Scan</label>
@@ -69,20 +34,7 @@
           Selected: {{ form.nationalIdFile?.name }}
         </p>
       </div>
-    </div>
-
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-6">
-      <p *ngIf="submitMessage" class="text-sm text-green-700 dark:text-green-400">
-        {{ submitMessage }}
-      </p>
-
-      <app-button
-        variant="primary"
-        label="Apply for Approval"
-        (onClick)="applyForApproval()"
-        [extraClasses]="'px-6 py-2 rounded-md text-sm'">
-      </app-button>
-    </div>
+    </app-onboarding-form>
   </div>
 </app-page>
 

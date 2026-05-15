@@ -1,6 +1,7 @@
 import hashlib
 from datetime import datetime, timedelta, timezone
 
+from typing import Union
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -21,7 +22,7 @@ def _hash_token(raw: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-async def authenticate_user(db: AsyncSession, email: str, password: str) -> User | None:
+async def authenticate_user(db: AsyncSession, email: str, password: str) -> Union[User, PendingApprovalResponse, None]:
     result = await db.execute(select(User).where(User.email == email.lower()))
     user = result.scalar_one_or_none()
     if user is None or not user.hashed_password:
@@ -29,28 +30,43 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> User
     if not verify_password(password, user.hashed_password):
         return None
 
-    # Prevent users belonging to suspended tenants from logging in
+    # Prevent users belonging to suspended tenants
     if user.tenant_id:
         tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
         tenant = tenant_result.scalar_one_or_none()
         if tenant is not None and not tenant.is_active:
-            # Treat as authentication failure so UI shows invalid credentials
             return None
 
-    # Check if user has a pending onboarding application
+    # Check for pre-pending and pending
     app_result = await db.execute(
         select(OnboardingApplication).where(
-            OnboardingApplication.user_id == user.id,
-            OnboardingApplication.status == ApplicationStatus.pending,
+            OnboardingApplication.user_id == user.id
         )
     )
-    pending_app = app_result.scalar_one_or_none()
-    if pending_app is not None:
-        # User has pending approval, return None to signal blocked login
-        # The auth endpoint should handle this
-        return None
+    app = app_result.scalar_one_or_none()
+
+    if app is not None:
+        if app.status == ApplicationStatus.pending:
+            tokens = await create_token_pair(db, user)
+            return PendingApprovalResponse(
+                status="pending",
+                message="Your account is pending approval from an administrator.",
+                role=app.role.value if hasattr(app.role, 'value') else str(app.role),
+                access_token=tokens.access_token,
+                refresh_token=tokens.refresh_token,
+            )
+        if app.status == ApplicationStatus.pre_pending:
+            tokens = await create_token_pair(db, user)
+            return PendingApprovalResponse(
+                status="pre_pending",
+                message="Please complete your onboarding process.",
+                role=app.role.value if hasattr(app.role, 'value') else str(app.role),
+                access_token=tokens.access_token,
+                refresh_token=tokens.refresh_token,
+            )
 
     if not user.is_active:
+        # Auto-activate if approved
         approved_result = await db.execute(
             select(OnboardingApplication).where(
                 OnboardingApplication.user_id == user.id,
@@ -65,7 +81,6 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> User
 
     return user
 
-
 async def check_pending_approval(db: AsyncSession, email: str) -> PendingApprovalResponse | None:
     """Check if a user with given email has pending approval. Returns PendingApprovalResponse if pending."""
     result = await db.execute(select(User).where(User.email == email.lower()))
@@ -76,28 +91,76 @@ async def check_pending_approval(db: AsyncSession, email: str) -> PendingApprova
     app_result = await db.execute(
         select(OnboardingApplication).where(
             OnboardingApplication.user_id == user.id,
-            OnboardingApplication.status == ApplicationStatus.pending,
+            OnboardingApplication.status.in_([ApplicationStatus.pending, ApplicationStatus.pre_pending]),
         )
     )
-    pending_app = app_result.scalar_one_or_none()
-    if pending_app is not None:
-        return PendingApprovalResponse()
+    app = app_result.scalar_one_or_none()
+    if app is not None:
+        if app.status == ApplicationStatus.pending:
+            tokens = await create_token_pair(db, user)
+            return PendingApprovalResponse(
+                status="pending",
+                message="Your account is pending approval from an administrator.",
+                role=app.role.value if hasattr(app.role, 'value') else str(app.role),
+                access_token=tokens.access_token,
+                refresh_token=tokens.refresh_token,
+            )
+        if app.status == ApplicationStatus.pre_pending:
+            tokens = await create_token_pair(db, user)
+            return PendingApprovalResponse(
+                status="pre_pending",
+                message="Please complete your onboarding process.",
+                role=app.role.value if hasattr(app.role, 'value') else str(app.role),
+                access_token=tokens.access_token,
+                refresh_token=tokens.refresh_token,
+            )
 
     return None
 
 
 async def create_token_pair(db: AsyncSession, user: User) -> TokenResponse:
-    access_token = create_access_token(str(user.id))
+    # Get onboarding status
+    app_result = await db.execute(
+        select(OnboardingApplication)
+        .where(OnboardingApplication.user_id == user.id)
+    )
+    app = app_result.scalar_one_or_none()
 
+    extra_claims = {
+        "onboarding_status": app.status.value if app else None,
+        "tenant_role": None,
+    }
+
+    # Get tenant role if user belongs to a tenant
+    if user.tenant_id:
+        tenant_result = await db.execute(
+            select(Tenant).where(Tenant.id == user.tenant_id)
+        )
+        tenant = tenant_result.scalar_one_or_none()
+
+        if tenant and tenant.role:
+            extra_claims["tenant_role"] = tenant.role.value
+
+    # Create access token with extra claims
+    access_token = create_access_token(
+        str(user.id),
+        extra_claims=extra_claims,
+    )
+
+    # Generate refresh token
     raw_refresh = generate_secure_token(64)
     token_hash = _hash_token(raw_refresh)
-    expires_at = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
+
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        days=settings.refresh_token_expire_days
+    )
 
     refresh_record = RefreshToken(
         user_id=user.id,
         token_hash=token_hash,
         expires_at=expires_at,
     )
+
     db.add(refresh_record)
     await db.commit()
 
@@ -105,7 +168,6 @@ async def create_token_pair(db: AsyncSession, user: User) -> TokenResponse:
         access_token=access_token,
         refresh_token=raw_refresh,
     )
-
 
 async def refresh_access_token(db: AsyncSession, raw_refresh: str) -> TokenResponse | None:
     token_hash = _hash_token(raw_refresh)

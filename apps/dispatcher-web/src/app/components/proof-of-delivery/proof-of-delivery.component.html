@@ -1,0 +1,43 @@
+<div class="space-y-4">
+    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+        Proof of Delivery
+        <span class="text-red-500">*</span>
+    </label>
+
+    <div class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+        Select at least one option for proof of delivery
+    </div>
+
+    <div class="flex flex-col gap-3">
+        <!-- Signature -->
+        <label class="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <input
+                type="checkbox"
+                [checked]="value.signature"
+                (change)="toggleSignature()"
+                class="w-5 h-5 accent-blue-600 rounded border-gray-300">
+            <div>
+                <div class="font-medium text-gray-800 dark:text-gray-200">Signature</div>
+                <div class="text-sm text-gray-500 dark:text-gray-400">Customer must sign on delivery</div>
+            </div>
+        </label>
+
+        <!-- Picture -->
+        <label class="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <input
+                type="checkbox"
+                [checked]="value.picture"
+                (change)="togglePicture()"
+                class="w-5 h-5 accent-blue-600 rounded border-gray-300">
+            <div>
+                <div class="font-medium text-gray-800 dark:text-gray-200">Picture</div>
+                <div class="text-sm text-gray-500 dark:text-gray-400">Take a photo of the delivered package</div>
+            </div>
+        </label>
+    </div>
+
+    <app-error-message
+        *ngIf="showError"
+        message="Please select at least one proof of delivery method.">
+    </app-error-message>
+</div>

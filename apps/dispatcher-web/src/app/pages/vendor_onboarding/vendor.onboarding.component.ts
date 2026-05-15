@@ -1,39 +1,20 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { AddressInputComponent } from '../../components/address-input/address-input.component';
-import { BaseInputComponent } from '../../components/base-input/base-input.component';
-import { ButtonComponent } from '../../components/button/button.component';
 import { PageComponent } from '../../components/page/page.component';
-import { PhoneInputComponent } from '../../components/phone-input/phone-input.component';
-import { TextareaComponent } from '../../components/textarea/textarea.component';
-import { PhoneValue } from '../../models/phone-input/phone-input.model';
 import { OnboardingService } from '../../core/onboarding/onboarding.service';
 import { TenantRole } from '@dispatch/shared/domain';
-
-interface VendorOnboardingForm {
-  fullName: string;
-  email: string;
-  phone: PhoneValue;
-  address: string;
-  notes: string;
-  nationalIdFile: File | null;
-  ntnNumber: string;
-}
+import { OnboardingFormComponent, OnboardingFormValues } from '../../components/onboarding-form/onboarding-form.component';
+import { BaseInputComponent } from '../../components/base-input/base-input.component';
 
 @Component({
   selector: 'app-vendor-onboarding',
   standalone: true,
   imports: [
     CommonModule,
-    FormsModule,
     PageComponent,
+    OnboardingFormComponent,
     BaseInputComponent,
-    PhoneInputComponent,
-    AddressInputComponent,
-    TextareaComponent,
-    ButtonComponent,
   ],
   templateUrl: './vendor.onboarding.component.html',
 })
@@ -41,7 +22,7 @@ export class VendorOnboardingComponent {
   private readonly onboarding = inject(OnboardingService);
   private readonly router = inject(Router);
 
-  form: VendorOnboardingForm = {
+  form: OnboardingFormValues = {
     fullName: '',
     email: '',
     phone: { countryCode: '+1', number: '' },
@@ -73,7 +54,7 @@ export class VendorOnboardingComponent {
           phone: this.form.phone,
           address: this.form.address.trim(),
           notes: this.form.notes.trim(),
-          ntnNumber: this.form.ntnNumber.trim(),
+          ntnNumber: this.form.ntnNumber?.trim() ?? '',
           nationalIdFileName: this.form.nationalIdFile?.name ?? null,
         },
       });
@@ -102,7 +83,7 @@ export class VendorOnboardingComponent {
       this.isEmailValid() &&
       !!this.form.phone.number &&
       !!this.form.address.trim() &&
-      !!this.form.ntnNumber.trim() &&
+      !!this.form.ntnNumber?.trim() &&
       !!this.form.nationalIdFile
     );
   }

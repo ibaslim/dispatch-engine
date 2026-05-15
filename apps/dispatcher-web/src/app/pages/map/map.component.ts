@@ -1,7 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { AfterViewInit, Component } from '@angular/core';
+import { AfterViewInit, Component, inject } from '@angular/core';
 import { PageComponent } from '../../components/page/page.component';
 import { ButtonComponent } from '../../components/button/button.component';
+import { AuthService } from '../../core/auth/auth.service';
 
 declare const google: any;
 
@@ -11,6 +12,12 @@ declare const google: any;
   templateUrl: './map.component.html'
 })
 export class MapComponent implements AfterViewInit {
+  private readonly auth = inject(AuthService);
+
+  get isReadOnlyTenant(): boolean {
+    return !this.auth.isPlatformAdmin();
+  }
+
   ngAfterViewInit(): void {
     new google.maps.Map(document.getElementById('map'), {
       center: { lat: 53.5461, lng: -113.4938 }, // Edmonton

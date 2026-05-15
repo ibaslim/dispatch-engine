@@ -1,39 +1,20 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { AddressInputComponent } from '../../components/address-input/address-input.component';
-import { BaseInputComponent } from '../../components/base-input/base-input.component';
-import { ButtonComponent } from '../../components/button/button.component';
 import { PageComponent } from '../../components/page/page.component';
-import { PhoneInputComponent } from '../../components/phone-input/phone-input.component';
-import { TextareaComponent } from '../../components/textarea/textarea.component';
-import { PhoneValue } from '../../models/phone-input/phone-input.model';
 import { OnboardingService } from '../../core/onboarding/onboarding.service';
 import { TenantRole } from '@dispatch/shared/domain';
-
-interface DriverOnboardingForm {
-  fullName: string;
-  email: string;
-  phone: PhoneValue;
-  address: string;
-  notes: string;
-  passportFile: File | null;
-  licenseFile: File | null;
-}
+import { OnboardingFormComponent, OnboardingFormValues } from '../../components/onboarding-form/onboarding-form.component';
+import { BaseInputComponent } from '../../components/base-input/base-input.component';
 
 @Component({
   selector: 'app-driver-onboarding',
   standalone: true,
   imports: [
     CommonModule,
-    FormsModule,
     PageComponent,
+    OnboardingFormComponent,
     BaseInputComponent,
-    PhoneInputComponent,
-    AddressInputComponent,
-    TextareaComponent,
-    ButtonComponent,
   ],
   templateUrl: './driver.onboarding.component.html',
 })
@@ -41,7 +22,7 @@ export class DriverOnboardingComponent {
   private readonly onboarding = inject(OnboardingService);
   private readonly router = inject(Router);
 
-  form: DriverOnboardingForm = {
+  form: OnboardingFormValues = {
     fullName: '',
     email: '',
     phone: { countryCode: '+1', number: '' },

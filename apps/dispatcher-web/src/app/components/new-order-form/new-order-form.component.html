@@ -20,10 +20,17 @@
             </app-deliver-to>
         </div>
 
-        <div class="lg:border-l lg:border-gray-200 lg:dark:border-[#5a5d5a] lg:pl-10 mt-6 lg:mt-0">
+        <div class="lg:border-l lg:border-gray-200 lg:dark:border-[#5a5d5a] lg:pl-10 mt-6 lg:mt-0 space-y-8">
             <app-other-order-details [value]="value.details" (valueChange)="patch({ details: $event })"
                 [showSubmitValidation]="showSubmitValidation">
             </app-other-order-details>
+
+            <!-- New Proof of Delivery Section -->
+            <app-proof-of-delivery
+                [value]="value.details.proofOfDelivery"
+                (valueChange)="onProofOfDeliveryChange($event)"
+                [showSubmitValidation]="showSubmitValidation">
+            </app-proof-of-delivery>
         </div>
     </div>
 </div>

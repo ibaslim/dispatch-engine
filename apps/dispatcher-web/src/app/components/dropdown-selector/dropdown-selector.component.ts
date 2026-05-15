@@ -1,11 +1,12 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { SelectOption } from '../../models/dropdown-selector/dropdown-selector.model';
 
 @Component({
   selector: 'app-dropdown-selector',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './dropdown-selector.component.html'
 })
 export class DropdownSelectorComponent<T extends string = string> {
@@ -25,7 +26,7 @@ export class DropdownSelectorComponent<T extends string = string> {
   @Input() dense = false;
   @Input() selectClass = '';
 
-  onChange(e: Event): void {
-    this.valueChange.emit((e.target as HTMLSelectElement).value as T | '');
+  onChange(value: T | ''): void {
+    this.valueChange.emit(value);
   }
 }

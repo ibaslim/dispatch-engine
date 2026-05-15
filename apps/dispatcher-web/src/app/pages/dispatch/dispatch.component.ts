@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { finalize } from 'rxjs/operators';
 
 import { PageComponent } from '../../components/page/page.component';
@@ -7,6 +7,7 @@ import { ButtonComponent } from '../../components/button/button.component';
 import { OrdersService } from '../../services/orders/orders.service';
 import { DemoDriversService } from '../../services/demo-drivers/demo-drivers.service';
 import { PaymentMethodType } from '../../models/new-order-form/new-order-form.model';
+import { AuthService } from '../../core/auth/auth.service';
 
 type BackendOrderItem = {
   itemName: string;
@@ -113,6 +114,12 @@ export class DispatchComponent implements OnInit {
   feedbackMessage = '';
   isLoading = false;
   readonly showLocalDemoTools = this.isLocalhost();
+
+  private readonly auth = inject(AuthService);
+
+  get isReadOnlyTenant(): boolean {
+    return !this.auth.isPlatformAdmin();
+  }
 
   constructor(
     private readonly ordersService: OrdersService,

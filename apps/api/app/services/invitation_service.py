@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Union, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -9,7 +9,7 @@ from app.models.invitation import Invitation
 from app.models.user import User, RoleEnum
 from app.models.tenant import Tenant
 from app.models.onboarding_application import OnboardingApplication, ApplicationStatus
-from app.schemas.auth import TokenResponse
+from app.schemas.auth import TokenResponse, PendingApprovalResponse
 from app.services.auth_service import create_token_pair
 from app.workers.tasks import send_invitation_email
 import logging
@@ -158,7 +158,7 @@ async def accept_invitation(
     password: str,
     name: Optional[str],
     username: Optional[str] = None,
-) -> Optional[TokenResponse]:
+) -> Union[TokenResponse, PendingApprovalResponse, None]:
     """
     Accept an invitation: validate token, create onboarding application (pre-pending).
     Returns TokenResponse with onboarding access tokens, or None if token is invalid or expired.
@@ -205,9 +205,25 @@ async def accept_invitation(
                 ),
             )
         )
-        if pending_result.scalar_one_or_none() is not None:
-            return await create_token_pair(db, existing_user)
-        return None
+        app = pending_result.scalar_one_or_none()
+        if app is not None:
+            tokens = await create_token_pair(db, existing_user)
+            if app.status == ApplicationStatus.pre_pending:
+                return PendingApprovalResponse(
+                    status="pre_pending",
+                    message="Please complete your onboarding process.",
+                    role=app.role.value if hasattr(app.role, "value") else str(app.role),
+                    access_token=tokens.access_token,
+                    refresh_token=tokens.refresh_token,
+                )
+            return PendingApprovalResponse(
+                status="pending",
+                message="Your account is pending approval from an administrator.",
+                role=app.role.value if hasattr(app.role, "value") else str(app.role),
+                access_token=tokens.access_token,
+                refresh_token=tokens.refresh_token,
+            )
+        return await create_token_pair(db, existing_user)
 
     if not invitation.is_valid():
         return None
@@ -269,7 +285,14 @@ async def accept_invitation(
         await db.commit()
         logger.info("accept_invitation: pending onboarding application ready for %s", invitation.email)
 
-        return await create_token_pair(db, existing_user)
+        tokens = await create_token_pair(db, existing_user)
+        return PendingApprovalResponse(
+            status="pre_pending",
+            message="Please complete your onboarding process.",
+            role=invitation.role,
+            access_token=tokens.access_token,
+            refresh_token=tokens.refresh_token,
+        )
 
     except Exception as e:
         logger.error("accept_invitation: error creating application: %s", str(e), exc_info=True)

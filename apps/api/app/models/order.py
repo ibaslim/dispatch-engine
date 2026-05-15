@@ -46,6 +46,7 @@ class Order(Base):
     instructions = Column(String)
     payment_method = Column(String)
     payment_details = Column(JSON)
+    proof_of_delivery = Column(JSON, nullable=True)
 
     status = Column(Enum(OrderStatus), default=OrderStatus.current)
     ready_for_pickup = Column(Boolean, default=False)

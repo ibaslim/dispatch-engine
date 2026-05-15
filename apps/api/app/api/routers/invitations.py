@@ -1,15 +1,16 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Union
 from urllib.parse import unquote
 from app.core.deps import get_db
-from app.schemas.auth import TokenResponse
+from app.schemas.auth import TokenResponse, PendingApprovalResponse
 from app.schemas.invitation import AcceptInvitationRequest
 from app.services.invitation_service import accept_invitation
 
 router = APIRouter()
 
 
-@router.post("/accept", response_model=TokenResponse)
+@router.post("/accept", response_model=Union[TokenResponse, PendingApprovalResponse])
 async def accept_invite(
     req: AcceptInvitationRequest,
     db: AsyncSession = Depends(get_db),

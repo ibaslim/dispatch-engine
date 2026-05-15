@@ -56,7 +56,7 @@
       [required]="true"
       [options]="roleOptions"
       [value]="inviteRole"
-      (valueChange)="inviteRole = $event || inviteRole; clearInviteFeedback()">
+      (valueChange)="inviteRole = $event; clearInviteFeedback()">
     </app-dropdown-selector>
   </div>
 

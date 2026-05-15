@@ -65,11 +65,11 @@ export class TenantManagementComponent implements OnInit {
   viewDrawerOpen = false;
 
   inviteEmail = '';
-  inviteRole: TenantRole = TenantRole.Driver;
+  inviteRole: TenantRole = TenantRole.Vendor;
   inviteError = '';
   inviteSuccess = '';
   isInviting = false;
-  roles = Object.values(TenantRole) as TenantRole[];
+  roles: TenantRole[] = [TenantRole.Vendor, TenantRole.Driver, TenantRole.Individual];
   roleOptions: SelectOption<TenantRole>[] = this.roles.map((role) => ({
     label: ROLE_LABELS[role] ?? role,
     value: role,
@@ -138,7 +138,7 @@ export class TenantManagementComponent implements OnInit {
 
   onInviteSent(): void {
     this.inviteEmail = '';
-    this.inviteRole = TenantRole.Driver;
+    this.inviteRole = TenantRole.Vendor;
     this.invitePopupOpen = false;
   }
 

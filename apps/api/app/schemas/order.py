@@ -45,6 +45,7 @@ class OrderCreate(BaseModel):
 
     payment_method: str
     payment_details: Optional[Dict[str, Any]] = None
+    proof_of_delivery: Optional[Dict[str, Any]] = None
 
 
 # -------------------------
@@ -82,6 +83,7 @@ class OrderUpdate(BaseModel):
 
     payment_method: Optional[str] = None
     payment_details: Optional[Dict[str, Any]] = None
+    proof_of_delivery: Optional[Dict[str, Any]] = None
 
     status: Optional[OrderStatus] = None
     ready_for_pickup: Optional[bool] = None
@@ -95,6 +97,7 @@ class OrderResponse(OrderCreate):
     status: OrderStatus
     ready_for_pickup: bool
     order_placed_time: Optional[str] = None
+    proof_of_delivery: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True

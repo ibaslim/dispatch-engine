@@ -13,9 +13,12 @@ class TokenResponse(BaseModel):
 
 
 class PendingApprovalResponse(BaseModel):
-    """Response when user exists but has pending approval."""
-    status: str = "pending_approval"
-    message: str = "Your account is pending approval from an administrator."
+    """Response when user exists but has pending onboarding or approval."""
+    status: str
+    message: str
+    role: str | None = None
+    access_token: str | None = None
+    refresh_token: str | None = None
 
 
 class RefreshRequest(BaseModel):

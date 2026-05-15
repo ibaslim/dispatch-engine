@@ -18,9 +18,15 @@ router = APIRouter()
 
 @router.post("/login", response_model=Union[TokenResponse, PendingApprovalResponse])
 async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
-    user = await authenticate_user(db, req.email, req.password)
-    if user is None:
-        # Check if user exists but is pending approval
+    result = await authenticate_user(db, req.email, req.password)
+    
+    if isinstance(result, PendingApprovalResponse):
+        return result
+    
+    if result is None:
+        # Check if user exists but is pending approval (fallback if password was wrong or something)
+        # Actually authenticate_user now handles it if password was correct.
+        # But if we want to support checking even without password (which check_pending_approval seems to do):
         pending = await check_pending_approval(db, req.email)
         if pending is not None:
             return pending
@@ -29,7 +35,7 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
-    return await create_token_pair(db, user)
+    return await create_token_pair(db, result)
 
 
 @router.post("/refresh", response_model=TokenResponse)
