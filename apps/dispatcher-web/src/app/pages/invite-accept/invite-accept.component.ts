@@ -199,22 +199,23 @@ export class InviteAcceptComponent implements OnInit {
       );
 
       // Store tokens and handle potential pre_pending state
+      // We don't store tokens here as per requirement to go to login page
+      /*
       if (res.access_token && res.refresh_token) {
         this.auth.storeTokens(res.access_token, res.refresh_token);
       }
+      */
 
       this.success.set(true);
 
       setTimeout(async () => {
-        if (res.status === 'pre_pending') {
-          const role = res.role?.toLowerCase() || this.role()?.toLowerCase() || 'vendor';
-          await this.router.navigate([`/onboarding/${role}`]);
-        } else if (res.status === 'pending') {
-          await this.router.navigate(['/onboarding/pending']);
-        } else {
-          // If already approved or no status returned, go to login or orders
-          await this.router.navigate(['/login']);
-        }
+        // Always go to login page after accepting invitation
+        await this.router.navigate(['/login'], { 
+          queryParams: { 
+            registered: 'true',
+            email: res.email || '' 
+          } 
+        });
       }, 1500);
     } catch (err: unknown) {
       this.errorMessage.set(

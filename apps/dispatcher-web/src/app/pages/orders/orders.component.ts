@@ -118,6 +118,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
   isLabelOpen = false;
   selectedOrderForLabel: OrderEntity | null = null;
 
+  // ─── Print order modal ──────────────────────────────────────────────────────
+  isPrintOpen = false;
+  selectedOrderForPrint: OrderEntity | null = null;
+
   // ─── Search & feedback ──────────────────────────────────────────────────────
   searchQuery = '';
   feedbackMessage = '';
@@ -373,7 +377,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
         break;
 
       case 'print':
-        this.openPrintWindow(order);
+        this.openPrintOrder(order);
         break;
 
       case 'printLabel':
@@ -801,6 +805,18 @@ export class OrdersComponent implements OnInit, OnDestroy {
     }
   }
 
+  // ─── Print order modal ──────────────────────────────────────────────────────
+
+  openPrintOrder(order: OrderEntity): void {
+    this.selectedOrderForPrint = structuredClone(order);
+    this.isPrintOpen = true;
+  }
+
+  closePrintOrder(): void {
+    this.isPrintOpen = false;
+    this.selectedOrderForPrint = null;
+  }
+
   // ─── Misc public ────────────────────────────────────────────────────────────
 
   maskCard(card: string = ''): string {
@@ -1181,7 +1197,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   // ─── Private: print ─────────────────────────────────────────────────────────
 
-  private openPrintWindow(order: OrderEntity): void {
+  openPrintWindow(order: OrderEntity): void {
     const printContent = this.generatePrintHTML(order);
     const printWindow = window.open('', '', 'height=600,width=800');
     if (!printWindow) {

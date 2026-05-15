@@ -49,6 +49,7 @@ export interface OnboardingApplicationReviewRequest {
 export interface OnboardingApplicationResponse {
   id: string;
   user_id: string;
+  tenant_id: string | null;
   role: string;
   status: OnboardingStatus;
   data: Record<string, unknown>;

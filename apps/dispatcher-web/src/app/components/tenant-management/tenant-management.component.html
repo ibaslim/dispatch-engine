@@ -30,11 +30,10 @@
 <!-- ── Add New Tenant Popup ── -->
 <app-popup
   [open]="invitePopupOpen"
-  title="Invite New User"
+  title="Invite New Tenent"
   (close)="closeInvitePopup()"
 >
   <div class="space-y-6">
-    <p class="text-sm text-gray-500">Send an invitation to a new team member.</p>
 
     <div *ngIf="inviteError" class="rounded-md bg-red-50 p-3 text-sm text-red-800">
       {{ inviteError }}
@@ -85,44 +84,89 @@
   (closed)="closeViewDrawer()"
 >
   <!-- Body -->
-  <div *ngIf="selectedTenant" class="space-y-4 text-sm">
-    <div>
-      <p class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Name</p>
-      <p class="text-base text-gray-900 dark:text-gray-100">{{ selectedTenant.name }}</p>
-    </div>
-    <div>
-      <p class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Email</p>
-      <p class="text-base text-gray-900 dark:text-gray-100">{{ selectedTenant.email }}</p>
-    </div>
-    <div>
-      <p class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Role</p>
-      <p class="text-base text-gray-900 dark:text-gray-100">{{ getRoleLabel(selectedTenant.role) }}</p>
-    </div>
-    <div>
-      <p class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Status</p>
-      <p class="text-base text-gray-900 dark:text-gray-100">{{ selectedTenant.status }}</p>
-    </div>
-    <div *ngIf="selectedTenant.phone">
-      <p class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Phone</p>
-      <p class="text-base text-gray-900 dark:text-gray-100">{{ selectedTenant.phone }}</p>
-    </div>
-    <div *ngIf="selectedTenant.createdAt">
-      <p class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Created at</p>
-      <p class="text-base text-gray-900 dark:text-gray-100">{{ selectedTenant.createdAt }}</p>
-    </div>
+  <div *ngIf="selectedTenant" class="flex flex-col h-full">
+    <div class="flex-1 overflow-y-auto pr-2 space-y-8">
+      
+      <!-- Basic Info Section -->
+      <section>
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-4 flex items-center gap-2">
+          <i class="ph ph-user-circle text-lg"></i>
+          Basic Information
+        </h3>
+        <div class="grid grid-cols-1 gap-6 bg-gray-50 dark:bg-[#2a2d2a]/30 p-4 rounded-xl border border-gray-100 dark:border-[#2a2d2a]">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <p class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 mb-1">Name</p>
+              <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ selectedTenant.name }}</p>
+            </div>
+            <div>
+              <p class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 mb-1">Status</p>
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium" 
+                [ngClass]="{
+                  'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400': selectedTenant.status === 'Active' || selectedTenant.status === 'Approved',
+                  'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400': selectedTenant.status === 'Pending',
+                  'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400': selectedTenant.status === 'Rejected' || selectedTenant.status === 'Suspended'
+                }">
+                {{ selectedTenant.status }}
+              </span>
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <p class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 mb-1">Email</p>
+              <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" [title]="selectedTenant.email">{{ selectedTenant.email }}</p>
+            </div>
+            <div *ngIf="selectedTenant.phone">
+              <p class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 mb-1">Phone</p>
+              <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ selectedTenant.phone }}</p>
+            </div>
+          </div>
 
-    <div *ngIf="selectedApplicationEntries.length" class="pt-3 border-t border-gray-200 dark:border-[#2a2d2a]">
-      <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Application data</p>
-      <div class="space-y-3">
-        <div *ngFor="let entry of selectedApplicationEntries">
-          <p class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">{{ entry.label }}</p>
-          <div *ngIf="!entry.isFile" class="text-sm text-gray-900 dark:text-gray-100 break-words">{{ entry.value }}</div>
-          <div *ngIf="entry.isFile" class="flex items-center gap-3">
-            <p class="text-sm text-gray-900 dark:text-gray-100">{{ entry.fileName }}</p>
-            <app-button variant="ghost-outline" label="Download" (onClick)="downloadDocument(selectedApplication!.id, entry.fileName!)"></app-button>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <p class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 mb-1">Role</p>
+              <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ getRoleLabel(selectedTenant.role) }}</p>
+            </div>
+            <div *ngIf="selectedTenant.createdAt">
+              <p class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 mb-1">Created at</p>
+              <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ selectedTenant.createdAt }}</p>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
+
+      <!-- Application Data Section -->
+      <section *ngIf="selectedApplicationEntries.length">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-4 flex items-center gap-2">
+          <i class="ph ph-file-text text-lg"></i>
+          Application Details
+        </h3>
+        <div class="space-y-4">
+          <div *ngFor="let entry of selectedApplicationEntries" 
+               class="p-3 bg-white dark:bg-[#1E201E] border border-gray-100 dark:border-[#2a2d2a] rounded-lg hover:border-[#3ddc97]/50 transition-colors">
+            <p class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 mb-1">{{ entry.label }}</p>
+            
+            <div *ngIf="!entry.isFile" class="text-sm text-gray-700 dark:text-gray-300 break-words font-medium">
+              {{ entry.value }}
+            </div>
+            
+            <div *ngIf="entry.isFile" class="flex items-center justify-between mt-1">
+              <div class="flex items-center gap-2 overflow-hidden">
+                <i class="ph ph-file-pdf text-xl text-red-500"></i>
+                <p class="text-sm text-gray-700 dark:text-gray-300 truncate font-medium">{{ entry.fileName }}</p>
+              </div>
+              <app-button 
+                variant="ghost-outline" 
+                label="Download" 
+                (onClick)="downloadDocument(selectedApplication!.id, entry.fileName!)"
+                [extraClasses]="'!py-1 !px-3 !text-[10px] !h-auto uppercase font-bold tracking-tight'">
+              </app-button>
+            </div>
+          </div>
+        </div>
+      </section>
+
     </div>
   </div>
 

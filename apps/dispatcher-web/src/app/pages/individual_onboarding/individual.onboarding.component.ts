@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { PageComponent } from '../../components/page/page.component';
 import { OnboardingService } from '../../core/onboarding/onboarding.service';
+import { AuthService } from '../../core/auth/auth.service';
 import { TenantRole } from '@dispatch/shared/domain';
 import { OnboardingFormComponent, OnboardingFormValues } from '../../components/onboarding-form/onboarding-form.component';
 import { BaseInputComponent } from '../../components/base-input/base-input.component';
@@ -18,8 +19,9 @@ import { BaseInputComponent } from '../../components/base-input/base-input.compo
   ],
   templateUrl: './individual.onboarding.component.html',
 })
-export class IndividualOnboardingComponent {
+export class IndividualOnboardingComponent implements OnInit {
   private readonly onboarding = inject(OnboardingService);
+  private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
 
   form: OnboardingFormValues = {
@@ -35,6 +37,17 @@ export class IndividualOnboardingComponent {
   showSubmitValidation = false;
   emailError = '';
   submitMessage = '';
+
+  async ngOnInit(): Promise<void> {
+    if (!this.auth.currentUser()) {
+      await this.auth.loadCurrentUser();
+    }
+    const user = this.auth.currentUser();
+    if (user) {
+      this.form.email = user.email;
+      this.form.fullName = user.name || '';
+    }
+  }
 
   async applyForApproval(): Promise<void> {
     this.showSubmitValidation = true;

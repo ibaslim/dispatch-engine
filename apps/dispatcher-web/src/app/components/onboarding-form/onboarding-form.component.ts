@@ -47,6 +47,7 @@ export interface OnboardingFormValues {
         type="email"
         [required]="true"
         [value]="form.email"
+        [disabled]="true"
         [externalError]="emailError"
         [showSubmitValidation]="showSubmitValidation"
         (valueChange)="onValueChange('email', $event)">
@@ -88,7 +89,7 @@ export interface OnboardingFormValues {
 
       <app-button
         variant="primary"
-        label="Apply for Approval"
+        label="Proceed"
         (onClick)="onSubmit.emit()"
         [extraClasses]="'px-6 py-2 rounded-md text-sm'">
       </app-button>

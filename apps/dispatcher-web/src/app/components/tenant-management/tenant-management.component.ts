@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { PageComponent } from '../page/page.component';
 import { ButtonComponent } from '../button/button.component';
@@ -59,9 +59,11 @@ interface TenantUser {
   ],
   templateUrl: './tenant-management.component.html',
 })
-export class TenantManagementComponent implements OnInit {
+export class TenantManagementComponent implements OnInit, OnDestroy {
   private readonly onboarding = inject(OnboardingService);
   private readonly http = inject(HttpClient);
+
+  private refreshInterval?: any;
 
   invitePopupOpen = false;
   viewDrawerOpen = false;
@@ -97,6 +99,25 @@ export class TenantManagementComponent implements OnInit {
 
   async ngOnInit(): Promise<void> {
     await this.loadTenants();
+    this.startAutoRefresh();
+  }
+
+  ngOnDestroy(): void {
+    this.stopAutoRefresh();
+  }
+
+  private startAutoRefresh(): void {
+    this.stopAutoRefresh();
+    this.refreshInterval = setInterval(() => {
+      this.loadTenants();
+    }, 30000); // 30 seconds
+  }
+
+  private stopAutoRefresh(): void {
+    if (this.refreshInterval) {
+      clearInterval(this.refreshInterval);
+      this.refreshInterval = undefined;
+    }
   }
 
   openInvitePopup(): void {
@@ -227,6 +248,7 @@ export class TenantManagementComponent implements OnInit {
     if (!application) return [];
     const entries: { label: string; value: string; isFile?: boolean; fileName?: string }[] = [];
     for (const [key, value] of Object.entries(application.data ?? {})) {
+      if (key === 'password' || key === 'password_hash' || key === 'confirmPassword') continue;
       // Format phone object nicely instead of raw JSON
       if (key.toLowerCase().includes('phone') && typeof value === 'object' && value !== null) {
         const phone = value as { countryCode?: string; number?: string };
