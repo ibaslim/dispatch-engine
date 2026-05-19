@@ -1,4 +1,5 @@
 from uuid import UUID
+from datetime import datetime
 from pydantic import BaseModel, EmailStr
 
 
@@ -11,6 +12,24 @@ class InviteTenantAdminRequest(BaseModel):
 class InviteTenantUserRequest(BaseModel):
     email: EmailStr
     role: str
+
+
+class PendingInvitationResponse(BaseModel):
+    id: UUID
+    email: EmailStr
+    role: str
+    name: str | None = None
+    created_at: datetime
+    expires_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TenantStatusResponse(BaseModel):
+    id: UUID
+    is_active: bool
+
+    model_config = {"from_attributes": True}
 
 
 class TenantResponse(BaseModel):

@@ -2,11 +2,13 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
+from datetime import datetime, timezone
 
 from app.core.deps import get_db, TenantAdmin
-from app.schemas.tenant import InviteTenantUserRequest
+from app.schemas.tenant import InviteTenantUserRequest, PendingInvitationResponse, TenantStatusResponse
 from app.services.invitation_service import create_tenant_user_invitation
 from app.models.tenant import Tenant
+from app.models.invitation import Invitation
 
 router = APIRouter()
 
@@ -82,3 +84,41 @@ async def unsuspend_my_tenant(
     tenant.is_active = True
     db.add(tenant)
     await db.commit()
+
+
+@router.get("/invitations", response_model=list[PendingInvitationResponse])
+async def list_pending_invitations(
+    current_user: TenantAdmin,
+    db: AsyncSession = Depends(get_db),
+):
+    now = datetime.now(timezone.utc)
+    stmt = select(Invitation).where(
+        Invitation.is_used.is_(False),
+        Invitation.expires_at > now,
+    )
+    if not current_user.is_platform_admin:
+        if not current_user.tenant_id:
+            return []
+        stmt = stmt.where(Invitation.tenant_id == current_user.tenant_id)
+
+    result = await db.execute(stmt.order_by(Invitation.created_at.desc()))
+    invitations = result.scalars().all()
+    return invitations
+
+
+@router.get("/status", response_model=list[TenantStatusResponse])
+async def get_tenant_statuses(
+    ids: list[str],
+    current_user: TenantAdmin,
+    db: AsyncSession = Depends(get_db),
+):
+    if not ids:
+        return []
+
+    stmt = select(Tenant).where(Tenant.id.in_(ids))
+    if not current_user.is_platform_admin and current_user.tenant_id:
+        stmt = stmt.where(Tenant.id == current_user.tenant_id)
+
+    result = await db.execute(stmt)
+    tenants = result.scalars().all()
+    return tenants

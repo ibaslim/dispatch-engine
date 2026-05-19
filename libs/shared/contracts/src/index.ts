@@ -35,7 +35,7 @@ export interface MeResponse {
   roles: string[];
 }
 
-export type OnboardingStatus = 'pre_pending' | 'pending' | 'approved' | 'rejected';
+export type OnboardingStatus = 'pre_pending' | 'pending' | 'approved' | 'rejected' | 'invited';
 
 export interface OnboardingApplicationCreateRequest {
   role: string;

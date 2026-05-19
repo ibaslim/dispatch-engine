@@ -15,6 +15,7 @@ import type { OnboardingApplicationResponse, OnboardingStatus } from '@dispatch/
 import { OnboardingService } from '../../core/onboarding/onboarding.service';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { ToastService } from '../../core/toast/toast.service';
 
 const ROLE_LABELS: Record<TenantRole, string> = {
   [TenantRole.Vendor]: 'Vendor',
@@ -22,11 +23,14 @@ const ROLE_LABELS: Record<TenantRole, string> = {
   [TenantRole.Individual]: 'Individual',
 };
 
-const STATUS_LABELS: Record<OnboardingStatus, string> = {
+type TenantStatus = OnboardingStatus | 'invited';
+
+const STATUS_LABELS: Record<TenantStatus, string> = {
   pre_pending: 'Pre-Pending',
   pending: 'Pending Approval',
   approved: 'Approved',
   rejected: 'Rejected',
+  invited: 'Invited',
 };
 
 interface TenantUser {
@@ -39,8 +43,18 @@ interface TenantUser {
   status: string;
   phone?: string;
   createdAt?: string;
+  createdAtTime?: string;
   applicationId?: string;
   tenantId?: string | null;
+}
+
+interface TenantInvitation {
+  id: string;
+  email: string;
+  role: string;
+  name?: string | null;
+  created_at: string;
+  expires_at: string;
 }
 
 @Component({
@@ -62,6 +76,7 @@ interface TenantUser {
 export class TenantManagementComponent implements OnInit, OnDestroy {
   private readonly onboarding = inject(OnboardingService);
   private readonly http = inject(HttpClient);
+  private readonly toast = inject(ToastService);
 
   private refreshInterval?: any;
 
@@ -151,9 +166,11 @@ export class TenantManagementComponent implements OnInit, OnDestroy {
       await firstValueFrom(
         this.http.post('/api/v1/tenants/invite', { email, role })
       );
-      this.inviteSuccess = 'Invitation sent successfully.';
+      this.toast.success('Tenant invited successfully.');
+      await this.loadTenants();
       this.onInviteSent();
     } catch (err: unknown) {
+      this.toast.error('Invitation failed.');
       this.inviteError = err instanceof Error ? err.message : 'Failed to send invite.';
     } finally {
       this.isInviting = false;
@@ -212,9 +229,17 @@ export class TenantManagementComponent implements OnInit, OnDestroy {
 
   private async loadTenants(): Promise<void> {
     try {
-      const applications = await this.onboarding.listApplications();
+      const [applications, invitations] = await Promise.all([
+        this.onboarding.listApplications(),
+        this.loadInvitations(),
+      ]);
       this.pendingApplications = applications;
-      this.tenants = applications.map((application, index) => {
+      const tenantIds = applications
+        .map((application) => application.tenant_id)
+        .filter((tenantId): tenantId is string => !!tenantId);
+      const tenantStatusMap = await this.loadTenantStatuses(tenantIds);
+
+      const applicationRows = applications.map((application) => {
         const data = application.data ?? {};
         const username = (data['username'] as string) || '—';
         let name = (data['fullName'] as string);
@@ -222,23 +247,82 @@ export class TenantManagementComponent implements OnInit, OnDestroy {
           name = username !== '—' ? username : 'Pending Applicant';
         }
 
+        const isSuspended = application.tenant_id
+          ? tenantStatusMap.get(application.tenant_id) === false
+          : false;
+
         return {
           id: application.id,
-          number: index + 1,
+          number: 0,
           applicationId: application.id,
           tenantId: application.tenant_id,
           name: name,
           username: username,
           email: (data['email'] as string) || '—',
           role: (application.role as TenantRole) ?? TenantRole.Driver,
-          status: STATUS_LABELS[application.status] ?? application.status,
+          status: isSuspended
+            ? 'Suspended'
+            : STATUS_LABELS[application.status as TenantStatus] ?? application.status,
           phone: this.formatPhone(data['phone']),
           createdAt: application.created_at?.split('T')[0],
+          createdAtTime: application.created_at,
         };
       });
+
+      const invitedRows = invitations.map((invite) => {
+        const displayName = invite.name || invite.email.split('@')[0];
+        return {
+          id: invite.id,
+          number: 0,
+          applicationId: undefined,
+          tenantId: null,
+          name: displayName,
+          username: '—',
+          email: invite.email,
+          role: (invite.role as TenantRole) ?? TenantRole.Driver,
+          status: STATUS_LABELS.invited,
+          phone: undefined,
+          createdAt: invite.created_at?.split('T')[0],
+          createdAtTime: invite.created_at,
+        };
+      });
+
+      const combined = [...invitedRows, ...applicationRows].sort((a, b) => {
+        return new Date(b.createdAtTime || 0).getTime() - new Date(a.createdAtTime || 0).getTime();
+      });
+
+      this.tenants = combined.map((row, index) => ({
+        ...row,
+        number: index + 1,
+      }));
     } catch {
       this.tenants = [];
       this.pendingApplications = [];
+    }
+  }
+
+  private async loadTenantStatuses(tenantIds: string[]): Promise<Map<string, boolean>> {
+    if (!tenantIds.length) {
+      return new Map();
+    }
+    try {
+      const query = tenantIds.map((id) => `ids=${encodeURIComponent(id)}`).join('&');
+      const response = await firstValueFrom(
+        this.http.get<{ id: string; is_active: boolean }[]>(`/api/v1/tenants/status?${query}`)
+      );
+      return new Map(response.map((item) => [item.id, item.is_active]));
+    } catch {
+      return new Map();
+    }
+  }
+
+  private async loadInvitations(): Promise<TenantInvitation[]> {
+    try {
+      return await firstValueFrom(
+        this.http.get<TenantInvitation[]>('/api/v1/tenants/invitations')
+      );
+    } catch {
+      return [];
     }
   }
 
@@ -287,8 +371,20 @@ export class TenantManagementComponent implements OnInit, OnDestroy {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      // ignore or show message
-      console.error('Failed to download document', err);
+      this.toast.error('Failed to download document.');
+    }
+  }
+
+  async previewDocument(applicationId: string, fileName: string): Promise<void> {
+    try {
+      const blob = await firstValueFrom(
+        this.http.get(`/api/v1/onboarding/applications/${applicationId}/document?name=${encodeURIComponent(fileName)}`, { responseType: 'blob' })
+      );
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      this.toast.error('Failed to preview document.');
     }
   }
 
@@ -332,7 +428,7 @@ export class TenantManagementComponent implements OnInit, OnDestroy {
     return ROLE_LABELS[role] ?? role;
   }
 
-  getStatusLabel(status: OnboardingStatus): string {
+  getStatusLabel(status: TenantStatus): string {
     return STATUS_LABELS[status] ?? status;
   }
 

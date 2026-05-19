@@ -28,7 +28,6 @@ export const routes: Routes = [
   },
   {
     path: 'onboarding/driver',
-    data: { hideNavbar: true },
     loadComponent: () =>
       import('./pages/driver_onboarding/driver.onboarding.component').then(
         (m) => m.DriverOnboardingComponent
@@ -36,7 +35,6 @@ export const routes: Routes = [
   },
   {
     path: 'onboarding/pending',
-    data: { hideNavbar: true },
     loadComponent: () =>
       import('./pages/onboarding-pending/onboarding-pending.component').then(
         (m) => m.OnboardingPendingComponent
@@ -44,7 +42,6 @@ export const routes: Routes = [
   },
   {
     path: 'onboarding/vendor',
-    data: { hideNavbar: true },
     loadComponent: () =>
       import('./pages/vendor_onboarding/vendor.onboarding.component').then(
         (m) => m.VendorOnboardingComponent
@@ -52,7 +49,6 @@ export const routes: Routes = [
   },
   {
     path: 'onboarding/individual',
-    data: { hideNavbar: true },
     loadComponent: () =>
       import('./pages/individual_onboarding/individual.onboarding.component').then(
         (m) => m.IndividualOnboardingComponent

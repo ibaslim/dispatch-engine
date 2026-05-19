@@ -1,6 +1,6 @@
 <app-page
-  title="Driver Onboarding"
-  subtitle="Complete your profile to apply for approval."
+  title="Settings"
+  subtitle="Edit account settings."
   containerClass="w-full px-4 py-8 sm:px-6 lg:px-8 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-screen"
   contentClass="w-full">
   <div class="max-w-3xl mx-auto bg-white dark:bg-[#1E201E] border border-gray-200 dark:border-[#2a2d2a] rounded-lg p-6">
@@ -19,7 +19,10 @@
           accept="image/*,application/pdf"
           class="block w-full text-sm text-gray-700 dark:text-gray-200 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:bg-gray-100 dark:file:bg-[#2a2d2a] file:text-gray-700 dark:file:text-gray-200"
           (change)="onPassportChange($event)" />
-        <p *ngIf="showSubmitValidation && !form.passportFile" class="text-xs text-red-500 mt-2">
+        <p *ngIf="passportFileError" class="text-xs text-red-500 mt-2">
+          {{ passportFileError }}
+        </p>
+        <p *ngIf="showSubmitValidation && !form.passportFile && !passportFileError" class="text-xs text-red-500 mt-2">
           Passport scan is required.
         </p>
         <p *ngIf="form.passportFile" class="text-xs text-gray-500 mt-2">
@@ -34,7 +37,10 @@
           accept="image/*,application/pdf"
           class="block w-full text-sm text-gray-700 dark:text-gray-200 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:bg-gray-100 dark:file:bg-[#2a2d2a] file:text-gray-700 dark:file:text-gray-200"
           (change)="onLicenseChange($event)" />
-        <p *ngIf="showSubmitValidation && !form.licenseFile" class="text-xs text-red-500 mt-2">
+        <p *ngIf="licenseFileError" class="text-xs text-red-500 mt-2">
+          {{ licenseFileError }}
+        </p>
+        <p *ngIf="showSubmitValidation && !form.licenseFile && !licenseFileError" class="text-xs text-red-500 mt-2">
           Driving license scan is required.
         </p>
         <p *ngIf="form.licenseFile" class="text-xs text-gray-500 mt-2">
@@ -44,4 +50,3 @@
     </app-onboarding-form>
   </div>
 </app-page>
-

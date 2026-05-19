@@ -46,7 +46,7 @@ def get_order_status(
 # -------------------------
 # GET ORDERS
 # -------------------------
-@router.get("/", response_model=list[OrderResponse])
+@router.get("", response_model=list[OrderResponse])
 async def get_orders(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
@@ -58,7 +58,7 @@ async def get_orders(
 # -------------------------
 # CREATE ORDER
 # -------------------------
-@router.post("/", response_model=OrderResponse)
+@router.post("", response_model=OrderResponse)
 async def create_order(
     payload: OrderCreate,
     current_user: CurrentUser,

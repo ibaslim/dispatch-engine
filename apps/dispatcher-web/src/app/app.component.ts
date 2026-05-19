@@ -4,14 +4,16 @@ import { ActivatedRoute, NavigationEnd, Router, RouterOutlet } from '@angular/ro
 import { filter, startWith, Subject, takeUntil } from 'rxjs';
 import { AuthService } from './core/auth/auth.service';
 import { NavbarComponent } from './components/navbar/navbar.component';
+import { ToastContainerComponent } from './components/toast-container/toast-container.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, NavbarComponent],
+  imports: [CommonModule, RouterOutlet, NavbarComponent, ToastContainerComponent],
   template: `
     <app-navbar *ngIf="auth.currentUser() && !hideNavbar"></app-navbar>
     <router-outlet></router-outlet>
+    <app-toast-container></app-toast-container>
   `,
 })
 export class AppComponent implements OnInit, OnDestroy {

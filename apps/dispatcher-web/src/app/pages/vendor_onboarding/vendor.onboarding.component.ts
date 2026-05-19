@@ -7,6 +7,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { TenantRole } from '@dispatch/shared/domain';
 import { OnboardingFormComponent, OnboardingFormValues } from '../../components/onboarding-form/onboarding-form.component';
 import { BaseInputComponent } from '../../components/base-input/base-input.component';
+import { ToastService } from '../../core/toast/toast.service';
 
 @Component({
   selector: 'app-vendor-onboarding',
@@ -23,6 +24,9 @@ export class VendorOnboardingComponent implements OnInit {
   private readonly onboarding = inject(OnboardingService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly toast = inject(ToastService);
+
+  private readonly maxUploadBytes = 1024 * 1024;
 
   form: OnboardingFormValues = {
     fullName: '',
@@ -31,12 +35,13 @@ export class VendorOnboardingComponent implements OnInit {
     address: '',
     notes: '',
     nationalIdFile: null,
-    ntnNumber: '',
+    businessNumber: '',
   };
 
   showSubmitValidation = false;
   emailError = '';
   submitMessage = '';
+  nationalIdFileError = '';
 
   async ngOnInit(): Promise<void> {
     if (!this.auth.currentUser()) {
@@ -67,7 +72,7 @@ export class VendorOnboardingComponent implements OnInit {
           phone: this.form.phone,
           address: this.form.address.trim(),
           notes: this.form.notes.trim(),
-          ntnNumber: this.form.ntnNumber?.trim() ?? '',
+          businessNumber: this.form.businessNumber?.trim() ?? '',
           nationalIdFileName: this.form.nationalIdFile?.name ?? null,
         },
       });
@@ -83,7 +88,8 @@ export class VendorOnboardingComponent implements OnInit {
   }
 
   onNationalIdChange(event: Event): void {
-    this.form.nationalIdFile = this.getFileFromEvent(event);
+    this.nationalIdFileError = '';
+    this.form.nationalIdFile = this.getFileFromEvent(event, 'National identity scan');
   }
 
   private isEmailValid(): boolean {
@@ -96,13 +102,28 @@ export class VendorOnboardingComponent implements OnInit {
       this.isEmailValid() &&
       !!this.form.phone.number &&
       !!this.form.address.trim() &&
-      !!this.form.ntnNumber?.trim() &&
+      this.isBusinessNumberValid() &&
       !!this.form.nationalIdFile
     );
   }
 
-  private getFileFromEvent(event: Event): File | null {
+  private isBusinessNumberValid(): boolean {
+    const value = (this.form.businessNumber || '').trim();
+    return /^[A-Za-z0-9]{15}$/.test(value);
+  }
+
+  private getFileFromEvent(event: Event, label: string): File | null {
     const input = event.target as HTMLInputElement | null;
-    return input?.files?.[0] ?? null;
+    const file = input?.files?.[0] ?? null;
+    if (file && file.size > this.maxUploadBytes) {
+      if (input) {
+        input.value = '';
+      }
+      const message = `${label}: Please select an item below 1 MB.`;
+      this.nationalIdFileError = message;
+      this.toast.error(message);
+      return null;
+    }
+    return file;
   }
 }

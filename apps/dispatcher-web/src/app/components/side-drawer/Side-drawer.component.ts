@@ -36,7 +36,7 @@ export class SideDrawerComponent implements OnChanges, AfterContentInit {
   /** Controls open/closed state */
   @Input() open: boolean = false;
 
-  /** Drawer size — regular (400px), large (600px), xl (800px) */
+  /** Drawer size — regular (400px), large (680px), xl (800px) */
   @Input() size: DrawerSize = 'regular';
 
   /** Title displayed in the drawer header */
@@ -117,7 +117,7 @@ export class SideDrawerComponent implements OnChanges, AfterContentInit {
   getSizeClasses(): string {
     const sizes: Record<DrawerSize, string> = {
       regular: 'w-full sm:w-[400px]',
-      large:   'w-full sm:w-[600px]',
+      large:   'w-full sm:w-[680px]',
       xl:      'w-full sm:w-[800px]',
     };
     return sizes[this.size];

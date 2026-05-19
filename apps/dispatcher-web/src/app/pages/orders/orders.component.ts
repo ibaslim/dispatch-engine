@@ -610,19 +610,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
       this.formSubmitted.set(false);
       this.editingOrderId = null;
     } catch (error: any) {
-      if (!this.editingOrderId && this.showLocalDemoButton) {
-        const localOrder = this.buildLocalOrderEntity(
-          this.newOrderValue,
-          this.deriveStatusFromForm(this.newOrderValue),
-          false,
-          this.currentOrderPlacedTime()
-        );
-        this.addLocalDemoOrder(localOrder);
-        this.setFeedback(`Order ${orderNumber} saved locally for demo.`, 'success');
-        this.closeNewOrder();
-        this.formSubmitted.set(false);
-        return;
-      }
       this.setFeedback(error?.error?.detail || `Failed to save order ${orderNumber}.`, 'error');
     } finally {
       this.isSavingOrder = false;

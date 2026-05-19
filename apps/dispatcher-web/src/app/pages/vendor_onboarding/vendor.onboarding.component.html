@@ -1,6 +1,6 @@
 <app-page
-  title="Vendor Onboarding"
-  subtitle="Complete your profile to apply for approval."
+  title="Settings"
+  subtitle="Edit account settings."
   containerClass="w-full px-4 py-8 sm:px-6 lg:px-8 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-screen"
   contentClass="w-full">
   <div class="max-w-3xl mx-auto bg-white dark:bg-[#1E201E] border border-gray-200 dark:border-[#2a2d2a] rounded-lg p-6">
@@ -13,11 +13,13 @@
       (formChange)="form = $event">
 
       <app-base-input
-        label="NTN Number"
+        label="Business Number"
         [required]="true"
-        [value]="form.ntnNumber || ''"
+        [value]="form.businessNumber || ''"
+        [pattern]="'^[A-Za-z0-9]{15}$'"
+        [errorMessages]="{ pattern: 'Business number must be 15 alphanumeric characters.' }"
         [showSubmitValidation]="showSubmitValidation"
-        (valueChange)="form.ntnNumber = $event">
+        (valueChange)="form.businessNumber = $event">
       </app-base-input>
 
       <div class="md:col-span-2">
@@ -27,7 +29,10 @@
           accept="image/*,application/pdf"
           class="block w-full text-sm text-gray-700 dark:text-gray-200 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:bg-gray-100 dark:file:bg-[#2a2d2a] file:text-gray-700 dark:file:text-gray-200"
           (change)="onNationalIdChange($event)" />
-        <p *ngIf="showSubmitValidation && !form.nationalIdFile" class="text-xs text-red-500 mt-2">
+        <p *ngIf="nationalIdFileError" class="text-xs text-red-500 mt-2">
+          {{ nationalIdFileError }}
+        </p>
+        <p *ngIf="showSubmitValidation && !form.nationalIdFile && !nationalIdFileError" class="text-xs text-red-500 mt-2">
           National identity scan is required.
         </p>
         <p *ngIf="form.nationalIdFile" class="text-xs text-gray-500 mt-2">
@@ -37,4 +42,3 @@
     </app-onboarding-form>
   </div>
 </app-page>
-

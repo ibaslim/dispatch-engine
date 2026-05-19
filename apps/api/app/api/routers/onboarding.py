@@ -48,13 +48,14 @@ def _slugify(value: str) -> str:
 
 def _extract_tenant_payload(data: dict, fallback_name: str, fallback_email: str) -> dict:
     phone = data.get("phone") if isinstance(data.get("phone"), dict) else {}
+    business_number = (data.get("businessNumber") or data.get("ntnNumber") or "").strip()
     return {
         "contact_name": (data.get("fullName") or fallback_name or "").strip() or None,
         "contact_email": (data.get("email") or fallback_email or "").strip() or None,
         "contact_phone_country_code": (phone.get("countryCode") or "").strip() or None,
         "contact_phone_number": (phone.get("number") or "").strip() or None,
         "address": (data.get("address") or "").strip() or None,
-        "ntn_number": (data.get("ntnNumber") or "").strip() or None,
+        "ntn_number": business_number or None,
         "notes": (data.get("notes") or "").strip() or None,
         "national_id_file_name": (data.get("nationalIdFileName") or "").strip() or None,
     }

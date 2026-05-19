@@ -22,6 +22,8 @@
     [columnTemplate]="'repeat(8, minmax(0, 1fr))'"
     [emptyTitle]="'No tenants found'"
     [emptySubtitle]="'Invite users to start collaborating'"
+    [actionIcon]="'eye'"
+    [actionLabel]="'View details'"
     (actionClick)="onTableActionClick($event)"
   >
   </app-table>
@@ -31,6 +33,7 @@
 <app-popup
   [open]="invitePopupOpen"
   title="Invite New Tenent"
+  [widthClass]="'max-w-md'"
   (close)="closeInvitePopup()"
 >
   <div class="space-y-6">
@@ -79,8 +82,8 @@
 <app-side-drawer
   [open]="viewDrawerOpen && !!selectedTenant"
   size="large"
-  title="User Details"
-  subtitle="Read-only view of this tenant's account."
+  title="Tenant Details"
+  subtitle="tenant's information."
   (closed)="closeViewDrawer()"
 >
   <!-- Body -->
@@ -104,7 +107,8 @@
               <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium" 
                 [ngClass]="{
                   'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400': selectedTenant.status === 'Active' || selectedTenant.status === 'Approved',
-                  'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400': selectedTenant.status === 'Pending',
+                  'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400': selectedTenant.status === 'Pending' || selectedTenant.status === 'Pending Approval' || selectedTenant.status === 'Pre-Pending',
+                  'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400': selectedTenant.status === 'Invited',
                   'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400': selectedTenant.status === 'Rejected' || selectedTenant.status === 'Suspended'
                 }">
                 {{ selectedTenant.status }}
@@ -142,26 +146,38 @@
           <i class="ph ph-file-text text-lg"></i>
           Application Details
         </h3>
-        <div class="space-y-4">
-          <div *ngFor="let entry of selectedApplicationEntries" 
-               class="p-3 bg-white dark:bg-[#1E201E] border border-gray-100 dark:border-[#2a2d2a] rounded-lg hover:border-[#3ddc97]/50 transition-colors">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div *ngFor="let entry of selectedApplicationEntries"
+               class="p-4 bg-white dark:bg-[#1E201E] border border-gray-100 dark:border-[#2a2d2a] rounded-lg">
             <p class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 mb-1">{{ entry.label }}</p>
             
             <div *ngIf="!entry.isFile" class="text-sm text-gray-700 dark:text-gray-300 break-words font-medium">
               {{ entry.value }}
             </div>
             
-            <div *ngIf="entry.isFile" class="flex items-center justify-between mt-1">
+            <div *ngIf="entry.isFile" class="flex items-center justify-between mt-2 gap-3">
               <div class="flex items-center gap-2 overflow-hidden">
                 <i class="ph ph-file-pdf text-xl text-red-500"></i>
                 <p class="text-sm text-gray-700 dark:text-gray-300 truncate font-medium">{{ entry.fileName }}</p>
               </div>
-              <app-button 
-                variant="ghost-outline" 
-                label="Download" 
-                (onClick)="downloadDocument(selectedApplication!.id, entry.fileName!)"
-                [extraClasses]="'!py-1 !px-3 !text-[10px] !h-auto uppercase font-bold tracking-tight'">
-              </app-button>
+              <div class="flex items-center gap-2">
+                <app-button
+                  variant="ghost-outline"
+                  label="Download"
+                  (onClick)="downloadDocument(selectedApplication!.id, entry.fileName!)"
+                  [extraClasses]="'!py-1 !px-3 !text-[10px] !h-auto uppercase font-bold tracking-tight'">
+                </app-button>
+                <app-button
+                  variant="ghost-outline"
+                  label="View"
+                  (onClick)="previewDocument(selectedApplication!.id, entry.fileName!)"
+                  [extraClasses]="'!py-1 !px-3 !text-[10px] !h-auto uppercase font-bold tracking-tight'"
+                  ariaLabel="View document">
+                  <span data-icon>
+                    <i class="ph ph-eye"></i>
+                  </span>
+                </app-button>
+              </div>
             </div>
           </div>
         </div>
@@ -206,4 +222,10 @@
      ></app-button>
   </div>
 </app-side-drawer>
+
+
+
+
+
+
 

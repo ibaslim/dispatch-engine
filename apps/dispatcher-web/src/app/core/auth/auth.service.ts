@@ -69,7 +69,11 @@ export class AuthService {
       this._currentUser.set(null);
     }
   }
-
+  clearTokens(): void {
+  localStorage.removeItem(ACCESS_KEY);
+  localStorage.removeItem(REFRESH_KEY);
+  this._currentUser.set(null);
+}
   async logout(): Promise<void> {
     try {
       await firstValueFrom(this.http.post('/api/v1/auth/logout', {}));

@@ -69,12 +69,7 @@ import { AuthService } from '../../core/auth/auth.service';
               {{ isLoading() ? 'Signing in...' : 'Sign in' }}
             </button>
           </div>
-
-          <div class="text-center">
-            <a routerLink="/invite/accept" class="text-sm text-primary-600 hover:text-primary-500">
-              Accept an invitation
-            </a>
-          </div>
+          
         </form>
       </div>
     </div>

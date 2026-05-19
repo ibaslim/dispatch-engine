@@ -16,6 +16,7 @@ export interface OnboardingFormValues {
   address: string;
   notes: string;
   ntnNumber?: string;
+  businessNumber?: string;
   passportFile?: File | null;
   licenseFile?: File | null;
   nationalIdFile?: File | null;

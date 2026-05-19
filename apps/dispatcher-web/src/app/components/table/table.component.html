@@ -64,15 +64,25 @@
                         </div>
                     </ng-container>
 
+                    <!-- STATUS -->
+                    <ng-container *ngSwitchCase="'status'">
+                        <span
+                            class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                            [ngClass]="getStatusBadgeClasses(row[col.key])">
+                            {{ row[col.key] }}
+                        </span>
+                    </ng-container>
+
                     <!-- ACTIONS -->
                     <ng-container *ngSwitchCase="'actions'">
                         <div class="relative flex justify-center w-full">
 
                             <app-button variant="icon"
                                 class="row-action-button group rounded-md hover:bg-gray-100 dark:hover:bg-[#2a2d2a] transition"
-                                (onClick)="onActionClick(row, $event)" ariaLabel="Row actions">
+                                (onClick)="onActionClick(row, $event)" [ariaLabel]="actionLabel">
                                 <i
-                                    class="ph ph-dots-three text-xl text-gray-900 dark:text-gray-200 transition-transform duration-150 group-hover:scale-125"></i>
+                                    class="ph text-xl text-gray-900 dark:text-gray-200 transition-transform duration-150 group-hover:scale-125"
+                                    [ngClass]="actionIcon === 'eye' ? 'ph-eye' : 'ph-dots-three'"></i>
                             </app-button>
 
                             <app-menu [items]="menuItems" [visible]="activeMenuRow?.id === row.id"

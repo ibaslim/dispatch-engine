@@ -7,6 +7,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { TenantRole } from '@dispatch/shared/domain';
 import { OnboardingFormComponent, OnboardingFormValues } from '../../components/onboarding-form/onboarding-form.component';
 import { BaseInputComponent } from '../../components/base-input/base-input.component';
+import { ToastService } from '../../core/toast/toast.service';
 
 @Component({
   selector: 'app-driver-onboarding',
@@ -23,6 +24,9 @@ export class DriverOnboardingComponent implements OnInit {
   private readonly onboarding = inject(OnboardingService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly toast = inject(ToastService);
+
+  private readonly maxUploadBytes = 1024 * 1024;
 
   form: OnboardingFormValues = {
     fullName: '',
@@ -37,6 +41,8 @@ export class DriverOnboardingComponent implements OnInit {
   showSubmitValidation = false;
   emailError = '';
   submitMessage = '';
+  passportFileError = '';
+  licenseFileError = '';
 
   async ngOnInit(): Promise<void> {
     if (!this.auth.currentUser()) {
@@ -90,11 +96,13 @@ export class DriverOnboardingComponent implements OnInit {
   }
 
   onPassportChange(event: Event): void {
-    this.form.passportFile = this.getFileFromEvent(event);
+    this.passportFileError = '';
+    this.form.passportFile = this.getFileFromEvent(event, 'Passport scan', 'passport');
   }
 
   onLicenseChange(event: Event): void {
-    this.form.licenseFile = this.getFileFromEvent(event);
+    this.licenseFileError = '';
+    this.form.licenseFile = this.getFileFromEvent(event, 'Driving license scan', 'license');
   }
 
   private isEmailValid(): boolean {
@@ -112,8 +120,22 @@ export class DriverOnboardingComponent implements OnInit {
     );
   }
 
-  private getFileFromEvent(event: Event): File | null {
+  private getFileFromEvent(event: Event, label: string, target: 'passport' | 'license'): File | null {
     const input = event.target as HTMLInputElement | null;
-    return input?.files?.[0] ?? null;
+    const file = input?.files?.[0] ?? null;
+    if (file && file.size > this.maxUploadBytes) {
+      if (input) {
+        input.value = '';
+      }
+      const message = `${label}: Please select an item below 1 MB.`;
+      if (target === 'passport') {
+        this.passportFileError = message;
+      } else {
+        this.licenseFileError = message;
+      }
+      this.toast.error(message);
+      return null;
+    }
+    return file;
   }
 }
