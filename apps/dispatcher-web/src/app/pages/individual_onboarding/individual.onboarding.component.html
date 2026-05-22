@@ -21,7 +21,7 @@
       </app-base-input>
 
       <div class="md:col-span-2">
-        <label class="block text-sm text-gray-600 dark:text-gray-200 mb-2">National Identity Scan</label>
+        <label class="block text-sm text-gray-600 dark:text-gray-200 mb-2">Citizen Card / Driving License Scan</label>
         <input
           type="file"
           accept="image/*,application/pdf"
@@ -31,7 +31,7 @@
           {{ nationalIdFileError }}
         </p>
         <p *ngIf="showSubmitValidation && !form.nationalIdFile && !nationalIdFileError" class="text-xs text-red-500 mt-2">
-          National identity scan is required.
+          Citizen card / driving license scan is required.
         </p>
         <p *ngIf="form.nationalIdFile" class="text-xs text-gray-500 mt-2">
           Selected: {{ form.nationalIdFile?.name }}

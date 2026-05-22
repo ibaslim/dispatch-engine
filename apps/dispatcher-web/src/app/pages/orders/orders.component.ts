@@ -52,6 +52,7 @@ type BackendOrder = {
   instructions?: string | null;
   payment_method: PaymentMethodType;
   payment_details?: Record<string, unknown> | null;
+  proof_of_delivery?: Record<string, unknown> | null;
   status: OrderTab;
   ready_for_pickup: boolean;
   order_placed_time?: string | null;
@@ -336,12 +337,12 @@ export class OrdersComponent implements OnInit, OnDestroy {
       case 'moveToCurrent':
         if (this.isLocalOnlyOrder(order.id)) {
           this.updateLocalOrderStatus(order.id, 'current');
-          this.setFeedback(`Order ${order.full.orderNumber} moved to Current.`, 'success');
+          this.setFeedback(`Order ${order.full.orderNumber ?? ''} moved to Current.`, 'success');
           break;
         }
         this.ordersService.updateStatus(order.id, 'current').subscribe({
           next: () => {
-            this.setFeedback(`Order ${order.full.orderNumber} moved to Current.`, 'success');
+            this.setFeedback(`Order ${order.full.orderNumber ?? ''} moved to Current.`, 'success');
             this.loadOrders();
           },
           error: () => this.setFeedback('Unable to update order status.', 'error')
@@ -351,12 +352,12 @@ export class OrdersComponent implements OnInit, OnDestroy {
       case 'moveToHistory':
         if (this.isLocalOnlyOrder(order.id)) {
           this.updateLocalOrderStatus(order.id, 'history');
-          this.setFeedback(`Order ${order.full.orderNumber} moved to History.`, 'success');
+          this.setFeedback(`Order ${order.full.orderNumber ?? ''} moved to History.`, 'success');
           break;
         }
         this.ordersService.updateStatus(order.id, 'history').subscribe({
           next: () => {
-            this.setFeedback(`Order ${order.full.orderNumber} moved to History.`, 'success');
+            this.setFeedback(`Order ${order.full.orderNumber ?? ''} moved to History.`, 'success');
             this.loadOrders();
           },
           error: () => this.setFeedback('Unable to update order status.', 'error')
@@ -387,12 +388,12 @@ export class OrdersComponent implements OnInit, OnDestroy {
       case 'delete':
         if (this.isLocalOnlyOrder(order.id)) {
           this.deleteLocalOrder(order.id);
-          this.setFeedback(`Order ${order.full.orderNumber} deleted.`, 'success');
+          this.setFeedback(`Order ${order.full.orderNumber ?? ''} deleted.`, 'success');
           break;
         }
         this.ordersService.deleteOrder(order.id).subscribe({
           next: () => {
-            this.setFeedback(`Order ${order.full.orderNumber} deleted.`, 'success');
+            this.setFeedback(`Order ${order.full.orderNumber ?? ''} deleted.`, 'success');
             this.loadOrders();
           },
           error: () => this.setFeedback('Unable to delete order.', 'error')
@@ -435,14 +436,14 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
       if (this.isLocalOnlyOrder(id)) {
         this.updateLocalOrderStatus(id, nextStatus);
-        this.setFeedback(`Order ${selectedOrder.full.orderNumber} updated to ${this.formatStatusLabel(nextStatus)}.`, 'success');
+        this.setFeedback(`Order ${selectedOrder.full.orderNumber ?? ''} updated to ${this.formatStatusLabel(nextStatus)}.`, 'success');
         this.closeDetails();
         return;
       }
 
       this.ordersService.updateStatus(id, nextStatus).subscribe({
         next: () => {
-          this.setFeedback(`Order ${selectedOrder.full.orderNumber} updated to ${this.formatStatusLabel(nextStatus)}.`, 'success');
+            this.setFeedback(`Order ${selectedOrder.full.orderNumber ?? ''} updated to ${this.formatStatusLabel(nextStatus)}.`, 'success');
           this.closeDetails();
           this.loadOrders();
         },
@@ -454,14 +455,14 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (action === 'delete') {
       if (this.isLocalOnlyOrder(id)) {
         this.deleteLocalOrder(id);
-        this.setFeedback(`Order ${selectedOrder.full.orderNumber} deleted.`, 'success');
+        this.setFeedback(`Order ${selectedOrder.full.orderNumber ?? ''} deleted.`, 'success');
         this.closeDetails();
         return;
       }
 
       this.ordersService.deleteOrder(id).subscribe({
         next: () => {
-          this.setFeedback(`Order ${selectedOrder.full.orderNumber} deleted.`, 'success');
+          this.setFeedback(`Order ${selectedOrder.full.orderNumber ?? ''} deleted.`, 'success');
           this.closeDetails();
           this.loadOrders();
         },
@@ -484,7 +485,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.setReadyForPickupLocal(id, isReady);
 
     if (this.isLocalOnlyOrder(id)) {
-      this.setFeedback(`Order ${this.selectedOrderForDetails.full.orderNumber} ready-for-pickup updated locally.`, 'success');
+      this.setFeedback(`Order ${this.selectedOrderForDetails.full.orderNumber ?? ''} ready-for-pickup updated locally.`, 'success');
       return;
     }
 
@@ -586,12 +587,11 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.isSavingOrder = true;
     const payload = this.toOrderPayload(this.newOrderValue);
     const mode = this.editingOrderId ? 'updated' : 'created';
-    const orderNumber = this.newOrderValue.orderNumber;
 
     try {
       if (this.editingOrderId && this.isLocalOnlyOrder(this.editingOrderId)) {
         this.updateLocalOrderFromForm(this.editingOrderId, this.newOrderValue);
-        this.setFeedback(`Order ${orderNumber} updated locally for demo.`, 'success');
+        this.setFeedback(`Order updated locally for demo.`, 'success');
         this.closeNewOrder();
         this.formSubmitted.set(false);
         this.editingOrderId = null;
@@ -604,13 +604,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
         await firstValueFrom(this.ordersService.createOrder(payload));
       }
 
-      this.setFeedback(`Order ${orderNumber} ${mode}.`, 'success');
+      this.setFeedback(`Order ${mode} successfully.`, 'success');
       this.loadOrders();
       this.closeNewOrder();
       this.formSubmitted.set(false);
       this.editingOrderId = null;
     } catch (error: any) {
-      this.setFeedback(error?.error?.detail || `Failed to save order ${orderNumber}.`, 'error');
+      this.setFeedback(error?.error?.detail || `Failed to save order.`, 'error');
     } finally {
       this.isSavingOrder = false;
     }
@@ -667,7 +667,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     }
     this.demoDriversService.assignDriver(this.selectedOrderForAssignment.id, this.selectedDriverId);
     this.refreshOrdersState(this.getRemoteOrders());
-    this.setFeedback(`Driver assigned to order ${this.selectedOrderForAssignment.full.orderNumber}.`, 'success');
+    this.setFeedback(`Driver assigned to order ${this.selectedOrderForAssignment.full.orderNumber ?? ''}.`, 'success');
     this.closeAssignDriver();
   }
 
@@ -679,7 +679,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (!this.selectedOrderForAssignment) return;
     this.demoDriversService.unassignDriver(this.selectedOrderForAssignment.id);
     this.refreshOrdersState(this.getRemoteOrders());
-    this.setFeedback(`Driver removed from order ${this.selectedOrderForAssignment.full.orderNumber}.`, 'success');
+    this.setFeedback(`Driver removed from order ${this.selectedOrderForAssignment.full.orderNumber ?? ''}.`, 'success');
     this.closeAssignDriver();
   }
 
@@ -713,7 +713,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   printLabel(): void {
     if (!this.selectedOrderForLabel) return;
     const order = this.selectedOrderForLabel;
-    const orderNumber = order.full.orderNumber;
+    const orderNumber = order.full.orderNumber ?? '';
 
     const win = window.open('', '', 'height=750,width=520');
     if (!win) {
@@ -786,7 +786,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [101.6, 152.4] });
       const imgHeight = (canvas.height * 101.6) / canvas.width;
       pdf.addImage(imgData, 'PNG', 0, 0, 101.6, imgHeight);
-      pdf.save(`label-${this.selectedOrderForLabel!.full.orderNumber}.pdf`);
+      pdf.save(`label-${this.selectedOrderForLabel!.full.orderNumber ?? ''}.pdf`);
     } catch {
       this.setFeedback('Failed to download label PDF.', 'error');
     }
@@ -866,7 +866,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
         pdf.addImage(imgData, 'PNG', 0, -position, imgWidth, imgHeight);
         heightLeft -= pageHeight;
       }
-      pdf.save(`order-${order.full.orderNumber}.pdf`);
+      pdf.save(`order-${order.full.orderNumber ?? ''}.pdf`);
     } finally {
       document.body.removeChild(element);
     }
@@ -877,7 +877,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   private async renderLabelGraphics(): Promise<void> {
   if (!this.selectedOrderForLabel) return;
 
-  const orderNumber = this.selectedOrderForLabel.full.orderNumber;
+  const orderNumber = this.selectedOrderForLabel.full.orderNumber ?? '';
 
   await new Promise(resolve => requestAnimationFrame(resolve));
 
@@ -988,10 +988,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
           total: order.total,
           instructions: order.instructions || '',
           payment,
-          proofOfDelivery: {
-            signature: false,
-            picture: false
-          }
+          proofOfDelivery: this.normalizeProofOfDelivery(order.proof_of_delivery)
         }
       },
       tab: order.status,
@@ -1202,7 +1199,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const creditCard = order.full.details.payment.creditCard;
 
     return `<!DOCTYPE html><html><head>
-      <title>Order #${this.escapeHtml(order.full.orderNumber)}</title>
+      <title>Order #${this.escapeHtml(order.full.orderNumber ?? '')}</title>
       <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         h2 { text-align: center; margin-bottom: 30px; }
@@ -1213,7 +1210,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
         @media print { body { margin: 0; } }
       </style>
     </head><body>
-      <h2>Order #${this.escapeHtml(order.full.orderNumber)}</h2>
+      <h2>Order #${this.escapeHtml(order.full.orderNumber ?? '')}</h2>
       <div class="section">
         <h3>Pickup Information</h3>
         <p><strong>${this.escapeHtml(order.full.pickup.name)}</strong></p>
@@ -1257,7 +1254,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   private toOrderPayload(value: NewOrderFormValue): Record<string, unknown> {
     return {
-      order_number: value.orderNumber.trim(),
       pickup_name: value.pickup.name.trim(),
       pickup_phone: `${value.pickup.phone.countryCode}${value.pickup.phone.number}`,
       pickup_address: value.pickup.address.trim(),
@@ -1285,6 +1281,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       total: value.details.total,
       instructions: value.details.instructions.trim(),
       payment_method: value.details.payment.method,
+      proof_of_delivery: value.details.proofOfDelivery,
       payment_details: value.details.payment.method === 'credit_card'
         ? { creditCard: value.details.payment.creditCard }
         : null
@@ -1319,9 +1316,20 @@ export class OrdersComponent implements OnInit, OnDestroy {
     return Number.isNaN(value.getTime()) ? null : value;
   }
 
+  private normalizeProofOfDelivery(value: unknown): NewOrderFormValue['details']['proofOfDelivery'] {
+    if (!value || typeof value !== 'object') {
+      return { signature: false, picture: false };
+    }
+
+    const record = value as Record<string, unknown>;
+    return {
+      signature: Boolean(record['signature']),
+      picture: Boolean(record['picture'])
+    };
+  }
+
   private checkFormErrors(): boolean {
     const value = this.newOrderValue;
-    if (!value.orderNumber.trim()) return true;
     if (!value.pickup.name.trim()) return true;
     if (!value.pickup.address.trim()) return true;
     if (!value.pickup.pickupDate || !value.pickup.pickupTime) return true;

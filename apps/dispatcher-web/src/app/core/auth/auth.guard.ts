@@ -15,19 +15,31 @@ export const authGuard: CanActivateFn = async (_route, state) => {
     return router.createUrlTree(['/login']);
   }
 
-  // Load user if not already loaded
-  if (!auth.isLoggedIn()) {
-    await auth.loadCurrentUser();
+  // Always refresh user context so tenant suspension changes are enforced quickly.
+  await auth.loadCurrentUser();
 
-    if (!auth.isLoggedIn()) {
-      return router.createUrlTree(['/login']);
-    }
+  if (!auth.isLoggedIn()) {
+    return router.createUrlTree(['/login']);
   }
 
   const currentUser = auth.currentUser();
 
   if (!currentUser) {
     return router.createUrlTree(['/login']);
+  }
+
+  const isSuspended = currentUser.tenant_is_active === false;
+  const isSuspensionRoute = state.url.startsWith('/suspended');
+  if (isSuspended) {
+    if (isSuspensionRoute) {
+      return true;
+    }
+    toast.error('Your account is suspended.');
+    return router.createUrlTree(['/suspended']);
+  }
+
+  if (isSuspensionRoute) {
+    return router.createUrlTree(['/orders']);
   }
 
   // Skip onboarding checks for platform admin

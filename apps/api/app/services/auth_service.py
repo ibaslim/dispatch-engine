@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.models.user import User
 from app.models.token import RefreshToken
 from app.models.onboarding_application import OnboardingApplication, ApplicationStatus
-from app.schemas.auth import TokenResponse, PendingApprovalResponse
+from app.schemas.auth import TokenResponse, PendingApprovalResponse, SuspendedAccountResponse
 from app.models.tenant import Tenant
 
 
@@ -22,7 +22,11 @@ def _hash_token(raw: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-async def authenticate_user(db: AsyncSession, email: str, password: str) -> Union[User, PendingApprovalResponse, None]:
+async def authenticate_user(
+    db: AsyncSession,
+    email: str,
+    password: str,
+) -> Union[User, PendingApprovalResponse, SuspendedAccountResponse, None]:
     result = await db.execute(select(User).where(User.email == email.lower()))
     user = result.scalar_one_or_none()
     if user is None or not user.hashed_password:
@@ -30,12 +34,18 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> Unio
     if not verify_password(password, user.hashed_password):
         return None
 
-    # Prevent users belonging to suspended tenants
+    # Allow login for suspended tenants so frontend can route to suspension screen.
     if user.tenant_id:
         tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
         tenant = tenant_result.scalar_one_or_none()
         if tenant is not None and not tenant.is_active:
-            return None
+            tokens = await create_token_pair(db, user)
+            return SuspendedAccountResponse(
+                status="suspended",
+                message="Your account is suspended. Please contact support.",
+                access_token=tokens.access_token,
+                refresh_token=tokens.refresh_token,
+            )
 
     # Check for pre-pending and pending
     app_result = await db.execute(

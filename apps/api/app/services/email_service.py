@@ -31,7 +31,7 @@ def build_invitation_email(name: str, tenant_name: str, accept_url: str, role: s
     <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h2>You've been invited to Dispatch Engine</h2>
         <p>Hi {name},</p>
-        <p>You have been invited to manage <strong>{tenant_name}</strong> on Dispatch Engine as a <strong>{role}</strong>.</p>
+        <p>You have been invited to  Dispatch Engine as a <strong>{role}</strong>.</p>
         <p>Click the link below to accept your invitation and set your password:</p>
         <p>
             <a href="{accept_url}"
@@ -126,4 +126,24 @@ def build_tenant_suspended_email(tenant_name: str) -> str:
     </body>
     </html>
     """
+
+
+def build_tenant_unsuspended_email(tenant_name: str) -> str:
+    """Email sent when a tenant account suspension is removed."""
+    return f"""
+    <html>
+    <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #10b981;">Account Reactivated</h2>
+        <p>Hi {tenant_name},</p>
+        <p>Your Dispatch Engine account suspension has been removed and your account is now <strong>active</strong>.</p>
+        <p>You can log in and continue using the platform.</p>
+        <p><strong>Support Email:</strong> support@dispatch.local</p>
+        <br/>
+        <p style="color: #6b7280; font-size: 14px;">
+            This is an automated message. Please do not reply directly to this email.
+        </p>
+    </body>
+    </html>
+    """
+
 

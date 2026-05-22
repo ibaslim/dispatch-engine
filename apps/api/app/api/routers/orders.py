@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,6 +43,26 @@ def get_order_status(
         diff_hours = (delivery_at - pickup_at).total_seconds() / 3600
         return OrderStatus.current if diff_hours < 3 else OrderStatus.scheduled
 
+
+async def generate_order_number(db: AsyncSession) -> str:
+    now = datetime.now(APP_TIMEZONE)
+    day = now.strftime("%d")
+    month = now.strftime("%m")
+    year = now.strftime("%y")
+
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
+
+    result = await db.execute(
+        select(func.count(Order.id)).where(
+            (Order.created_at >= today_start) & (Order.created_at < today_end)
+        )
+    )
+    count = result.scalar() or 0
+    order_sequence = str(count + 1).zfill(2)
+
+    return f"ORD{day}{month}{year}{order_sequence}"
+
 # -------------------------
 # GET ORDERS
 # -------------------------
@@ -72,8 +92,12 @@ async def create_order(
     try:
         data = payload.model_dump()
 
-        # ADD THIS LINE (order placed time in AM/PM)
+        data["order_number"] = await generate_order_number(db)
         data["order_placed_time"] = datetime.now(APP_TIMEZONE).strftime("%I:%M %p")
+        data["proof_of_delivery"] = data.get("proof_of_delivery") or {
+            "signature": False,
+            "picture": False,
+        }
 
         data["status"] = get_order_status(
             data["pickup_date"],
@@ -93,7 +117,7 @@ async def create_order(
         await db.rollback()
         raise HTTPException(
             status_code=400,
-            detail="Order number already exists. Please use a unique order number."
+            detail="Error creating order. Please try again."
         )
 
 

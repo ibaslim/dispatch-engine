@@ -32,6 +32,7 @@ export interface MeResponse {
   name: string;
   is_platform_admin: boolean;
   tenant_id: string | null;
+  tenant_is_active: boolean | null;
   roles: string[];
 }
 

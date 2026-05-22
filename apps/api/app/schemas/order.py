@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-from app.models.order import OrderStatus
+from app.models.order import OrderStatus, ActivityStatus
 from uuid import UUID
 
 
@@ -14,7 +14,7 @@ class OrderItem(BaseModel):
 # CREATE ORDER
 # -------------------------
 class OrderCreate(BaseModel):
-    order_number: str
+    order_number: Optional[str] = None
 
     pickup_name: str
     pickup_phone: str
@@ -95,6 +95,7 @@ class OrderUpdate(BaseModel):
 class OrderResponse(OrderCreate):
     id: UUID
     status: OrderStatus
+    activity_status: ActivityStatus
     ready_for_pickup: bool
     order_placed_time: Optional[str] = None
     proof_of_delivery: Optional[Dict[str, Any]] = None

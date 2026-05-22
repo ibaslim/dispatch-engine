@@ -89,7 +89,7 @@ export class IndividualOnboardingComponent implements OnInit {
 
   onNationalIdChange(event: Event): void {
     this.nationalIdFileError = '';
-    this.form.nationalIdFile = this.getFileFromEvent(event, 'National identity scan');
+    this.form.nationalIdFile = this.getFileFromEvent(event, 'Citizen card / driving license scan');
   }
 
   private isEmailValid(): boolean {

@@ -1,11 +1,11 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
 from datetime import datetime, timezone
 
 from app.core.deps import get_db, TenantAdmin
-from app.schemas.tenant import InviteTenantUserRequest, PendingInvitationResponse, TenantStatusResponse
+from app.schemas.tenant import InviteTenantAdminRequest, InviteTenantUserRequest, PendingInvitationResponse, TenantStatusResponse
 from app.services.invitation_service import create_tenant_user_invitation
 from app.models.tenant import Tenant
 from app.models.invitation import Invitation
@@ -108,9 +108,9 @@ async def list_pending_invitations(
 
 @router.get("/status", response_model=list[TenantStatusResponse])
 async def get_tenant_statuses(
-    ids: list[str],
     current_user: TenantAdmin,
     db: AsyncSession = Depends(get_db),
+    ids: list[str] | None = Query(None),
 ):
     if not ids:
         return []

@@ -14,6 +14,15 @@ class OrderStatus(str, enum.Enum):
     history = "history"
 
 
+class ActivityStatus(str, enum.Enum):
+    driver_not_assigned = "driver_not_assigned"
+    pickup_initiated = "pickup_initiated"
+    picked_up = "picked_up"
+    delivery_initiated = "delivery_initiated"
+    delivery_in_progress = "delivery_in_progress"
+    delivered = "delivered"
+
+
 class Order(Base):
     __tablename__ = "orders"
 
@@ -49,6 +58,10 @@ class Order(Base):
     proof_of_delivery = Column(JSON, nullable=True)
 
     status = Column(Enum(OrderStatus), default=OrderStatus.current)
+    activity_status = Column(
+        Enum(ActivityStatus, name="activitystatus_enum"),
+        default=ActivityStatus.driver_not_assigned,
+    )
     ready_for_pickup = Column(Boolean, default=False)
 
     order_placed_time = Column(String)

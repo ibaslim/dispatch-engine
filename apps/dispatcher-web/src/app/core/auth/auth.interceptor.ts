@@ -1,4 +1,4 @@
-import { HttpInterceptorFn, HttpRequest, HttpHandlerFn, HttpErrorResponse } from '@angular/common/http';
+import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from './auth.service';
@@ -14,8 +14,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   return next(cloned).pipe(
     catchError((err: HttpErrorResponse) => {
       if (err.status === 401) {
-        auth.clearTokens();         // clear storage
-        router.navigate(['/login']); // redirect
+        if (auth.currentUser()?.tenant_is_active === false) {
+          router.navigate(['/suspended']);
+          return throwError(() => err);
+        }
+
+        auth.clearTokens();
+        router.navigate(['/login']);
       }
       return throwError(() => err);
     })

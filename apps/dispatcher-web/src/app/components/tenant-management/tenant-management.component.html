@@ -5,7 +5,7 @@
 >
   <div class="flex items-center justify-between mb-6">
     <div>
-      <p class="text-sm text-gray-500">Manage users and roles for your tenant.</p>
+      <p class="text-sm text-gray-500">Manage your tenants.</p>
     </div>
 
     <app-button
@@ -204,13 +204,13 @@
     ></app-button>
     <!-- If approved, allow suspending/unsuspending tenant -->
     <app-button
-      *ngIf="selectedApplication?.status === 'approved'"
+      *ngIf="isSelectedTenantApproved() && !isSelectedTenantSuspended()"
       variant="ghost-outline"
       label="Suspend Tenant"
       (onClick)="suspendTenant()"
     ></app-button>
     <app-button
-      *ngIf="selectedApplication?.status === 'approved'"
+      *ngIf="isSelectedTenantApproved() && isSelectedTenantSuspended()"
       variant="ghost-outline"
       label="Unsuspend Tenant"
       (onClick)="unsuspendTenant()"

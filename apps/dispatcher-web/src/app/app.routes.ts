@@ -55,6 +55,14 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'suspended',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/suspended/suspended.component').then(
+        (m) => m.SuspendedComponent
+      ),
+  },
+  {
     path: 'orders',
     canActivate: [authGuard],
     loadComponent: () =>

@@ -7,6 +7,13 @@ import type { MeResponse, LoginRequest } from '@dispatch/shared/contracts';
 const ACCESS_KEY = 'dispatch:access_token';
 const REFRESH_KEY = 'dispatch:refresh_token';
 
+interface AuthStatusResponse {
+  status?: 'pending' | 'pre_pending' | 'suspended';
+  role?: string;
+  access_token?: string;
+  refresh_token?: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
@@ -31,7 +38,7 @@ export class AuthService {
   async login(email: string, password: string): Promise<void> {
     const req: LoginRequest = { email, password };
     const res = await firstValueFrom(
-      this.http.post<any>('/api/v1/auth/login', req)
+      this.http.post<AuthStatusResponse>('/api/v1/auth/login', req)
     );
 
     // Check if response indicates pending onboarding or approval
@@ -52,7 +59,19 @@ export class AuthService {
       return;
     }
 
+    if (res.status === 'suspended') {
+      if (res.access_token && res.refresh_token) {
+        this.storeTokens(res.access_token, res.refresh_token);
+      }
+      await this.loadCurrentUser();
+      await this.router.navigate(['/suspended']);
+      return;
+    }
+
     // Normal login flow
+    if (!res.access_token || !res.refresh_token) {
+      throw new Error('Login response is missing tokens.');
+    }
     localStorage.setItem(ACCESS_KEY, res.access_token);
     localStorage.setItem(REFRESH_KEY, res.refresh_token);
     await this.loadCurrentUser();

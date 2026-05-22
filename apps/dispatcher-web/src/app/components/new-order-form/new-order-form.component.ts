@@ -1,6 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, Output, Signal } from '@angular/core';
-import { BaseInputComponent } from '../base-input/base-input.component';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { NewOrderFormValue } from '../../models/new-order-form/new-order-form.model';
 import { PickupFromComponent } from '../pickup-from/pickup-from.component';
 import { DeliverToComponent } from '../deliver-to/deliver-to.component';
@@ -12,7 +11,6 @@ import {ProofOfDeliveryComponent} from "../proof-of-delivery/proof-of-delivery.c
   standalone: true,
   imports: [
     CommonModule,
-    BaseInputComponent,
     PickupFromComponent,
     DeliverToComponent,
     OtherOrderDetailsComponent,

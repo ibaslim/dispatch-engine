@@ -28,7 +28,7 @@ type TenantStatus = OnboardingStatus | 'invited';
 const STATUS_LABELS: Record<TenantStatus, string> = {
   pre_pending: 'Pre-Pending',
   pending: 'Pending Approval',
-  approved: 'Approved',
+  approved: 'Active',
   rejected: 'Rejected',
   invited: 'Invited',
 };
@@ -295,6 +295,8 @@ export class TenantManagementComponent implements OnInit, OnDestroy {
         ...row,
         number: index + 1,
       }));
+
+      this.syncSelectedTenantFromLatestRows();
     } catch {
       this.tenants = [];
       this.pendingApplications = [];
@@ -392,8 +394,8 @@ export class TenantManagementComponent implements OnInit, OnDestroy {
     if (!this.selectedTenant?.tenantId) return;
     try {
       await firstValueFrom(this.http.post(`/api/v1/platform/tenants/${this.selectedTenant.tenantId}/suspend`, {}));
+      this.updateTenantStatus(this.selectedTenant.tenantId, 'Suspended');
       await this.loadTenants();
-      this.closeViewDrawer();
     } catch (err) {
       console.error('Failed to suspend tenant', err);
     }
@@ -403,11 +405,55 @@ export class TenantManagementComponent implements OnInit, OnDestroy {
     if (!this.selectedTenant?.tenantId) return;
     try {
       await firstValueFrom(this.http.post(`/api/v1/platform/tenants/${this.selectedTenant.tenantId}/unsuspend`, {}));
+      this.updateTenantStatus(this.selectedTenant.tenantId, 'Active');
       await this.loadTenants();
-      this.closeViewDrawer();
     } catch (err) {
       console.error('Failed to unsuspend tenant', err);
     }
+  }
+
+  private updateTenantStatus(tenantId: string, status: string): void {
+    this.tenants = this.tenants.map((tenant) =>
+      tenant.tenantId === tenantId ? { ...tenant, status } : tenant
+    );
+    if (this.selectedTenant?.tenantId === tenantId) {
+      this.selectedTenant = { ...this.selectedTenant, status };
+    }
+  }
+
+  isSelectedTenantSuspended(): boolean {
+    return this.getSelectedTenant()?.status === 'Suspended';
+  }
+
+  isSelectedTenantApproved(): boolean {
+    return this.selectedApplication?.status === 'approved';
+  }
+
+  private syncSelectedTenantFromLatestRows(): void {
+    const selected = this.selectedTenant;
+    if (!selected) return;
+
+    const refreshedTenant = selected.tenantId
+      ? this.tenants.find((tenant) => tenant.tenantId === selected.tenantId)
+      : this.tenants.find((tenant) => tenant.id === selected.id);
+
+    if (refreshedTenant) {
+      this.selectedTenant = refreshedTenant;
+    }
+
+    if (this.selectedApplication) {
+      this.selectedApplication = this.pendingApplications.find(
+        (application) => application.id === this.selectedApplication?.id
+      ) ?? this.selectedApplication;
+      this.selectedApplicationEntries = this.buildApplicationEntries(this.selectedApplication);
+    }
+  }
+
+  private getSelectedTenant(): TenantUser | null {
+    if (!this.selectedTenant) return null;
+    return this.selectedTenant.tenantId
+      ? this.tenants.find((tenant) => tenant.tenantId === this.selectedTenant?.tenantId) ?? this.selectedTenant
+      : this.tenants.find((tenant) => tenant.id === this.selectedTenant?.id) ?? this.selectedTenant;
   }
 
   private formatPhone(value: unknown): string | undefined {
@@ -428,9 +474,6 @@ export class TenantManagementComponent implements OnInit, OnDestroy {
     return ROLE_LABELS[role] ?? role;
   }
 
-  getStatusLabel(status: TenantStatus): string {
-    return STATUS_LABELS[status] ?? status;
-  }
 
   clearInviteFeedback(): void {
     this.inviteError = '';

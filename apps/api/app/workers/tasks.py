@@ -6,29 +6,31 @@ from app.services.email_service import (
     build_onboarding_approved_email,
     build_onboarding_rejected_email,
     build_tenant_suspended_email,
+    build_tenant_unsuspended_email,
 )
+from typing import Optional
 
 
 @celery_app.task(name="send_invitation_email", bind=True, max_retries=3)
 def send_invitation_email(
     self,
-    email: str = None,
-    name: str = None,
-    tenant_name: str = None,
-    invite_token: str = None,
-    accept_url: str = None,
+    email: Optional[str] = None,
+    name: Optional[str] = None,
+    tenant_name: Optional[str] = None,
+    invite_token: Optional[str] = None,
+    accept_url: Optional[str] = None,
     role: str = "member",
     **kwargs,
 ) -> None:
-    email = email or kwargs.get("email")
-    name = name or kwargs.get("name")
-    tenant_name = tenant_name or kwargs.get("tenant_name")
-    invite_token = invite_token or kwargs.get("invite_token")
-    accept_url = accept_url or kwargs.get("accept_url")
-    role = role or kwargs.get("role", "member")
+    email_value = email or kwargs.get("email") or ""
+    name_value = name or kwargs.get("name") or ""
+    tenant_name_value = tenant_name or kwargs.get("tenant_name") or ""
+    invite_token_value = invite_token or kwargs.get("invite_token") or ""
+    accept_url_value = accept_url or kwargs.get("accept_url") or ""
+    role_value = role or kwargs.get("role") or "member"
     try:
-        html = build_invitation_email(name, tenant_name, accept_url, role)
-        send_email_sync(email, "You're invited to Dispatch Engine", html)
+        html = build_invitation_email(name_value, tenant_name_value, accept_url_value, role_value)
+        send_email_sync(email_value, "You're invited to Dispatch Engine", html)
     except Exception as exc:
         raise self.retry(exc=exc, countdown=60)
 
@@ -58,16 +60,16 @@ def send_push_notification(fcm_token: str, title: str, body: str, data: dict | N
 @celery_app.task(name="send_onboarding_submitted_email", bind=True, max_retries=3)
 def send_onboarding_submitted_email(
     self,
-    tenant_name: str = None,
-    contact_email: str = None,
+    tenant_name: Optional[str] = None,
+    contact_email: Optional[str] = None,
     **kwargs,
 ) -> None:
     """Send email when onboarding application is submitted."""
-    tenant_name = tenant_name or kwargs.get("tenant_name")
-    contact_email = contact_email or kwargs.get("contact_email")
+    tenant_name_value = tenant_name or kwargs.get("tenant_name") or ""
+    contact_email_value = contact_email or kwargs.get("contact_email") or ""
     try:
-        html = build_onboarding_submitted_email(tenant_name, contact_email)
-        send_email_sync(contact_email, "Your Application is Under Review", html)
+        html = build_onboarding_submitted_email(tenant_name_value, contact_email_value)
+        send_email_sync(contact_email_value, "Your Application is Under Review", html)
     except Exception as exc:
         raise self.retry(exc=exc, countdown=60)
 
@@ -75,18 +77,18 @@ def send_onboarding_submitted_email(
 @celery_app.task(name="send_onboarding_approved_email", bind=True, max_retries=3)
 def send_onboarding_approved_email(
     self,
-    tenant_name: str = None,
-    contact_email: str = None,
-    tenant_role: str = None,
+    tenant_name: Optional[str] = None,
+    contact_email: Optional[str] = None,
+    tenant_role: Optional[str] = None,
     **kwargs,
 ) -> None:
     """Send email when onboarding application is approved."""
-    tenant_name = tenant_name or kwargs.get("tenant_name")
-    contact_email = contact_email or kwargs.get("contact_email")
-    tenant_role = tenant_role or kwargs.get("tenant_role") or kwargs.get("role")
+    tenant_name_value = tenant_name or kwargs.get("tenant_name") or ""
+    contact_email_value = contact_email or kwargs.get("contact_email") or ""
+    tenant_role_value = tenant_role or kwargs.get("tenant_role") or kwargs.get("role") or ""
     try:
-        html = build_onboarding_approved_email(tenant_name, tenant_role)
-        send_email_sync(contact_email, "Welcome! Your Application is Approved", html)
+        html = build_onboarding_approved_email(tenant_name_value, tenant_role_value)
+        send_email_sync(contact_email_value, "Welcome! Your Application is Approved", html)
     except Exception as exc:
         raise self.retry(exc=exc, countdown=60)
 
@@ -94,18 +96,18 @@ def send_onboarding_approved_email(
 @celery_app.task(name="send_onboarding_rejected_email", bind=True, max_retries=3)
 def send_onboarding_rejected_email(
     self,
-    tenant_name: str = None,
-    contact_email: str = None,
-    reason: str = None,
+    tenant_name: Optional[str] = None,
+    contact_email: Optional[str] = None,
+    reason: Optional[str] = None,
     **kwargs,
 ) -> None:
     """Send email when onboarding application is rejected."""
-    tenant_name = tenant_name or kwargs.get("tenant_name")
-    contact_email = contact_email or kwargs.get("contact_email")
-    reason = reason or kwargs.get("reason")
+    tenant_name_value = tenant_name or kwargs.get("tenant_name") or ""
+    contact_email_value = contact_email or kwargs.get("contact_email") or ""
+    reason_value = reason or kwargs.get("reason") or None
     try:
-        html = build_onboarding_rejected_email(tenant_name, reason)
-        send_email_sync(contact_email, "Application Status Update", html)
+        html = build_onboarding_rejected_email(tenant_name_value, reason_value)
+        send_email_sync(contact_email_value, "Application Status Update", html)
     except Exception as exc:
         raise self.retry(exc=exc, countdown=60)
 
@@ -113,16 +115,34 @@ def send_onboarding_rejected_email(
 @celery_app.task(name="send_tenant_suspended_email", bind=True, max_retries=3)
 def send_tenant_suspended_email(
     self,
-    tenant_name: str = None,
-    contact_email: str = None,
+    tenant_name: Optional[str] = None,
+    contact_email: Optional[str] = None,
     **kwargs,
 ) -> None:
     """Send email when a tenant account is suspended."""
-    tenant_name = tenant_name or kwargs.get("tenant_name")
-    contact_email = contact_email or kwargs.get("contact_email")
+    tenant_name_value = tenant_name or kwargs.get("tenant_name") or ""
+    contact_email_value = contact_email or kwargs.get("contact_email") or ""
     try:
-        html = build_tenant_suspended_email(tenant_name)
-        send_email_sync(contact_email, "Account Suspended", html)
+        html = build_tenant_suspended_email(tenant_name_value)
+        send_email_sync(contact_email_value, "Account Suspended", html)
     except Exception as exc:
         raise self.retry(exc=exc, countdown=60)
+
+
+@celery_app.task(name="send_tenant_unsuspended_email", bind=True, max_retries=3)
+def send_tenant_unsuspended_email(
+    self,
+    tenant_name: Optional[str] = None,
+    contact_email: Optional[str] = None,
+    **kwargs,
+) -> None:
+    """Send email when a tenant account is reactivated."""
+    tenant_name_value = tenant_name or kwargs.get("tenant_name") or ""
+    contact_email_value = contact_email or kwargs.get("contact_email") or ""
+    try:
+        html = build_tenant_unsuspended_email(tenant_name_value)
+        send_email_sync(contact_email_value, "Account Reactivated", html)
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=60)
+
 

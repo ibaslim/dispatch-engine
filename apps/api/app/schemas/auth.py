@@ -21,6 +21,13 @@ class PendingApprovalResponse(BaseModel):
     refresh_token: str | None = None
 
 
+class SuspendedAccountResponse(BaseModel):
+    status: str
+    message: str
+    access_token: str | None = None
+    refresh_token: str | None = None
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 
@@ -31,6 +38,7 @@ class MeResponse(BaseModel):
     name: str
     is_platform_admin: bool
     tenant_id: str | None
+    tenant_is_active: bool | None = None
     roles: list[str]
 
 

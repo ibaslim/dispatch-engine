@@ -12,15 +12,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.core.security import decode_access_token
-from app.db.session import async_session_factory
+from app.db.session import get_db as _get_db
 from app.models.user import User
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-async def get_db() -> AsyncSession:
-    async with async_session_factory() as session:
-        yield session
+get_db = _get_db
 
 
 DBSession = Annotated[AsyncSession, Depends(get_db)]
@@ -38,7 +36,8 @@ async def _get_current_user(
     if credentials is None:
         raise exc
     try:
-        payload = decode_access_token(credentials.credentials)
+        token: str = credentials.credentials
+        payload = decode_access_token(token)
         user_id: str = payload.get("sub", "")
         if not user_id:
             raise exc
@@ -81,7 +80,8 @@ async def _get_current_user_allow_inactive(
     if credentials is None:
         raise exc
     try:
-        payload = decode_access_token(credentials.credentials)
+        token: str = credentials.credentials
+        payload = decode_access_token(token)
         user_id: str = payload.get("sub", "")
         if not user_id:
             raise exc
@@ -112,6 +112,43 @@ async def _get_current_user_allow_inactive(
 CurrentUserAllowInactive = Annotated[User, Depends(_get_current_user_allow_inactive)]
 
 
+async def _get_current_user_allow_inactive_and_suspended(
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(bearer_scheme)],
+    db: DBSession,
+) -> User:
+    exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if credentials is None:
+        raise exc
+    try:
+        token: str = credentials.credentials
+        payload = decode_access_token(token)
+        user_id: str = payload.get("sub", "")
+        if not user_id:
+            raise exc
+    except JWTError:
+        raise exc
+
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.roles))
+        .where(User.id == UUID(user_id))
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise exc
+    return user
+
+
+CurrentUserAllowInactiveAndSuspended = Annotated[
+    User,
+    Depends(_get_current_user_allow_inactive_and_suspended),
+]
+
+
 def require_platform_admin(current_user: CurrentUser) -> User:
     if not current_user.is_platform_admin:
         raise HTTPException(
@@ -125,7 +162,6 @@ PlatformAdmin = Annotated[User, Depends(require_platform_admin)]
 
 
 def require_tenant_admin(current_user: CurrentUser) -> User:
-    from app.models.user import UserRole as UserRoleModel
     has_role = any(
         r.role in ("tenant_admin", "vendor")
         for r in current_user.roles

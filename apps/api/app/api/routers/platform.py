@@ -6,7 +6,7 @@ from app.core.deps import get_db, PlatformAdmin
 from app.schemas.tenant import InviteTenantAdminRequest
 from app.services.invitation_service import create_tenant_admin_invitation
 from app.models.tenant import Tenant
-from app.workers.tasks import send_tenant_suspended_email
+from app.workers.tasks import send_tenant_suspended_email, send_tenant_unsuspended_email
 
 router = APIRouter()
 
@@ -59,3 +59,10 @@ async def unsuspend_tenant(
     tenant.is_active = True
     db.add(tenant)
     await db.commit()
+
+    if tenant.contact_email:
+        send_tenant_unsuspended_email.delay(
+            tenant_name=tenant.name,
+            contact_email=tenant.contact_email,
+        )
+
