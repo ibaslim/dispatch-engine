@@ -1,15 +1,15 @@
 <app-page title=""
     containerClass="w-full px-4 py-6 sm:px-6 lg:px-8 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]"
-    contentClass="w-full h-[calc(100vh-6rem)] flex flex-col gap-3">
+    contentClass="w-full h-auto lg:h-[calc(100vh-6rem)] flex flex-col gap-3">
 
     <div page-actions class="flex items-center justify-end gap-2">
         <app-button variant="ghost" label="Refresh" [loading]="isLoading" (onClick)="refreshDispatchState()"
             [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-3 py-2 rounded-md text-sm'">
         </app-button>
 
-        <app-button *ngIf="showLocalDemoTools && !isReadOnlyTenant" variant="ghost-danger" label="Reset Demo Cache"
-            [disabled]="isLoading" (onClick)="resetLocalDemoCache()">
-        </app-button>
+<!--        <app-button *ngIf="showLocalDemoTools && !isReadOnlyTenant" variant="ghost-danger" label="Reset Demo Cache"-->
+<!--            [disabled]="isLoading" (onClick)="resetLocalDemoCache()">-->
+<!--        </app-button>-->
     </div>
 
     <div *ngIf="isLoading"
@@ -23,9 +23,9 @@
 
     <div
         class="grid grid-cols-1 lg:grid-cols-[280px_1fr_380px] text-sm font-medium text-gray-700 dark:text-gray-300 px-2">
-        <span>Assigned orders by driver</span>
+<!--        <span>Assigned orders by driver</span>-->
         <span></span>
-        <span class="text-left">New Orders</span>
+<!--        <span class="text-left">New Orders</span>-->
     </div>
 
     <div *ngIf="isLoading"
@@ -66,10 +66,11 @@
     </div>
 
     <div *ngIf="!isLoading"
-        class="grid grid-cols-1 lg:grid-cols-[280px_1fr_380px] gap-0 border border-gray-200 dark:border-[#2a2d2a] rounded-md overflow-hidden flex-1">
+        class="grid grid-cols-1 lg:grid-cols-[280px_1fr_380px] gap-0 border border-gray-200 dark:border-[#2a2d2a] rounded-md overflow-hidden flex-1 min-h-0">
 
         <div
-            class="bg-gray-50 dark:bg-[#151a18] border-r border-gray-200 dark:border-[#2a2d2a] p-4 space-y-4 overflow-auto">
+            class="bg-gray-50 dark:bg-[#151a18] border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-[#2a2d2a] p-4 space-y-4 overflow-auto max-h-[400px] lg:max-h-none">
+            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Assigned orders by driver</h4>
             <div *ngFor="let driver of assignedDrivers"
                 class="rounded-lg border border-gray-200 dark:border-[#2a2d2a] p-3 bg-white dark:bg-[#1E201E]">
                 <div class="flex items-center justify-between mb-2">
@@ -93,7 +94,7 @@
             </div>
         </div>
 
-        <div class="bg-white dark:bg-[#1E201E] p-6 overflow-auto">
+        <div class="bg-white dark:bg-[#1E201E] p-6 overflow-auto max-h-[500px] lg:max-h-none">
             <ng-container *ngIf="selectedOrder as order; else emptySelection">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Order {{ order.orderNumber }}</h3>
 
@@ -112,9 +113,36 @@
                         <p class="text-sm text-gray-600 dark:text-gray-400">{{ order.delivery.name }}</p>
                         <p class="text-sm text-gray-600 dark:text-gray-400">{{ order.delivery.phone }}</p>
                         <p class="text-sm text-gray-600 dark:text-gray-400">{{ order.delivery.address }}</p>
+
                         <p class="text-sm text-gray-600 dark:text-gray-400">Delivery: {{ order.delivery.date }} • {{
                             order.delivery.time }}</p>
                     </div>
+                    <!-- Proof of Delivery -->
+<div class="mt-6">
+    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+        Proof of Delivery
+    </h4>
+
+    <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+
+        <div *ngIf="order.proofOfDelivery?.signature"
+            class="flex items-center gap-2 rounded-md bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2">
+            <span class="text-emerald-500">✓</span>
+            <span>Signature Required</span>
+        </div>
+
+        <div *ngIf="order.proofOfDelivery?.picture"
+            class="flex items-center gap-2 rounded-md bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2">
+            <span class="text-emerald-500">✓</span>
+            <span>Picture Required</span>
+        </div>
+
+        <div *ngIf="!order.proofOfDelivery?.signature && !order.proofOfDelivery?.picture"
+            class="text-gray-500 dark:text-gray-400 italic">
+            No proof of delivery required.
+        </div>
+    </div>
+</div>
                 </div>
 
                 <div class="mt-6">
@@ -146,16 +174,16 @@
             </ng-template>
         </div>
 
-        <div class="bg-white dark:bg-[#1E201E] border-l border-gray-200 dark:border-[#2a2d2a] p-4 overflow-auto">
+        <div class="bg-white dark:bg-[#1E201E] border-t lg:border-t-0 lg:border-l border-gray-200 dark:border-[#2a2d2a] p-4 overflow-auto max-h-[400px] lg:max-h-none">
             <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">New Orders</h4>
             <div class="space-y-3">
-                <div *ngFor="let order of newOrders"
-                    class="rounded-lg border border-gray-200 dark:border-[#2a2d2a] p-3 bg-gray-50 dark:bg-[#151a18]">
-                    <div class="font-medium text-sm text-gray-900 dark:text-gray-100">{{ order.id }}</div>
-                    <div class="text-xs text-gray-600 dark:text-gray-400">{{ order.pickup }} → {{ order.dropoff }}</div>
-                    <div class="text-[11px] text-gray-500 dark:text-gray-400">ETA: {{ order.eta }} · {{ order.total }}
-                    </div>
-                </div>
+                <button *ngFor="let order of newOrders" type="button"
+    class="w-full text-left rounded-lg border border-gray-200 dark:border-[#2a2d2a] p-3 bg-gray-50 dark:bg-[#151a18] transition hover:bg-gray-100 dark:hover:bg-[#232623]"
+    (click)="selectOrder(order.realId)">
+    <div class="font-medium text-sm text-gray-900 dark:text-gray-100">{{ order.id }}</div>
+    <div class="text-xs text-gray-600 dark:text-gray-400">{{ order.pickup }} → {{ order.dropoff }}</div>
+    <div class="text-[11px] text-gray-500 dark:text-gray-400">ETA: {{ order.eta }} · {{ order.total }}</div>
+</button>
             </div>
 
             <div *ngIf="newOrders.length === 0"
@@ -163,11 +191,12 @@
                 No unassigned current or scheduled orders right now.
             </div>
 
-            <div *ngIf="!isReadOnlyTenant" class="mt-6 flex items-center justify-center">
-                <app-button variant="icon" ariaLabel="Add new order" [icon]="'M12 5v14M5 12h14'"
-                    [extraClasses]="'w-12 h-12 rounded-md bg-[#2ecc8a] text-white hover:bg-[#27b87b] flex items-center justify-center'">
-                </app-button>
-            </div>
+<!--            <div *ngIf="!isReadOnlyTenant" class="mt-6 flex items-center justify-center">-->
+<!--                <app-button variant="icon" ariaLabel="Add new order" [icon]="'M12 5v14M5 12h14'" -->
+<!--                    [extraClasses]="'w-12 h-12 rounded-md bg-[#2ecc8a] text-white hover:bg-[#27b87b] flex items-center justify-center'">-->
+<!--                </app-button>-->
+<!--            </div>-->
+
         </div>
 
     </div>

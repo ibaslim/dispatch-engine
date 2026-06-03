@@ -6,11 +6,14 @@ from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.core.deps import CurrentUser
-from app.models.order import Order, OrderStatus
+from app.models.order import Order, OrderStatus, ActivityStatus
+from app.models.tenant import Tenant, TenantRole
 from app.schemas.order import OrderCreate, OrderResponse, OrderUpdate
+from uuid import UUID
 
 router = APIRouter(tags=["Orders"])
 APP_TIMEZONE = ZoneInfo("Asia/Karachi")
@@ -63,6 +66,7 @@ async def generate_order_number(db: AsyncSession) -> str:
 
     return f"ORD{day}{month}{year}{order_sequence}"
 
+
 # -------------------------
 # GET ORDERS
 # -------------------------
@@ -71,7 +75,9 @@ async def get_orders(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Order))
+    result = await db.execute(
+        select(Order).options(selectinload(Order.driver))
+    )
     return result.scalars().all()
 
 
@@ -94,6 +100,12 @@ async def create_order(
 
         data["order_number"] = await generate_order_number(db)
         data["order_placed_time"] = datetime.now(APP_TIMEZONE).strftime("%I:%M %p")
+        proof = data.get("proof_of_delivery", {})
+        if not proof.get("signature") and not proof.get("picture"):
+            raise HTTPException(
+                status_code=400,
+                detail="At least one proof of delivery method is required."
+            )
         data["proof_of_delivery"] = data.get("proof_of_delivery") or {
             "signature": False,
             "picture": False,
@@ -103,15 +115,19 @@ async def create_order(
             data["pickup_date"],
             data["pickup_time"],
             data["delivery_date"],
-            data["delivery_time"])
-        
-        order = Order(**data)
+            data["delivery_time"],
+        )
 
+        order = Order(**data)
         db.add(order)
         await db.commit()
         await db.refresh(order)
 
-        return order
+        # Re-fetch with driver relationship loaded
+        result = await db.execute(
+            select(Order).where(Order.id == order.id).options(selectinload(Order.driver))
+        )
+        return result.scalar_one()
 
     except IntegrityError:
         await db.rollback()
@@ -122,7 +138,7 @@ async def create_order(
 
 
 # -------------------------
-# UPDATE ORDER (NEW)
+# UPDATE ORDER
 # -------------------------
 @router.patch("/{order_id}", response_model=OrderResponse)
 async def update_order(
@@ -136,7 +152,10 @@ async def update_order(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Read-only access for tenant users.",
         )
-    result = await db.execute(select(Order).where(Order.id == order_id))
+
+    result = await db.execute(
+        select(Order).where(Order.id == order_id).options(selectinload(Order.driver))
+    )
     order = result.scalar_one_or_none()
 
     if not order:
@@ -148,12 +167,7 @@ async def update_order(
         for key, value in update_data.items():
             setattr(order, key, value)
 
-        schedule_fields = {
-            "pickup_date",
-            "pickup_time",
-            "delivery_date",
-            "delivery_time",
-        }
+        schedule_fields = {"pickup_date", "pickup_time", "delivery_date", "delivery_time"}
         if "status" not in update_data and schedule_fields.intersection(update_data):
             order.status = get_order_status(
                 order.pickup_date,
@@ -165,7 +179,12 @@ async def update_order(
         await db.commit()
         await db.refresh(order)
 
-        return order
+        # Re-fetch with driver relationship loaded
+        result = await db.execute(
+            select(Order).where(Order.id == order.id).options(selectinload(Order.driver))
+        )
+        return result.scalar_one()
+
     except IntegrityError:
         await db.rollback()
         raise HTTPException(
@@ -175,7 +194,7 @@ async def update_order(
 
 
 # -------------------------
-# DELETE ORDER (NEW)
+# DELETE ORDER
 # -------------------------
 @router.delete("/{order_id}")
 async def delete_order(
@@ -188,6 +207,7 @@ async def delete_order(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Read-only access for tenant users.",
         )
+
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
 
@@ -219,6 +239,7 @@ async def update_status(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Read-only access for tenant users.",
         )
+
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
 
@@ -250,6 +271,7 @@ async def toggle_ready(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Read-only access for tenant users.",
         )
+
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
 
@@ -264,3 +286,69 @@ async def toggle_ready(
         "success": True,
         "ready_for_pickup": order.ready_for_pickup
     }
+
+
+# -------------------------
+# ASSIGN DRIVER
+# -------------------------
+class AssignDriverRequest(BaseModel):
+    driver_id: UUID
+
+
+@router.patch("/{order_id}/assign-driver", response_model=OrderResponse)
+async def assign_driver(
+    order_id: str,
+    payload: AssignDriverRequest,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Assign a driver to an order. Driver must be an active tenant with role='driver'."""
+    if not current_user.is_platform_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Read-only access for tenant users.",
+        )
+
+    result = await db.execute(
+        select(Order).where(Order.id == order_id).options(selectinload(Order.driver))
+    )
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    driver_result = await db.execute(
+        select(Tenant).where(
+            (Tenant.id == payload.driver_id) &
+            (Tenant.role == TenantRole.driver) &
+            (Tenant.is_active == True)
+        )
+    )
+    driver = driver_result.scalar_one_or_none()
+
+    if not driver:
+        raise HTTPException(
+            status_code=404,
+            detail="Driver not found or is not active"
+        )
+
+    try:
+        order.driver_id = payload.driver_id
+        if order.activity_status == ActivityStatus.driver_not_assigned:
+            order.activity_status = ActivityStatus.pickup_initiated
+
+        await db.commit()
+        await db.refresh(order)
+
+        # Re-fetch with driver relationship loaded
+        result = await db.execute(
+            select(Order).where(Order.id == order.id).options(selectinload(Order.driver))
+        )
+        return result.scalar_one()
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Error assigning driver: {str(e)}"
+        )

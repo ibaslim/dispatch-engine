@@ -117,13 +117,15 @@ def send_tenant_suspended_email(
     self,
     tenant_name: Optional[str] = None,
     contact_email: Optional[str] = None,
+    reason: Optional[str] = None,
     **kwargs,
 ) -> None:
     """Send email when a tenant account is suspended."""
     tenant_name_value = tenant_name or kwargs.get("tenant_name") or ""
     contact_email_value = contact_email or kwargs.get("contact_email") or ""
+    reason_value = reason or kwargs.get("reason") or None
     try:
-        html = build_tenant_suspended_email(tenant_name_value)
+        html = build_tenant_suspended_email(tenant_name_value, reason_value)
         send_email_sync(contact_email_value, "Account Suspended", html)
     except Exception as exc:
         raise self.retry(exc=exc, countdown=60)

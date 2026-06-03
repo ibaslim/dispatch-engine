@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import select
 from app.core.deps import get_db, PlatformAdmin
-from app.schemas.tenant import InviteTenantAdminRequest
+from app.schemas.tenant import InviteTenantAdminRequest, SuspendTenantRequest
 from app.services.invitation_service import create_tenant_admin_invitation
 from app.models.tenant import Tenant
 from app.workers.tasks import send_tenant_suspended_email, send_tenant_unsuspended_email
@@ -29,6 +29,7 @@ async def invite_tenant_admin(
 @router.post("/tenants/{tenant_id}/suspend", status_code=status.HTTP_204_NO_CONTENT)
 async def suspend_tenant(
     tenant_id: str,
+    req: SuspendTenantRequest,
     current_user: PlatformAdmin,
     db: AsyncSession = Depends(get_db),
 ):
@@ -42,7 +43,9 @@ async def suspend_tenant(
 
     if tenant.contact_email:
         send_tenant_suspended_email.delay(
-            tenant_name=tenant.name, contact_email=tenant.contact_email
+            tenant_name=tenant.name,
+            contact_email=tenant.contact_email,
+            reason=req.reason
         )
 
 

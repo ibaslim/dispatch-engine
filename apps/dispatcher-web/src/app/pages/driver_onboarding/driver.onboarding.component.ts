@@ -36,6 +36,9 @@ export class DriverOnboardingComponent implements OnInit {
     notes: '',
     passportFile: null,
     licenseFile: null,
+    policeVerificationFile: null,
+    drivingHistoryFile: null,
+    photoIdFile: null,
   };
 
   showSubmitValidation = false;
@@ -43,6 +46,9 @@ export class DriverOnboardingComponent implements OnInit {
   submitMessage = '';
   passportFileError = '';
   licenseFileError = '';
+  policeVerificationFileError = '';
+  drivingHistoryFileError = '';
+  photoIdFileError = '';
 
   async ngOnInit(): Promise<void> {
     if (!this.auth.currentUser()) {
@@ -75,6 +81,9 @@ export class DriverOnboardingComponent implements OnInit {
           notes: this.form.notes.trim(),
           passportFileName: this.form.passportFile?.name ?? null,
           licenseFileName: this.form.licenseFile?.name ?? null,
+          policeVerificationFileName: this.form.policeVerificationFile?.name ?? null,
+          drivingHistoryFileName: this.form.drivingHistoryFile?.name ?? null,
+          photoIdFileName: this.form.photoIdFile?.name ?? null,
         },
       });
 
@@ -84,6 +93,15 @@ export class DriverOnboardingComponent implements OnInit {
       }
       if (this.form.licenseFile) {
         uploads.push(this.onboarding.uploadDocument(application.id, this.form.licenseFile));
+      }
+      if (this.form.policeVerificationFile) {
+        uploads.push(this.onboarding.uploadDocument(application.id, this.form.policeVerificationFile));
+      }
+      if (this.form.drivingHistoryFile) {
+        uploads.push(this.onboarding.uploadDocument(application.id, this.form.drivingHistoryFile));
+      }
+      if (this.form.photoIdFile) {
+        uploads.push(this.onboarding.uploadDocument(application.id, this.form.photoIdFile));
       }
       if (uploads.length) {
         await Promise.all(uploads);
@@ -105,6 +123,21 @@ export class DriverOnboardingComponent implements OnInit {
     this.form.licenseFile = this.getFileFromEvent(event, 'Driving license scan', 'license');
   }
 
+  onPoliceVerificationChange(event: Event): void {
+    this.policeVerificationFileError = '';
+    this.form.policeVerificationFile = this.getFileFromEvent(event, 'Police verification certificate', 'policeVerification');
+  }
+
+  onDrivingHistoryChange(event: Event): void {
+    this.drivingHistoryFileError = '';
+    this.form.drivingHistoryFile = this.getFileFromEvent(event, 'Driving history report', 'drivingHistory');
+  }
+
+  onPhotoIdChange(event: Event): void {
+    this.photoIdFileError = '';
+    this.form.photoIdFile = this.getFileFromEvent(event, 'Photo ID', 'photoId');
+  }
+
   private isEmailValid(): boolean {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.form.email.trim());
   }
@@ -116,11 +149,14 @@ export class DriverOnboardingComponent implements OnInit {
       !!this.form.phone.number &&
       !!this.form.address.trim() &&
       !!this.form.passportFile &&
-      !!this.form.licenseFile
+      !!this.form.licenseFile &&
+      !!this.form.policeVerificationFile &&
+      !!this.form.drivingHistoryFile &&
+      !!this.form.photoIdFile
     );
   }
 
-  private getFileFromEvent(event: Event, label: string, target: 'passport' | 'license'): File | null {
+  private getFileFromEvent(event: Event, label: string, target: 'passport' | 'license' | 'policeVerification' | 'drivingHistory' | 'photoId'): File | null {
     const input = event.target as HTMLInputElement | null;
     const file = input?.files?.[0] ?? null;
     if (file && file.size > this.maxUploadBytes) {
@@ -130,8 +166,14 @@ export class DriverOnboardingComponent implements OnInit {
       const message = `${label}: Please select an item below 1 MB.`;
       if (target === 'passport') {
         this.passportFileError = message;
-      } else {
+      } else if (target === 'license') {
         this.licenseFileError = message;
+      } else if (target === 'policeVerification') {
+        this.policeVerificationFileError = message;
+      } else if (target === 'drivingHistory') {
+        this.drivingHistoryFileError = message;
+      } else {
+        this.photoIdFileError = message;
       }
       this.toast.error(message);
       return null;

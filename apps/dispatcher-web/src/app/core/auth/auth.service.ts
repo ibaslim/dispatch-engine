@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import type { MeResponse, LoginRequest } from '@dispatch/shared/contracts';
+import { ToastService} from "../toast/toast.service";
 
 const ACCESS_KEY = 'dispatch:access_token';
 const REFRESH_KEY = 'dispatch:refresh_token';
@@ -18,7 +19,7 @@ interface AuthStatusResponse {
 export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
-
+  private readonly toast = inject(ToastService);
   private readonly _currentUser = signal<MeResponse | null>(null);
   readonly currentUser = this._currentUser.asReadonly();
   readonly isLoggedIn = computed(() => this._currentUser() !== null);
@@ -64,7 +65,9 @@ export class AuthService {
         this.storeTokens(res.access_token, res.refresh_token);
       }
       await this.loadCurrentUser();
-      await this.router.navigate(['/suspended']);
+      this.toast.error(
+    'Your account has been suspended. Please contact support.'
+  );
       return;
     }
 

@@ -2,20 +2,23 @@
     containerClass="w-full px-4 py-8 sm:px-6 lg:px-8 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]"
     contentClass="w-full space-y-6">
 
-    <div page-actions class="flex items-center gap-2">
-        <app-search-bar [value]="searchQuery" (valueChange)="searchQuery = $event"></app-search-bar>
+    <div page-actions class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+        <app-search-bar [value]="searchQuery" (valueChange)="searchQuery = $event" class="w-full sm:w-auto"></app-search-bar>
 
-        <app-button *ngIf="showLocalDemoButton" variant="ghost-success" label="Seed Drivers"
-            (onClick)="seedDrivers()">
-        </app-button>
+        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <app-button *ngIf="showLocalDemoButton" variant="ghost-success" label="Seed Drivers"
+                (onClick)="seedDrivers()"
+                [extraClasses]="'flex-1 sm:flex-none justify-center px-3 py-2 rounded-md text-sm h-9'">
+            </app-button>
 
-        <app-button variant="ghost" label="Get the app"
-            [extraClasses]="'border border-gray-300 dark:border-grey-100 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-3 py-2 rounded-md text-sm'">
-        </app-button>
+            <app-button variant="ghost" label="Get the app"
+                [extraClasses]="'border border-gray-300 dark:border-grey-100 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-3 py-2 rounded-md text-sm flex-1 sm:flex-none justify-center h-9'">
+            </app-button>
 
-        <app-button variant="primary" label="+ New Driver" (onClick)="openNewDriver()"
-            [extraClasses]="'px-3 py-2 rounded-md text-sm h-9'">
-        </app-button>
+            <app-button variant="primary" label="+ New Driver" (onClick)="openNewDriver()"
+                [extraClasses]="'px-3 py-2 rounded-md text-sm h-9 flex-1 sm:flex-none justify-center'">
+            </app-button>
+        </div>
     </div>
 
     <p *ngIf="feedbackMessage" [class]="'text-sm ' +
@@ -27,10 +30,10 @@
         {{ feedbackMessage }}
     </p>
 
-    <div class="flex items-center gap-6 text-sm text-gray-500 border-b pb-2 mt-2">
-        <app-button *ngFor="let tab of tabs" variant="tab" [label]="tab" (onClick)="setActiveTab(tab)" [extraClasses]="activeTab === tab 
+    <div class="flex items-center gap-6 text-sm text-gray-500 border-b pb-2 mt-2 overflow-x-auto whitespace-nowrap scrollbar-none">
+        <app-button *ngFor="let tab of tabs" variant="tab" [label]="tab" (onClick)="setActiveTab(tab)" [extraClasses]="(activeTab === tab 
               ? 'text-[#32C896] border-b-2 border-[#32C896]' 
-              : 'text-gray-500'">
+              : 'text-gray-500') + ' whitespace-nowrap'">
         </app-button>
     </div>
 

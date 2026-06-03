@@ -1,11 +1,14 @@
-<div
-    class="w-full border-t border-gray-200 dark:border-[#2a2d2a] bg-white dark:bg-[#1E201E] text-gray-800 dark:text-gray-200">
+<div class="w-full overflow-x-auto transition-all duration-300" [ngClass]="{'pb-32': activeMenuRow}">
+  <div
+      class="min-w-[900px] lg:min-w-0 w-full border-t border-gray-200 dark:border-[#2a2d2a] bg-white dark:bg-[#1E201E] text-gray-800 dark:text-gray-200">
 
     <!-- HEADER -->
     <div class="grid items-center gap-4 px-4 py-3 text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400"
         [style.gridTemplateColumns]="columnTemplate ? columnTemplate : ('repeat(' + columns.length + ', minmax(0, 1fr))')">
-        <div *ngFor="let col of columns" class="flex items-center gap-2 w-full"
+        <div *ngFor="let col of columns" class="items-center gap-2 w-full"
              [ngClass]="{
+               'hidden sm:flex': col.hiddenOnMobile,
+               'flex': !col.hiddenOnMobile,
                'justify-start text-left': col.align === 'left',
                'justify-center text-center': col.align === 'center' || !col.align,
                'justify-end text-right': col.align === 'right'
@@ -27,8 +30,10 @@
         <div *ngFor="let row of rows" class="grid items-center gap-4 px-4 py-3 text-sm"
             [style.gridTemplateColumns]="columnTemplate ? columnTemplate : ('repeat(' + columns.length + ', minmax(0, 1fr))')">
 
-            <div *ngFor="let col of columns" class="flex items-center w-full"
+            <div *ngFor="let col of columns" class="items-center w-full"
                  [ngClass]="{
+                   'hidden sm:flex': col.hiddenOnMobile,
+                   'flex': !col.hiddenOnMobile,
                    'justify-start text-left': col.align === 'left',
                    'justify-center text-center': col.align === 'center' || !col.align,
                    'justify-end text-right': col.align === 'right'
@@ -101,7 +106,7 @@
                                'justify-end': col.align === 'right'
                              }">
                             <div
-                                class="w-7 h-7 rounded-full bg-gray-300 dark:bg-[#3a3a3a] text-gray-800 dark:text-gray-100 text-xs flex items-center justify-center font-semibold">
+                                class="w-7 h-7 rounded-full bg-gray-300 dark:bg-[#3a3a3a] text-gray-800 dark:text-gray-100 text-xs items-center justify-center font-semibold hidden sm:flex">
                                 {{ getInitials(row.name) }}
                             </div>
                             <span>{{ row.name }}</span>
@@ -120,22 +125,24 @@
 
     </div>
 
-    <!-- EMPTY STATE -->
-    <div *ngIf="rows.length === 0"
-        class="py-24 flex flex-col items-center text-center text-gray-500 dark:text-gray-400">
-        <div class="w-12 h-12 rounded-full bg-green-100 dark:bg-[#143628] flex items-center justify-center mb-3">
-            <svg class="w-6 h-6 text-[#3ddc97]" viewBox="0 0 256 256" fill="currentColor">
-                <path
-                    d="M208 40H64a16 16 0 00-16 16v144a16 16 0 0016 16h144a16 16 0 0016-16V56a16 16 0 00-16-16zm0 160H64V56h144zM96 104h64a8 8 0 010 16H96a8 0 010-16zm0 32h64a8 8 0 010 16H96a8 0 010-16z">
-                </path>
-            </svg>
-        </div>
+  </div>
+  
+  <!-- EMPTY STATE (Moved outside min-w wrapper) -->
+  <div *ngIf="rows.length === 0"
+      class="w-full py-24 flex flex-col items-center text-center text-gray-500 dark:text-gray-400 sticky left-0 right-0">
+      <div class="w-12 h-12 rounded-full bg-green-100 dark:bg-[#143628] flex items-center justify-center mb-3">
+          <svg class="w-6 h-6 text-[#3ddc97]" viewBox="0 0 256 256" fill="currentColor">
+              <path
+                  d="M208 40H64a16 16 0 00-16 16v144a16 16 0 0016 16h144a16 16 0 0016-16V56a16 16 0 00-16-16zm0 160H64V56h144zM96 104h64a8 8 0 010 16H96a8 0 010-16zm0 32h64a8 8 0 010 16H96a8 0 010-16z">
+              </path>
+          </svg>
+      </div>
 
-        <div class="text-sm">{{ emptyTitle }}</div>
+      <div class="text-sm">{{ emptyTitle }}</div>
 
-        <div *ngIf="emptySubtitle" class="text-xs text-gray-400 dark:text-gray-500 mt-1">
-            {{ emptySubtitle }}
-        </div>
-    </div>
+      <div *ngIf="emptySubtitle" class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+          {{ emptySubtitle }}
+      </div>
+  </div>
 
 </div>

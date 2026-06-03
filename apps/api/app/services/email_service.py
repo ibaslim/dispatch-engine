@@ -109,14 +109,16 @@ def build_onboarding_rejected_email(tenant_name: str, reason: str | None = None)
     """
 
 
-def build_tenant_suspended_email(tenant_name: str) -> str:
+def build_tenant_suspended_email(tenant_name: str, reason: str | None = None) -> str:
     """Email sent when a tenant account is suspended."""
+    reason_text = f"<p><strong>Reason for suspension:</strong> {reason}</p>" if reason else ""
     return f"""
     <html>
     <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h2 style="color: #ef4444;">Account Suspended</h2>
         <p>Hi {tenant_name},</p>
         <p>Your account on Dispatch Engine has been <strong>suspended</strong>.</p>
+        {reason_text}
         <p>Please contact the platform administrator for more information or to discuss the next steps.</p>
         <p><strong>Support Email:</strong> support@dispatch.local</p>
         <br/>

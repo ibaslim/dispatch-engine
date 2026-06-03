@@ -4,11 +4,11 @@
 
     <!-- Tabs -->
     <div
-        class="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-[#2a2d2a] pb-2 mt-2 mb-8">
+        class="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-[#2a2d2a] pb-2 mt-2 mb-8 overflow-x-auto whitespace-nowrap scrollbar-none">
         <app-button *ngFor="let tab of accountTabs" variant="tab" [label]="tab" (onClick)="setActiveTab(tab)"
-            [extraClasses]="activeTab === tab
+            [extraClasses]="(activeTab === tab
         ? 'text-[#3ddc97] border-b-2 border-[#3ddc97]'
-        : 'text-gray-500'">
+        : 'text-gray-500') + ' whitespace-nowrap'">
         </app-button>
     </div>
 
@@ -108,28 +108,30 @@
             <section class="space-y-4">
                 <h3 class="text-lg font-semibold">Usage</h3>
                 <div
-                    class="border border-gray-300 dark:border-[#2a2d2a] rounded-lg overflow-hidden bg-white dark:bg-[#1E201E]">
-                    <div
-                        class="grid grid-cols-6 text-xs text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-[#2a2d2a] px-5 py-3.5">
-                        <div>Month</div>
-                        <div>Billed Orders</div>
-                        <div>Plan</div>
-                        <div>Cost (in USD)</div>
-                        <div>Invoice</div>
-                        <div>Report</div>
-                    </div>
-
-                    <div *ngFor="let row of usageRows"
-                        class="grid grid-cols-6 px-5 py-3.5 text-sm border-b border-gray-200 dark:border-[#2a2d2a] last:border-b-0">
-                        <div>{{ row.month }}</div>
-                        <div>{{ row.billedOrders }}</div>
-                        <div>{{ row.plan }}</div>
-                        <div>{{ row.cost }}</div>
-                        <div class="text-gray-500">
-                            <i *ngIf="row.invoice" class="ph ph-download-simple"></i>
+                    class="border border-gray-300 dark:border-[#2a2d2a] rounded-lg overflow-x-auto bg-white dark:bg-[#1E201E]">
+                    <div class="min-w-[600px] lg:min-w-0">
+                        <div
+                            class="grid grid-cols-6 text-xs text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-[#2a2d2a] px-5 py-3.5">
+                            <div>Month</div>
+                            <div>Billed Orders</div>
+                            <div>Plan</div>
+                            <div>Cost (in USD)</div>
+                            <div>Invoice</div>
+                            <div>Report</div>
                         </div>
-                        <div class="text-gray-500">
-                            <i *ngIf="row.report" class="ph ph-file-text"></i>
+
+                        <div *ngFor="let row of usageRows"
+                            class="grid grid-cols-6 px-5 py-3.5 text-sm border-b border-gray-200 dark:border-[#2a2d2a] last:border-b-0">
+                            <div>{{ row.month }}</div>
+                            <div>{{ row.billedOrders }}</div>
+                            <div>{{ row.plan }}</div>
+                            <div>{{ row.cost }}</div>
+                            <div class="text-gray-500">
+                                <i *ngIf="row.invoice" class="ph ph-download-simple"></i>
+                            </div>
+                            <div class="text-gray-500">
+                                <i *ngIf="row.report" class="ph ph-file-text"></i>
+                            </div>
                         </div>
                     </div>
                 </div>

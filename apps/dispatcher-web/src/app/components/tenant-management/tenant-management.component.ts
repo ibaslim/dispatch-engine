@@ -16,9 +16,10 @@ import { OnboardingService } from '../../core/onboarding/onboarding.service';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { ToastService } from '../../core/toast/toast.service';
+import {SearchBarComponent} from "../search-bar/search-bar.component";
 
 const ROLE_LABELS: Record<TenantRole, string> = {
-  [TenantRole.Vendor]: 'Vendor',
+  [TenantRole.Vendor]: 'Partner',
   [TenantRole.Driver]: 'Driver',
   [TenantRole.Individual]: 'Individual',
 };
@@ -26,7 +27,7 @@ const ROLE_LABELS: Record<TenantRole, string> = {
 type TenantStatus = OnboardingStatus | 'invited';
 
 const STATUS_LABELS: Record<TenantStatus, string> = {
-  pre_pending: 'Pre-Pending',
+  pre_pending: 'Pending-onboarding',
   pending: 'Pending Approval',
   approved: 'Active',
   rejected: 'Rejected',
@@ -70,6 +71,7 @@ interface TenantInvitation {
     PopupComponent,
     BaseInputComponent,
     DropdownSelectorComponent,
+    SearchBarComponent,
   ],
   templateUrl: './tenant-management.component.html',
 })
@@ -77,11 +79,16 @@ export class TenantManagementComponent implements OnInit, OnDestroy {
   private readonly onboarding = inject(OnboardingService);
   private readonly http = inject(HttpClient);
   private readonly toast = inject(ToastService);
+  readonly TenantRole = TenantRole;
 
   private refreshInterval?: any;
 
   invitePopupOpen = false;
   viewDrawerOpen = false;
+  suspendPopupOpen = false;
+  suspensionReason = '';
+  isSuspending = false;
+  tenantToSuspend: TenantUser | null = null;
 
   inviteEmail = '';
   inviteRole: TenantRole = TenantRole.Vendor;
@@ -102,7 +109,7 @@ export class TenantManagementComponent implements OnInit, OnDestroy {
   isReviewing = false;
 
   columns: TableColumn[] = [
-    { key: 'number', label: '#', align: 'center' },
+    { key: 'number', label: '#', align: 'center', hiddenOnMobile: true },
     { key: 'name', label: 'Name', align: 'left' },
     { key: 'username', label: 'Username', align: 'left' },
     { key: 'email', label: 'Email', align: 'left' },
@@ -227,6 +234,31 @@ export class TenantManagementComponent implements OnInit, OnDestroy {
     }
   }
 
+  searchQuery = '';
+  activeRoleFilters: Set<TenantRole> = new Set();
+toggleRoleFilter(role: TenantRole): void {
+  if (this.activeRoleFilters.has(role)) {
+    this.activeRoleFilters.delete(role);
+  } else {
+    this.activeRoleFilters.add(role);
+  }
+  this.activeRoleFilters = new Set(this.activeRoleFilters); // trigger change detection
+}
+
+get filteredTenants() {
+  const q = this.searchQuery.trim().toLowerCase();
+  let results = this.tenants;
+
+  if (this.activeRoleFilters.size > 0) {
+    results = results.filter(t => this.activeRoleFilters.has(t.role));
+  }
+
+  if (!q) return results;
+  return results.filter((t) =>
+    [t.name, t.email, t.status, t.role]
+      .some((val) => String(val ?? '').toLowerCase().includes(q))
+  );
+}
   private async loadTenants(): Promise<void> {
     try {
       const [applications, invitations] = await Promise.all([
@@ -390,14 +422,37 @@ export class TenantManagementComponent implements OnInit, OnDestroy {
     }
   }
 
-  async suspendTenant(): Promise<void> {
-    if (!this.selectedTenant?.tenantId) return;
+  openSuspendPopup(): void {
+    this.tenantToSuspend = this.selectedTenant;
+    this.suspensionReason = '';
+    this.suspendPopupOpen = true;
+    this.closeViewDrawer();
+  }
+
+  closeSuspendPopup(): void {
+    this.suspendPopupOpen = false;
+    this.suspensionReason = '';
+    this.tenantToSuspend = null;
+  }
+
+  async confirmSuspendTenant(): Promise<void> {
+    if (!this.tenantToSuspend?.tenantId || !this.suspensionReason.trim()) return;
+    this.isSuspending = true;
     try {
-      await firstValueFrom(this.http.post(`/api/v1/platform/tenants/${this.selectedTenant.tenantId}/suspend`, {}));
-      this.updateTenantStatus(this.selectedTenant.tenantId, 'Suspended');
+      await firstValueFrom(
+        this.http.post(`/api/v1/platform/tenants/${this.tenantToSuspend.tenantId}/suspend`, {
+          reason: this.suspensionReason.trim()
+        })
+      );
+      this.toast.success('Tenant suspended successfully.');
+      this.updateTenantStatus(this.tenantToSuspend.tenantId, 'Suspended');
       await this.loadTenants();
+      this.closeSuspendPopup();
     } catch (err) {
+      this.toast.error('Failed to suspend tenant.');
       console.error('Failed to suspend tenant', err);
+    } finally {
+      this.isSuspending = false;
     }
   }
 

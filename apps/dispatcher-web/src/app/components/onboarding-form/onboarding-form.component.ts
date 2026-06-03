@@ -20,6 +20,9 @@ export interface OnboardingFormValues {
   passportFile?: File | null;
   licenseFile?: File | null;
   nationalIdFile?: File | null;
+  policeVerificationFile?: File | null;
+  drivingHistoryFile?: File | null;
+  photoIdFile?: File | null;
 }
 
 @Component({

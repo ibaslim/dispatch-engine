@@ -32,6 +32,18 @@ export class OrdersService {
     return this.http.patch(`${this.baseUrl}/${id}`, data);
   }
 
+  assignDriver(orderId: string, driverId: string): Observable<any> {
+    return this.http.patch(`${this.baseUrl}/${orderId}/assign-driver`, {
+      driver_id: driverId
+    });
+  }
+
+  unassignDriver(orderId: string): Observable<any> {
+    return this.http.patch(`${this.baseUrl}/${orderId}`, {
+      driver_id: null
+    });
+  }
+
   deleteOrder(id: string): Observable<any> {
     return this.http.delete(`${this.baseUrl}/${id}`);
   }

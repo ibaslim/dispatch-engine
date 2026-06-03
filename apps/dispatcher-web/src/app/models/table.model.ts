@@ -3,4 +3,5 @@ export interface TableColumn {
     label: string;
     sortable?: boolean;
     align?: 'left' | 'center' | 'right';
+    hiddenOnMobile?: boolean;
 }

@@ -39,12 +39,10 @@ async def authenticate_user(
         tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
         tenant = tenant_result.scalar_one_or_none()
         if tenant is not None and not tenant.is_active:
-            tokens = await create_token_pair(db, user)
             return SuspendedAccountResponse(
                 status="suspended",
                 message="Your account is suspended. Please contact support.",
-                access_token=tokens.access_token,
-                refresh_token=tokens.refresh_token,
+
             )
 
     # Check for pre-pending and pending

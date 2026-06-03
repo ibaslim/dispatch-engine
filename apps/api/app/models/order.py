@@ -1,6 +1,7 @@
-from sqlalchemy import Column, String, Integer, Float, DateTime, Boolean, JSON, Enum
+from sqlalchemy import Column, String, Integer, Float, DateTime, Boolean, JSON, Enum, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from app.db.base import Base
 import enum
 import uuid
@@ -28,6 +29,9 @@ class Order(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     order_number = Column(String, unique=True, nullable=False)
+
+    # Driver assignment
+    driver_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True)
 
     pickup_name = Column(String)
     pickup_phone = Column(String)
@@ -67,3 +71,6 @@ class Order(Base):
     order_placed_time = Column(String)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    driver = relationship("Tenant", foreign_keys=[driver_id], backref="orders")

@@ -5,7 +5,7 @@ import { finalize } from 'rxjs/operators';
 import { PageComponent } from '../../components/page/page.component';
 import { ButtonComponent } from '../../components/button/button.component';
 import { OrdersService } from '../../services/orders/orders.service';
-import { DemoDriversService } from '../../services/demo-drivers/demo-drivers.service';
+// import { DemoDriversService } from '../../services/demo-drivers/demo-drivers.service';
 import { PaymentMethodType } from '../../models/new-order-form/new-order-form.model';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -38,10 +38,18 @@ type BackendOrder = {
   discount: number;
   total: number;
   instructions?: string | null;
+  driver?: {
+  id: string;
+  name: string;
+} | null;
   payment_method: PaymentMethodType;
   status: 'current' | 'scheduled' | 'completed' | 'incomplete' | 'history';
   ready_for_pickup: boolean;
   order_placed_time?: string | null;
+  proof_of_delivery?: {
+  signature: boolean;
+  picture: boolean;
+};
 };
 
 type DispatchOrder = {
@@ -76,6 +84,10 @@ type DispatchOrder = {
   instructions: string;
   assignedDriverId: string | null;
   assignedDriverName: string;
+  proofOfDelivery: {
+  signature: boolean;
+  picture: boolean;
+};
 };
 
 type DispatchDriverGroup = {
@@ -91,7 +103,7 @@ type DispatchDriverGroup = {
   }>;
 };
 
-const LOCAL_DEMO_ORDERS_STORAGE_KEY = 'dispatch:orders:local-demo';
+// const LOCAL_DEMO_ORDERS_STORAGE_KEY = 'dispatch:orders:local-demo';
 
 @Component({
   selector: 'app-dispatch',
@@ -106,6 +118,7 @@ export class DispatchComponent implements OnInit {
   newOrders: Array<{
     id: string;
     pickup: string;
+    realId: string;  
     dropoff: string;
     eta: string;
     total: string;
@@ -113,7 +126,7 @@ export class DispatchComponent implements OnInit {
 
   feedbackMessage = '';
   isLoading = false;
-  readonly showLocalDemoTools = this.isLocalhost();
+  // readonly showLocalDemoTools = this.isLocalhost();
 
   private readonly auth = inject(AuthService);
 
@@ -123,7 +136,7 @@ export class DispatchComponent implements OnInit {
 
   constructor(
     private readonly ordersService: OrdersService,
-    private readonly demoDriversService: DemoDriversService
+    // private readonly demoDriversService: DemoDriversService
   ) { }
 
   ngOnInit(): void {
@@ -135,202 +148,234 @@ export class DispatchComponent implements OnInit {
     this.loadDispatchState();
   }
 
-  resetLocalDemoCache(): void {
-    if (!this.showLocalDemoTools || typeof localStorage === 'undefined' || this.isLoading) return;
-
-    localStorage.removeItem(LOCAL_DEMO_ORDERS_STORAGE_KEY);
-    this.demoDriversService.resetDemoState();
-    this.demoDriversService.seedDrivers();
-    this.feedbackMessage = 'Local demo cache reset. Reassign current orders from Orders if needed.';
-    this.loadDispatchState();
-  }
+  // resetLocalDemoCache(): void {
+  //   if (!this.showLocalDemoTools || typeof localStorage === 'undefined' || this.isLoading) return;
+  //
+  //   localStorage.removeItem(LOCAL_DEMO_ORDERS_STORAGE_KEY);
+  //   this.demoDriversService.resetDemoState();
+  //   this.demoDriversService.seedDrivers();
+  //   this.feedbackMessage = 'Local demo cache reset. Reassign current orders from Orders if needed.';
+  //   this.loadDispatchState();
+  // }
 
   selectOrder(orderId: string): void {
     this.selectedOrder = this.allOrders.find((order) => order.id === orderId) ?? null;
   }
 
   private loadDispatchState(): void {
-    this.isLoading = true;
-    this.feedbackMessage = 'Loading dispatch board...';
+  this.isLoading = true;
+  this.feedbackMessage = 'Loading dispatch board...';
 
-    this.ordersService.getOrders()
-      .pipe(finalize(() => {
+  this.ordersService.getOrders()
+    .pipe(
+      finalize(() => {
         this.isLoading = false;
-      }))
-      .subscribe({
-        next: (remoteOrders: BackendOrder[]) => {
-          const localOrders = this.readLocalDemoOrders();
-          const mappedRemoteOrders = remoteOrders.map((order) => this.mapBackendOrder(order));
-          const allOrders = mappedRemoteOrders.length > 0
-            ? mappedRemoteOrders
-            : localOrders;
-          this.applyDispatchState(allOrders);
-        },
-        error: () => {
-          const localOrders = this.readLocalDemoOrders();
-          this.applyDispatchState(localOrders);
-          if (localOrders.length === 0) {
-            this.feedbackMessage = 'No live orders loaded. Seed demo orders from Orders to populate Dispatch.';
-          }
-        }
-      });
-  }
+      })
+    )
+    .subscribe({
+      next: (remoteOrders: BackendOrder[]) => {
+
+        const orders = remoteOrders.map(order =>
+          this.mapBackendOrder(order)
+        );
+
+        console.log('DISPATCH ORDERS', orders);
+
+        this.applyDispatchState(orders);
+      },
+
+      error: (err) => {
+        console.error(err);
+
+        this.feedbackMessage =
+          'Failed to load orders.';
+      }
+    });
+}
 
   private applyDispatchState(allOrders: DispatchOrder[]): void {
-    const assignments = this.demoDriversService.assignments();
-    const drivers = this.demoDriversService.listDrivers();
 
-    const ordersWithAssignments = allOrders.map((order) => {
-      const assignmentDriverId = assignments[order.id] ?? null;
-      const assignedDriver = assignmentDriverId
-        ? this.demoDriversService.findDriverById(assignmentDriverId)
-        : null;
-      const assignedDriverId = assignedDriver?.id ?? null;
+  this.allOrders = allOrders;
 
-      return {
-        ...order,
-        assignedDriverId,
-        assignedDriverName: assignedDriver?.name ?? ''
-      };
+  // LEFT PANEL
+  const groupedDrivers = new Map<string, DispatchDriverGroup>();
+
+  allOrders.forEach(order => {
+
+    if (!order.assignedDriverId) {
+      return;
+    }
+
+    const driverId = order.assignedDriverId;
+
+    if (!groupedDrivers.has(driverId)) {
+
+      groupedDrivers.set(driverId, {
+        id: driverId,
+        name: order.assignedDriverName || 'Assigned Driver',
+        status: 'Assigned',
+        orders: []
+      });
+    }
+
+    groupedDrivers.get(driverId)?.orders.push({
+      id: order.id,
+      label: order.orderNumber,
+      pickup: order.pickup.name,
+      dropoff: order.delivery.name,
+      time:
+        `${this.formatTime(order.pickup.time)} → ${this.formatTime(order.delivery.time)}`
     });
+  });
 
-    this.allOrders = ordersWithAssignments;
+  this.assignedDrivers =
+    Array.from(groupedDrivers.values());
 
-    this.assignedDrivers = drivers
-      .map((driver) => ({
-        id: driver.id,
-        name: driver.name,
-        status: driver.status,
-        orders: ordersWithAssignments
-          .filter((order) => order.assignedDriverId === driver.id)
-          .map((order) => ({
-            id: order.id,
-            label: order.orderNumber,
-            pickup: order.pickup.name,
-            dropoff: order.delivery.name,
-            time: `${this.formatTime(order.pickup.time)} → ${this.formatTime(order.delivery.time)}`
-          }))
-      }))
-      .filter((driver) => driver.orders.length > 0);
+  // // RIGHT PANEL (ALL ORDERS)
+  // this.newOrders = allOrders.map(order => ({
+  //   id: order.orderNumber,
+  //   pickup: order.pickup.name,
+  //   dropoff: order.delivery.name,
+  //   eta: this.estimateEta(
+  //     order.delivery.date,
+  //     order.delivery.time
+  //   ),
+  //   total: this.money(order.total)
+  // }));
 
-    this.newOrders = ordersWithAssignments
-      .filter((order) =>
-        !order.assignedDriverId &&
-        (order.status === 'current' || order.status === 'scheduled')
-      )
-      .map((order) => ({
-        id: order.orderNumber,
-        pickup: order.pickup.name,
-        dropoff: order.delivery.name,
-        eta: this.estimateEta(order.delivery.date, order.delivery.time),
-        total: this.money(order.total)
-      }));
+// RIGHT PANEL (TODAY'S ORDERS ONLY)
+const today = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
 
-    const allDriverOrders = ordersWithAssignments.filter((order) => !!order.assignedDriverId);
-    this.selectedOrder =
-      allDriverOrders[0] ??
-      ordersWithAssignments.find((order) => order.status === 'current') ??
-      ordersWithAssignments[0] ??
-      null;
+this.newOrders = allOrders
+  .filter(order => order.pickup.date === today)
+  .map(order => ({
+    id: order.orderNumber,
+     realId: order.id,
+    pickup: order.pickup.name,
+    dropoff: order.delivery.name,
+    eta: this.estimateEta(
+      order.delivery.date,
+      order.delivery.time
+    ),
+    total: this.money(order.total)
+  }));
 
-    if (ordersWithAssignments.length === 0) {
-      this.feedbackMessage = 'No orders available. Seed demo orders from Orders to populate Dispatch.';
-    } else if (this.assignedDrivers.length === 0) {
-      this.feedbackMessage = 'No drivers are assigned yet. Use Orders → Assign Driver to populate the dispatch board.';
-    } else {
-      this.feedbackMessage = '';
-    }
+
+  // CENTER PANEL DEFAULT
+  this.selectedOrder =
+    allOrders[0] ?? null;
+
+  // feedback
+  if (allOrders.length === 0) {
+    this.feedbackMessage =
+      'No orders available.';
+  } else {
+    this.feedbackMessage = '';
   }
 
-  private readLocalDemoOrders(): DispatchOrder[] {
-    if (typeof localStorage === 'undefined') return [];
+  console.log(
+    'Assigned Drivers',
+    this.assignedDrivers
+  );
+}
+  // private readLocalDemoOrders(): DispatchOrder[] {
+  //   if (typeof localStorage === 'undefined') return [];
+  //
+  //   const raw = localStorage.getItem(LOCAL_DEMO_ORDERS_STORAGE_KEY);
+  //   if (!raw) return [];
+  //
+  //   try {
+  //     const parsed = JSON.parse(raw) as any[];
+  //     if (!Array.isArray(parsed)) return [];
+  //
+  //     return parsed.map((order) => this.mapLocalDemoOrder(order));
+  //   } catch {
+  //     return [];
+  //   }
+  // }
 
-    const raw = localStorage.getItem(LOCAL_DEMO_ORDERS_STORAGE_KEY);
-    if (!raw) return [];
-
-    try {
-      const parsed = JSON.parse(raw) as any[];
-      if (!Array.isArray(parsed)) return [];
-
-      return parsed.map((order) => this.mapLocalDemoOrder(order));
-    } catch {
-      return [];
-    }
-  }
-
-  private mapLocalDemoOrder(order: any): DispatchOrder {
-    return {
-      id: String(order.id),
-      orderNumber: String(order.full?.orderNumber ?? order.id),
-      status: order.tab ?? 'current',
-      pickup: {
-        name: String(order.full?.pickup?.name ?? ''),
-        phone: `${order.full?.pickup?.phone?.countryCode ?? ''}${order.full?.pickup?.phone?.number ?? ''}`,
-        address: String(order.full?.pickup?.address ?? ''),
-        time: String(order.full?.pickup?.pickupTime ?? ''),
-        date: String(order.full?.pickup?.pickupDate ?? '')
-      },
-      delivery: {
-        name: String(order.full?.delivery?.name ?? ''),
-        phone: `${order.full?.delivery?.phone?.countryCode ?? ''}${order.full?.delivery?.phone?.number ?? ''}`,
-        address: String(order.full?.delivery?.address ?? ''),
-        date: String(order.full?.delivery?.deliveryDate ?? ''),
-        time: String(order.full?.delivery?.deliveryTime ?? '')
-      },
-      items: Array.isArray(order.full?.details?.items)
-        ? order.full.details.items.map((item: any) => ({
-          name: String(item.itemName ?? ''),
-          price: this.toNumber(item.itemPrice),
-          qty: Math.round(this.toNumber(item.itemQty))
-        }))
-        : [],
-      taxRate: this.toNumber(order.full?.details?.taxRate),
-      deliveryFee: this.toNumber(order.full?.details?.deliveryFees),
-      tip: this.toNumber(order.full?.details?.deliveryTips),
-      discount: this.toNumber(order.full?.details?.discount),
-      total: this.toNumber(order.full?.details?.total),
-      payment: this.formatPaymentMethod(order.full?.details?.payment?.method),
-      instructions: String(order.full?.details?.instructions ?? ''),
-      assignedDriverId: null,
-      assignedDriverName: ''
-    };
-  }
+//   private mapLocalDemoOrder(order: any): DispatchOrder {
+//     return {
+//       id: String(order.id),
+//       orderNumber: String(order.full?.orderNumber ?? order.id),
+//       status: order.tab ?? 'current',
+//       pickup: {
+//         name: String(order.full?.pickup?.name ?? ''),
+//         phone: `${order.full?.pickup?.phone?.countryCode ?? ''}${order.full?.pickup?.phone?.number ?? ''}`,
+//         address: String(order.full?.pickup?.address ?? ''),
+//         time: String(order.full?.pickup?.pickupTime ?? ''),
+//         date: String(order.full?.pickup?.pickupDate ?? '')
+//       },
+//       delivery: {
+//         name: String(order.full?.delivery?.name ?? ''),
+//         phone: `${order.full?.delivery?.phone?.countryCode ?? ''}${order.full?.delivery?.phone?.number ?? ''}`,
+//         address: String(order.full?.delivery?.address ?? ''),
+//         date: String(order.full?.delivery?.deliveryDate ?? ''),
+//         time: String(order.full?.delivery?.deliveryTime ?? '')
+//       },
+//       items: Array.isArray(order.full?.details?.items)
+//         ? order.full.details.items.map((item: any) => ({
+//           name: String(item.itemName ?? ''),
+//           price: this.toNumber(item.itemPrice),
+//           qty: Math.round(this.toNumber(item.itemQty))
+//         }))
+//         : [],
+//       taxRate: this.toNumber(order.full?.details?.taxRate),
+//       deliveryFee: this.toNumber(order.full?.details?.deliveryFees),
+//       tip: this.toNumber(order.full?.details?.deliveryTips),
+//       discount: this.toNumber(order.full?.details?.discount),
+//       total: this.toNumber(order.full?.details?.total),
+//       payment: this.formatPaymentMethod(order.full?.details?.payment?.method),
+//       instructions: String(order.full?.details?.instructions ?? ''),
+//       assignedDriverId: order.assigned_driver_id ?? null,
+// assignedDriverName: order.assigned_driver_name ?? ''
+//     };
+//   }
 
   private mapBackendOrder(order: BackendOrder): DispatchOrder {
-    return {
-      id: order.id,
-      orderNumber: order.order_number,
-      status: order.status,
-      pickup: {
-        name: order.pickup_name,
-        phone: order.pickup_phone,
-        address: order.pickup_address,
-        time: order.pickup_time,
-        date: order.pickup_date
-      },
-      delivery: {
-        name: order.delivery_name,
-        phone: order.delivery_phone,
-        address: order.delivery_address,
-        date: order.delivery_date,
-        time: order.delivery_time
-      },
-      items: (order.items || []).map((item) => ({
-        name: item.itemName,
-        price: this.toNumber(item.itemPrice),
-        qty: Math.round(this.toNumber(item.itemQty))
-      })),
-      taxRate: order.tax_rate,
-      deliveryFee: order.delivery_fees,
-      tip: order.delivery_tips,
-      discount: order.discount,
-      total: order.total,
-      payment: this.formatPaymentMethod(order.payment_method),
-      instructions: order.instructions || '',
-      assignedDriverId: null,
-      assignedDriverName: ''
-    };
-  }
+    // console.log('BACKEND ORDER', order);
+  return {
+    id: order.id,
+    orderNumber: order.order_number,
+    status: order.status,
+
+    pickup: {
+      name: order.pickup_name,
+      phone: order.pickup_phone,
+      address: order.pickup_address,
+      time: order.pickup_time,
+      date: order.pickup_date
+    },
+
+    delivery: {
+      name: order.delivery_name,
+      phone: order.delivery_phone,
+      address: order.delivery_address,
+      date: order.delivery_date,
+      time: order.delivery_time
+    },
+
+    items: (order.items || []).map((item) => ({
+      name: item.itemName,
+      price: this.toNumber(item.itemPrice),
+      qty: Math.round(this.toNumber(item.itemQty))
+    })),
+
+    taxRate: order.tax_rate,
+    deliveryFee: order.delivery_fees,
+    tip: order.delivery_tips,
+    discount: order.discount,
+    total: order.total,
+    payment: this.formatPaymentMethod(order.payment_method),
+    instructions: order.instructions || '',
+    proofOfDelivery: {
+  signature: order.proof_of_delivery?.signature ?? false,
+  picture: order.proof_of_delivery?.picture ?? false
+},
+    assignedDriverId: order.driver?.id ?? null,
+assignedDriverName: order.driver?.name ?? ''
+  };
+}
 
   private formatPaymentMethod(method: string | undefined): string {
     return method === 'credit_card' ? 'Credit Card' : 'Cash on Delivery';
@@ -368,8 +413,8 @@ export class DispatchComponent implements OnInit {
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
-  private isLocalhost(): boolean {
-    if (typeof window === 'undefined') return false;
-    return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
-  }
+  // private isLocalhost(): boolean {
+  //   if (typeof window === 'undefined') return false;
+  //   return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+  // }
 }

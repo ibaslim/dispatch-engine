@@ -9,6 +9,10 @@ class InviteTenantAdminRequest(BaseModel):
     tenant_name: str
 
 
+class SuspendTenantRequest(BaseModel):
+    reason: str
+
+
 class InviteTenantUserRequest(BaseModel):
     email: EmailStr
     role: str

@@ -47,6 +47,60 @@
           Selected: {{ form.licenseFile?.name }}
         </p>
       </div>
+
+      <div>
+        <label class="block text-sm text-gray-600 dark:text-gray-200 mb-2">Police Verification Certificate</label>
+        <input
+          type="file"
+          accept="image/*,application/pdf"
+          class="block w-full text-sm text-gray-700 dark:text-gray-200 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:bg-gray-100 dark:file:bg-[#2a2d2a] file:text-gray-700 dark:file:text-gray-200"
+          (change)="onPoliceVerificationChange($event)" />
+        <p *ngIf="policeVerificationFileError" class="text-xs text-red-500 mt-2">
+          {{ policeVerificationFileError }}
+        </p>
+        <p *ngIf="showSubmitValidation && !form.policeVerificationFile && !policeVerificationFileError" class="text-xs text-red-500 mt-2">
+          Police verification certificate is required.
+        </p>
+        <p *ngIf="form.policeVerificationFile" class="text-xs text-gray-500 mt-2">
+          Selected: {{ form.policeVerificationFile?.name }}
+        </p>
+      </div>
+
+      <div>
+        <label class="block text-sm text-gray-600 dark:text-gray-200 mb-2">Driving History Report</label>
+        <input
+          type="file"
+          accept="image/*,application/pdf"
+          class="block w-full text-sm text-gray-700 dark:text-gray-200 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:bg-gray-100 dark:file:bg-[#2a2d2a] file:text-gray-700 dark:file:text-gray-200"
+          (change)="onDrivingHistoryChange($event)" />
+        <p *ngIf="drivingHistoryFileError" class="text-xs text-red-500 mt-2">
+          {{ drivingHistoryFileError }}
+        </p>
+        <p *ngIf="showSubmitValidation && !form.drivingHistoryFile && !drivingHistoryFileError" class="text-xs text-red-500 mt-2">
+          Driving history report is required.
+        </p>
+        <p *ngIf="form.drivingHistoryFile" class="text-xs text-gray-500 mt-2">
+          Selected: {{ form.drivingHistoryFile?.name }}
+        </p>
+      </div>
+
+      <div>
+        <label class="block text-sm text-gray-600 dark:text-gray-200 mb-2">Photo ID <span class="text-gray-400 dark:text-gray-500 font-normal">(PR Card or any official ID with photo)</span></label>
+        <input
+          type="file"
+          accept="image/*,application/pdf"
+          class="block w-full text-sm text-gray-700 dark:text-gray-200 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:bg-gray-100 dark:file:bg-[#2a2d2a] file:text-gray-700 dark:file:text-gray-200"
+          (change)="onPhotoIdChange($event)" />
+        <p *ngIf="photoIdFileError" class="text-xs text-red-500 mt-2">
+          {{ photoIdFileError }}
+        </p>
+        <p *ngIf="showSubmitValidation && !form.photoIdFile && !photoIdFileError" class="text-xs text-red-500 mt-2">
+          Photo ID is required.
+        </p>
+        <p *ngIf="form.photoIdFile" class="text-xs text-gray-500 mt-2">
+          Selected: {{ form.photoIdFile?.name }}
+        </p>
+      </div>
     </app-onboarding-form>
   </div>
 </app-page>

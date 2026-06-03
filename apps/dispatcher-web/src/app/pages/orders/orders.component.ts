@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -14,10 +15,9 @@ import { NewOrderFormComponent } from '../../components/new-order-form/new-order
 import { ToggleButtonComponent } from '../../components/toggle-button/toggle-button.component';
 import { TableColumn } from '../../models/table.model';
 import { NewOrderFormValue, PaymentMethodType } from '../../models/new-order-form/new-order-form.model';
-import { DriverEntity } from '../../models/drivers/driver.model';
+import { TenantDriverEntity } from '../../models/drivers/tenant-driver.model';
 import { OrderEntity, OrderTab } from '../../models/orders/order-entity.model';
 import { OrderView } from '../../models/orders/order-tabs.model';
-import { DemoDriversService } from '../../services/demo-drivers/demo-drivers.service';
 import { OrdersService } from '../../services/orders/orders.service';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -29,6 +29,7 @@ type BackendOrderItem = {
 
 type BackendOrder = {
   id: string;
+  created_at: string;
   order_number: string;
   pickup_name: string;
   pickup_phone: string;
@@ -56,15 +57,23 @@ type BackendOrder = {
   status: OrderTab;
   ready_for_pickup: boolean;
   order_placed_time?: string | null;
+  driver?: {
+    id: string;
+    name: string;
+    contact_name?: string | null;
+    contact_phone_country_code?: string | null;
+    contact_phone_number?: string | null;
+  } | null;
 };
 
-type DemoSeedTarget = {
-  desiredStatus: OrderTab;
-  readyForPickup: boolean;
-  value: NewOrderFormValue;
+type AssignableDriver = {
+  id: string;
+  name: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  address: string;
 };
-
-const LOCAL_DEMO_ORDERS_STORAGE_KEY = 'dispatch:orders:local-demo';
 
 @Component({
   selector: 'app-orders',
@@ -83,60 +92,60 @@ const LOCAL_DEMO_ORDERS_STORAGE_KEY = 'dispatch:orders:local-demo';
 })
 export class OrdersComponent implements OnInit, OnDestroy {
 
-  // ─── Tabs ───────────────────────────────────────────────────────────────────
+  // ─── Tabs ──────────────────────────────────────────────────────────────────
   tabs = ['Current', 'Scheduled', 'Completed', 'Incomplete', 'History'];
   activeTab = 'Current';
 
-  // ─── Form ───────────────────────────────────────────────────────────────────
+  // ─── Form ──────────────────────────────────────────────────────────────────
   formSubmitted = signal(false);
 
-  // ─── Orders state ───────────────────────────────────────────────────────────
+  // ─── Orders state ──────────────────────────────────────────────────────────
   orders: OrderEntity[] = [];
   editingOrderId: string | null = null;
   readyForPickupMap = new Map<string, boolean>();
 
-  // ─── New order modal ────────────────────────────────────────────────────────
+  // ─── New order modal ───────────────────────────────────────────────────────
   isNewOrderOpen = false;
   isSavingOrder = false;
-  isSeedingDemoOrders = false;
   newOrderValue: NewOrderFormValue = this.createDefaultNewOrder();
 
-  // ─── Table menu ─────────────────────────────────────────────────────────────
+  // ─── Table menu ────────────────────────────────────────────────────────────
   activeMenuRow: { id: string } | null = null;
 
-  // ─── Details modal ──────────────────────────────────────────────────────────
+  // ─── Details modal ─────────────────────────────────────────────────────────
   isDetailsOpen = false;
   selectedOrderForDetails: OrderEntity | null = null;
   isDetailsMenuOpen = false;
 
-  // ─── Assign driver modal ────────────────────────────────────────────────────
+  // ─── Assign driver modal ───────────────────────────────────────────────────
   isAssignDriverOpen = false;
   selectedOrderForAssignment: OrderEntity | null = null;
   assignDriverQuery = '';
   selectedDriverId = '';
+  availableAssignableDrivers: AssignableDriver[] = [];
+  isLoadingAssignableDrivers = false;
+  assignDriverLoadError = '';
 
-  // ─── Label modal ────────────────────────────────────────────────────────────
+  // ─── Label modal ───────────────────────────────────────────────────────────
   isLabelOpen = false;
   selectedOrderForLabel: OrderEntity | null = null;
 
-  // ─── Print order modal ──────────────────────────────────────────────────────
+  // ─── Print order modal ─────────────────────────────────────────────────────
   isPrintOpen = false;
   selectedOrderForPrint: OrderEntity | null = null;
 
-  // ─── Search & feedback ──────────────────────────────────────────────────────
+  // ─── Search & feedback ─────────────────────────────────────────────────────
   searchQuery = '';
   feedbackMessage = '';
   feedbackTone: 'success' | 'error' | 'info' = 'info';
 
   showLocalDemoButton = this.isLocalhost();
 
-  // ─── Private ────────────────────────────────────────────────────────────────
+  // ─── Private ───────────────────────────────────────────────────────────────
   private scheduledRefreshHandle: ReturnType<typeof setInterval> | null = null;
   private scheduledPromotionInFlight = false;
-  private localDemoOrders: OrderEntity[] = [];
-  private localOnlyOrderIds = new Set<string>();
 
-  // ─── Details menu items ─────────────────────────────────────────────────────
+  // ─── Details menu items ────────────────────────────────────────────────────
   get detailsMenuItems(): Array<{ label: string; action: string; icon: string; danger?: boolean }> {
     if (this.isReadOnlyTenant) {
       return [
@@ -154,7 +163,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   constructor(
     private readonly ordersService: OrdersService,
-    private readonly demoDriversService: DemoDriversService,
+    private readonly http: HttpClient,
     private readonly auth: AuthService
   ) { }
 
@@ -162,17 +171,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
     return !this.auth.isPlatformAdmin();
   }
 
-  // ─── Lifecycle ──────────────────────────────────────────────────────────────
+  // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
   ngOnInit(): void {
-    if (this.showLocalDemoButton && this.demoDriversService.listDrivers().length === 0) {
-      this.demoDriversService.seedDrivers();
-    }
-    this.restoreLocalDemoOrders();
     this.loadOrders();
     this.scheduledRefreshHandle = setInterval(() => {
       void this.checkAndUpdateScheduledOrders();
-    }, 60000);
+    }, 6000);
   }
 
   ngOnDestroy(): void {
@@ -181,19 +186,22 @@ export class OrdersComponent implements OnInit, OnDestroy {
     }
   }
 
-  // ─── Tab ────────────────────────────────────────────────────────────────────
+  // ─── Tab ───────────────────────────────────────────────────────────────────
 
   setActiveTab(tab: string): void {
     this.activeTab = tab;
   }
 
-  // ─── Orders loading ─────────────────────────────────────────────────────────
+  // ─── Orders loading ────────────────────────────────────────────────────────
 
   loadOrders(): void {
     this.ordersService.getOrders().subscribe({
       next: (res: BackendOrder[]) => {
-        const remoteOrders = res.map((order) => this.mapBackendOrder(order));
-        this.refreshOrdersState(remoteOrders);
+        this.orders = res.map((order) => this.mapBackendOrder(order));
+        this.readyForPickupMap.clear();
+        for (const order of this.orders) {
+          this.readyForPickupMap.set(order.id, !!order.view.current.readyForPickup);
+        }
 
         if (this.selectedOrderForDetails) {
           this.selectedOrderForDetails =
@@ -207,14 +215,14 @@ export class OrdersComponent implements OnInit, OnDestroy {
     });
   }
 
-  // ─── Table columns ──────────────────────────────────────────────────────────
+  // ─── Table columns ─────────────────────────────────────────────────────────
 
   unifiedColumns: TableColumn[] = [
     { key: 'orderNo', label: 'Order Number', sortable: true },
     { key: 'customerName', label: 'Customer Name', sortable: true },
-    { key: 'vendorName', label: 'Vendor Name', sortable: true },
+    { key: 'vendorName', label: 'Partner Name', sortable: true },
     { key: 'amount', label: 'Amount', sortable: true },
-    { key: 'distance', label: 'Distance', sortable: true },
+    // { key: 'distance', label: 'Distance', sortable: true },
     { key: 'orderPlacedTime', label: 'Order Placed Time', sortable: true },
     { key: 'pickupTime', label: 'Pickup Time', sortable: true },
     { key: 'estDeliveryTime', label: 'Est. Delivery Time', sortable: true },
@@ -240,36 +248,54 @@ export class OrdersComponent implements OnInit, OnDestroy {
       : filtered;
   }
 
-  // ─── Table rows ─────────────────────────────────────────────────────────────
+  // ─── Table rows ────────────────────────────────────────────────────────────
 
   get rows(): Array<Record<string, unknown>> {
     const tabKey = this.getTabKey(this.activeTab);
     const q = this.searchQuery.trim().toLowerCase();
 
     return this.orders
-      .filter((order) => order.tab === tabKey)
-      .filter((order) => {
-        if (!q) return true;
-        const view = order.view.current;
-        return (
-          view.orderNo.toLowerCase().includes(q) ||
-          view.customerName.toLowerCase().includes(q) ||
-          view.vendorName.toLowerCase().includes(q)
-        );
-      })
-      .map((order) => {
-        const row = { ...order.view.current, id: order.id } as Record<string, unknown>;
-        if (this.isReadOnlyTenant && (!row['driver'] || row['driver'] === '')) {
-          row['driver'] = '—';
-        }
-        return row;
-      });
+  .filter((order) => order.tab === tabKey)
+  .filter((order) => {
+    if (!q) return true;
+
+    const view = order.view.current;
+
+    return (
+      view.orderNo.toLowerCase().includes(q) ||
+      view.customerName.toLowerCase().includes(q) ||
+      view.vendorName.toLowerCase().includes(q)
+    );
+  })
+  .sort((a, b) => {
+    const timeA = a.view.current.orderPlacedTime
+      ? new Date(a.view.current.orderPlacedTime).getTime()
+      : 0;
+
+    const timeB = b.view.current.orderPlacedTime
+      ? new Date(b.view.current.orderPlacedTime).getTime()
+      : 0;
+
+    return timeB - timeA; // newest first
+  })
+  .map((order) => {
+    const row = {
+      ...order.view.current,
+      id: order.id
+    } as Record<string, unknown>;
+
+    if (this.isReadOnlyTenant && (!row['driver'] || row['driver'] === '')) {
+      row['driver'] = '?';
+    }
+
+    return row;
+  });
   }
 
   emptyTitle = 'No data available';
   emptySubtitle = '';
 
-  // ─── Context menu ───────────────────────────────────────────────────────────
+  // ─── Context menu ──────────────────────────────────────────────────────────
 
   toggleMenu(row: { id: string }): void {
     this.activeMenuRow = this.activeMenuRow?.id === row.id ? null : row;
@@ -335,11 +361,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
     switch (event.action) {
       case 'moveToCurrent':
-        if (this.isLocalOnlyOrder(order.id)) {
-          this.updateLocalOrderStatus(order.id, 'current');
-          this.setFeedback(`Order ${order.full.orderNumber ?? ''} moved to Current.`, 'success');
-          break;
-        }
         this.ordersService.updateStatus(order.id, 'current').subscribe({
           next: () => {
             this.setFeedback(`Order ${order.full.orderNumber ?? ''} moved to Current.`, 'success');
@@ -350,11 +371,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
         break;
 
       case 'moveToHistory':
-        if (this.isLocalOnlyOrder(order.id)) {
-          this.updateLocalOrderStatus(order.id, 'history');
-          this.setFeedback(`Order ${order.full.orderNumber ?? ''} moved to History.`, 'success');
-          break;
-        }
         this.ordersService.updateStatus(order.id, 'history').subscribe({
           next: () => {
             this.setFeedback(`Order ${order.full.orderNumber ?? ''} moved to History.`, 'success');
@@ -386,11 +402,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
         break;
 
       case 'delete':
-        if (this.isLocalOnlyOrder(order.id)) {
-          this.deleteLocalOrder(order.id);
-          this.setFeedback(`Order ${order.full.orderNumber ?? ''} deleted.`, 'success');
-          break;
-        }
         this.ordersService.deleteOrder(order.id).subscribe({
           next: () => {
             this.setFeedback(`Order ${order.full.orderNumber ?? ''} deleted.`, 'success');
@@ -404,7 +415,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.activeMenuRow = null;
   }
 
-  // ─── Details modal ──────────────────────────────────────────────────────────
+  // ─── Details modal ─────────────────────────────────────────────────────────
 
   closeDetails(): void {
     this.isDetailsOpen = false;
@@ -434,16 +445,9 @@ export class OrdersComponent implements OnInit, OnDestroy {
           action === 'failed' ? 'incomplete' :
             'history';
 
-      if (this.isLocalOnlyOrder(id)) {
-        this.updateLocalOrderStatus(id, nextStatus);
-        this.setFeedback(`Order ${selectedOrder.full.orderNumber ?? ''} updated to ${this.formatStatusLabel(nextStatus)}.`, 'success');
-        this.closeDetails();
-        return;
-      }
-
       this.ordersService.updateStatus(id, nextStatus).subscribe({
         next: () => {
-            this.setFeedback(`Order ${selectedOrder.full.orderNumber ?? ''} updated to ${this.formatStatusLabel(nextStatus)}.`, 'success');
+          this.setFeedback(`Order ${selectedOrder.full.orderNumber ?? ''} updated to ${this.formatStatusLabel(nextStatus)}.`, 'success');
           this.closeDetails();
           this.loadOrders();
         },
@@ -453,13 +457,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
     }
 
     if (action === 'delete') {
-      if (this.isLocalOnlyOrder(id)) {
-        this.deleteLocalOrder(id);
-        this.setFeedback(`Order ${selectedOrder.full.orderNumber ?? ''} deleted.`, 'success');
-        this.closeDetails();
-        return;
-      }
-
       this.ordersService.deleteOrder(id).subscribe({
         next: () => {
           this.setFeedback(`Order ${selectedOrder.full.orderNumber ?? ''} deleted.`, 'success');
@@ -471,7 +468,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     }
   }
 
-  // ─── Ready for pickup ───────────────────────────────────────────────────────
+  // ─── Ready for pickup ──────────────────────────────────────────────────────
 
   updateReadyForPickup(isReady: boolean): void {
     if (!this.selectedOrderForDetails) return;
@@ -483,11 +480,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
     const id = this.selectedOrderForDetails.id;
     this.setReadyForPickupLocal(id, isReady);
-
-    if (this.isLocalOnlyOrder(id)) {
-      this.setFeedback(`Order ${this.selectedOrderForDetails.full.orderNumber ?? ''} ready-for-pickup updated locally.`, 'success');
-      return;
-    }
 
     this.ordersService.toggleReady(id, isReady).subscribe({
       next: () => { this.readyForPickupMap.set(id, isReady); },
@@ -505,8 +497,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
     }
     this.setReadyForPickupLocal(orderId, isReady);
 
-    if (this.isLocalOnlyOrder(orderId)) return;
-
     this.ordersService.toggleReady(orderId, isReady).subscribe({
       next: () => { this.readyForPickupMap.set(orderId, isReady); },
       error: () => {
@@ -523,42 +513,60 @@ export class OrdersComponent implements OnInit, OnDestroy {
     return !!this.orders.find((o) => o.id === orderId)?.view.current.readyForPickup;
   }
 
-  // ─── Scheduled order promotion ──────────────────────────────────────────────
+  // ─── Scheduled order promotion ─────────────────────────────────────────────
 
-  async checkAndUpdateScheduledOrders(): Promise<void> {
-    if (this.scheduledPromotionInFlight) return;
 
+// ??? Scheduled order promotion ?????????????????????????????????????????????
+
+async checkAndUpdateScheduledOrders(): Promise<void> {
+  if (this.scheduledPromotionInFlight) return;
+
+  this.scheduledPromotionInFlight = true;
+
+  try {
     const now = new Date();
-    const threshold = now.getTime() + (3 * 60 * 60 * 1000);
-    const candidateIds = this.orders
-      .filter((o) => o.tab === 'scheduled')
-      .filter((o) => {
-        const dt = this.parseDateTime(o.full.delivery.deliveryDate, o.full.delivery.deliveryTime);
-        return dt !== null && dt.getTime() <= threshold;
-      })
-      .map((o) => o.id);
+    const twentyFourHoursLater = now.getTime() + (24 * 60 * 60 * 1000); // 24 hours from now
 
-    if (candidateIds.length === 0) return;
+    const candidateIds: string[] = [];
 
-    for (const id of candidateIds.filter((id) => this.isLocalOnlyOrder(id))) {
-      this.updateLocalOrderStatus(id, 'current');
+    for (const order of this.orders) {
+      if (order.tab !== 'scheduled') continue;
+
+      const pickupDateTime = this.parseDateTime(
+        order.full.pickup.pickupDate,
+        order.full.pickup.pickupTime
+      );
+
+      if (pickupDateTime && pickupDateTime.getTime() <= twentyFourHoursLater) {
+        candidateIds.push(order.id);
+      }
     }
 
-    const remoteIds = candidateIds.filter((id) => !this.isLocalOnlyOrder(id));
-    if (remoteIds.length === 0) return;
-
-    this.scheduledPromotionInFlight = true;
-    try {
-      await Promise.all(remoteIds.map((id) => firstValueFrom(this.ordersService.updateStatus(id, 'current'))));
-      this.loadOrders();
-    } catch {
-      this.setFeedback('Unable to refresh scheduled orders automatically.', 'error');
-    } finally {
-      this.scheduledPromotionInFlight = false;
+    if (candidateIds.length === 0) {
+      console.log('No scheduled orders ready to move to Current yet.');
+      return;
     }
+
+    console.log(`Promoting ${candidateIds.length} order(s) to Current (within 24 hours of pickup)`);
+
+    // Move them to Current tab
+    await Promise.all(
+      candidateIds.map(id =>
+        firstValueFrom(this.ordersService.updateStatus(id, 'current'))
+      )
+    );
+
+    this.loadOrders();
+
+  } catch (error) {
+    console.error('Failed to promote scheduled orders:', error);
+    this.setFeedback('Unable to auto-update scheduled orders.', 'error');
+  } finally {
+    this.scheduledPromotionInFlight = false;
   }
+}
 
-  // ─── New order modal ────────────────────────────────────────────────────────
+  // ─── New order modal ───────────────────────────────────────────────────────
 
   openNewOrder(): void {
     if (this.isReadOnlyTenant) {
@@ -589,15 +597,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const mode = this.editingOrderId ? 'updated' : 'created';
 
     try {
-      if (this.editingOrderId && this.isLocalOnlyOrder(this.editingOrderId)) {
-        this.updateLocalOrderFromForm(this.editingOrderId, this.newOrderValue);
-        this.setFeedback(`Order updated locally for demo.`, 'success');
-        this.closeNewOrder();
-        this.formSubmitted.set(false);
-        this.editingOrderId = null;
-        return;
-      }
-
       if (this.editingOrderId) {
         await firstValueFrom(this.ordersService.updateOrder(this.editingOrderId, payload));
       } else {
@@ -633,7 +632,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.setFeedback('Demo data filled in the order form.', 'success');
   }
 
-  // ─── Assign driver modal ────────────────────────────────────────────────────
+  // ─── Assign driver modal ───────────────────────────────────────────────────
 
   openAssignDriver(row: { id: string } | OrderEntity): void {
     if (this.isReadOnlyTenant) {
@@ -645,8 +644,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
     this.selectedOrderForAssignment = structuredClone(order);
     this.assignDriverQuery = '';
-    this.selectedDriverId = this.demoDriversService.getAssignedDriver(order.id)?.id ?? '';
     this.isAssignDriverOpen = true;
+    void this.loadAssignableDrivers(order.id);
   }
 
   closeAssignDriver(): void {
@@ -656,7 +655,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.selectedDriverId = '';
   }
 
-  assignSelectedDriver(): void {
+  async assignSelectedDriver(): Promise<void> {
     if (this.isReadOnlyTenant) {
       this.setFeedback('Read-only access for tenant users.', 'info');
       return;
@@ -665,44 +664,57 @@ export class OrdersComponent implements OnInit, OnDestroy {
       this.setFeedback('Select a driver to assign.', 'error');
       return;
     }
-    this.demoDriversService.assignDriver(this.selectedOrderForAssignment.id, this.selectedDriverId);
-    this.refreshOrdersState(this.getRemoteOrders());
-    this.setFeedback(`Driver assigned to order ${this.selectedOrderForAssignment.full.orderNumber ?? ''}.`, 'success');
-    this.closeAssignDriver();
+    try {
+      await firstValueFrom(
+        this.ordersService.assignDriver(this.selectedOrderForAssignment.id, this.selectedDriverId)
+      );
+      this.loadOrders();
+      const selectedDriver = this.availableAssignableDrivers.find((driver) => driver.id === this.selectedDriverId);
+      const driverLabel = selectedDriver ? selectedDriver.contactName || selectedDriver.name : 'Driver';
+      this.setFeedback(
+        `${driverLabel} assigned to order ${this.selectedOrderForAssignment.full.orderNumber ?? ''}.`,
+        'success'
+      );
+      this.closeAssignDriver();
+    } catch {
+      this.setFeedback('Unable to assign driver.', 'error');
+    }
   }
 
-  unassignSelectedDriver(): void {
+  async unassignSelectedDriver(): Promise<void> {
     if (this.isReadOnlyTenant) {
       this.setFeedback('Read-only access for tenant users.', 'info');
       return;
     }
     if (!this.selectedOrderForAssignment) return;
-    this.demoDriversService.unassignDriver(this.selectedOrderForAssignment.id);
-    this.refreshOrdersState(this.getRemoteOrders());
-    this.setFeedback(`Driver removed from order ${this.selectedOrderForAssignment.full.orderNumber ?? ''}.`, 'success');
-    this.closeAssignDriver();
+    try {
+      await firstValueFrom(this.ordersService.unassignDriver(this.selectedOrderForAssignment.id));
+      this.loadOrders();
+      this.setFeedback(`Driver removed from order ${this.selectedOrderForAssignment.full.orderNumber ?? ''}.`, 'success');
+      this.closeAssignDriver();
+    } catch {
+      this.setFeedback('Unable to remove driver.', 'error');
+    }
   }
 
-  get assignableDrivers(): DriverEntity[] {
+  get filteredAssignableDrivers(): AssignableDriver[] {
     const query = this.assignDriverQuery.trim().toLowerCase();
-    const drivers = this.demoDriversService.listDrivers();
+    const drivers = this.availableAssignableDrivers;
     if (!query) return drivers;
-    return drivers.filter((d) =>
-      d.name.toLowerCase().includes(query) ||
-      d.email.toLowerCase().includes(query) ||
-      `${d.phoneCountryCode}${d.phoneNumber}`.toLowerCase().includes(query) ||
-      d.vehicle.toLowerCase().includes(query)
+    return drivers.filter((driver) =>
+      [driver.name, driver.contactName, driver.email, driver.phone, driver.address]
+        .some((value) => String(value ?? '').toLowerCase().includes(query))
     );
   }
 
-  // ─── Label modal ────────────────────────────────────────────────────────────
+  // ─── Label modal ───────────────────────────────────────────────────────────
 
   openPrintLabel(order: OrderEntity): void {
     this.selectedOrderForLabel = structuredClone(order);
     this.isLabelOpen = true;
     queueMicrotask(() => {
-  this.renderLabelGraphics();
-});
+      this.renderLabelGraphics();
+    });
   }
 
   closePrintLabel(): void {
@@ -792,7 +804,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     }
   }
 
-  // ─── Print order modal ──────────────────────────────────────────────────────
+  // ─── Print order modal ─────────────────────────────────────────────────────
 
   openPrintOrder(order: OrderEntity): void {
     this.selectedOrderForPrint = structuredClone(order);
@@ -804,7 +816,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.selectedOrderForPrint = null;
   }
 
-  // ─── Misc public ────────────────────────────────────────────────────────────
+  // ─── Misc public ───────────────────────────────────────────────────────────
 
   maskCard(card: string = ''): string {
     if (!card) return '';
@@ -818,28 +830,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   onPickupPin(): void { this.openMapModule(); }
   onDeliveryPin(): void { this.openMapModule(); }
 
-  async seedDemoOrders(): Promise<void> {
-    if (!this.showLocalDemoButton || this.isSeedingDemoOrders) return;
-
-    this.isSeedingDemoOrders = true;
-    this.setFeedback('Seeding demo orders...', 'info');
-
-    try {
-      const localOrders = this.buildDemoSeedTargets().map((t) =>
-        this.buildLocalOrderEntity(t.value, t.desiredStatus, t.readyForPickup, this.currentOrderPlacedTime())
-      );
-      this.localOnlyOrderIds = new Set(localOrders.map((o) => o.id));
-      this.localDemoOrders = localOrders;
-      this.refreshOrdersState(this.getRemoteOrders());
-      this.setFeedback('Demo orders reset and created across Current, Scheduled, Completed, Incomplete, and History.', 'success');
-    } catch {
-      this.setFeedback('Unable to seed demo orders.', 'error');
-    } finally {
-      this.isSeedingDemoOrders = false;
-    }
-  }
-
-  // ─── PDF download (order) ───────────────────────────────────────────────────
+  // ─── PDF download (order) ──────────────────────────────────────────────────
 
   async downloadOrderPdf(order: OrderEntity): Promise<void> {
     const element = document.createElement('div');
@@ -872,36 +863,31 @@ export class OrdersComponent implements OnInit, OnDestroy {
     }
   }
 
-  // ─── Private: rendering ─────────────────────────────────────────────────────
+  // ─── Private: rendering ────────────────────────────────────────────────────
 
   private async renderLabelGraphics(): Promise<void> {
-  if (!this.selectedOrderForLabel) return;
+    if (!this.selectedOrderForLabel) return;
 
-  const orderNumber = this.selectedOrderForLabel.full.orderNumber ?? '';
+    const orderNumber = this.selectedOrderForLabel.full.orderNumber ?? '';
 
-  await new Promise(resolve => requestAnimationFrame(resolve));
+    await new Promise(resolve => requestAnimationFrame(resolve));
 
-  const canvas = document.getElementById('qrcode') as HTMLCanvasElement | null;
+    const canvas = document.getElementById('qrcode') as HTMLCanvasElement | null;
+    if (canvas) {
+      await QRCode.toCanvas(canvas, orderNumber, { width: 70, margin: 1 });
+    }
 
-  if (canvas) {
-    await QRCode.toCanvas(canvas, orderNumber, {
-      width: 70,
-      margin: 1
-    });
+    const barcodeElement = document.getElementById('barcode');
+    if (barcodeElement) {
+      JsBarcode('#barcode', orderNumber, {
+        format: 'CODE128',
+        displayValue: false,
+        margin: 0,
+        width: 2,
+        height: 60
+      });
+    }
   }
-
-  const barcodeElement = document.getElementById('barcode');
-
-  if (barcodeElement) {
-    JsBarcode('#barcode', orderNumber, {
-      format: 'CODE128',
-      displayValue: false,
-      margin: 0,
-      width: 2,
-      height: 60
-    });
-  }
-}
 
   private labelCSS(): string {
     return `
@@ -932,7 +918,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     `;
   }
 
-  // ─── Private: order mapping ──────────────────────────────────────────────────
+  // ─── Private: order mapping ────────────────────────────────────────────────
 
   private mapBackendOrder(order: BackendOrder): OrderEntity {
     const pickupPhone = this.splitPhoneNumber(order.pickup_phone);
@@ -944,18 +930,19 @@ export class OrdersComponent implements OnInit, OnDestroy {
       customerName: order.delivery_name,
       vendorName: order.pickup_name,
       amount: this.money(order.total),
-      distance: '—',
+      distance: '?',
       orderPlacedTime: order.order_placed_time || '',
       pickupTime: this.formatTime(order.pickup_time),
       estDeliveryTime: this.formatDateTime(order.delivery_date, order.delivery_time),
       readyForPickup: order.ready_for_pickup ?? false,
-      driver: '',
+      driver: order.driver?.contact_name || order.driver?.name || '',
       orderStatus: this.formatStatusLabel(order.status),
       trackingStatus: 'Inactive'
     };
 
     return {
       id: order.id,
+      createdAt: order.created_at,
       full: {
         orderNumber: order.order_number,
         pickup: {
@@ -1002,115 +989,47 @@ export class OrdersComponent implements OnInit, OnDestroy {
     };
   }
 
-  private refreshOrdersState(remoteOrders: OrderEntity[]): void {
-    this.orders = [...remoteOrders, ...this.localDemoOrders].map((o) => this.applyAssignedDriver(o));
-    this.readyForPickupMap.clear();
-    for (const order of this.orders) {
-      this.readyForPickupMap.set(order.id, !!order.view.current.readyForPickup);
-    }
-    this.persistLocalDemoOrders();
-  }
+  private async loadAssignableDrivers(selectedOrderId?: string): Promise<void> {
+    this.isLoadingAssignableDrivers = true;
+    this.assignDriverLoadError = '';
 
-  private getRemoteOrders(): OrderEntity[] {
-    return this.orders.filter((o) => !this.localOnlyOrderIds.has(o.id));
-  }
+    try {
+      const drivers = await firstValueFrom(this.http.get<TenantDriverEntity[]>('/api/v1/drivers/available'));
+     console.log('RAW DRIVERS FROM API', drivers);
+      this.availableAssignableDrivers = drivers.map((driver: any) => ({
+  id: String(driver.id),
+  name: String(driver.name ?? '').trim(),
+  contactName: String(driver.contact_name ?? '').trim(),
+  email: String(driver.contact_email ?? '').trim(),
+  phone: this.formatTenantPhone(
+    driver.contact_phone_country_code,
+    driver.contact_phone_number
+  ),
+  address: String(driver.address ?? '').trim()
+}));
 
-  private isLocalOnlyOrder(orderId: string): boolean {
-    return this.localOnlyOrderIds.has(orderId);
-  }
-
-  private addLocalDemoOrder(order: OrderEntity): void {
-    this.localOnlyOrderIds.add(order.id);
-    this.localDemoOrders = [...this.localDemoOrders, order];
-    this.refreshOrdersState(this.getRemoteOrders());
-  }
-
-  private deleteLocalOrder(orderId: string): void {
-    this.localOnlyOrderIds.delete(orderId);
-    this.localDemoOrders = this.localDemoOrders.filter((o) => o.id !== orderId);
-    this.readyForPickupMap.delete(orderId);
-    this.refreshOrdersState(this.getRemoteOrders());
-  }
-
-  private updateLocalOrderStatus(orderId: string, status: OrderTab): void {
-    this.localDemoOrders = this.localDemoOrders.map((order) => {
-      if (order.id !== orderId) return order;
-      const next = structuredClone(order);
-      next.tab = status;
-      const label = this.formatStatusLabel(status);
-      next.view.current.orderStatus = label;
-      next.view.scheduled.orderStatus = label;
-      next.view.completed.orderStatus = label;
-      next.view.incomplete.orderStatus = label;
-      next.view.history.orderStatus = label;
-      return next;
-    });
-    this.refreshOrdersState(this.getRemoteOrders());
-    if (this.selectedOrderForDetails?.id === orderId) {
-      this.selectedOrderForDetails = this.orders.find((o) => o.id === orderId) ?? null;
-    }
-  }
-
-  private updateLocalOrderFromForm(orderId: string, value: NewOrderFormValue): void {
-    const currentReady = this.getReadyForPickupStatus(orderId);
-    this.localDemoOrders = this.localDemoOrders.map((order) =>
-      order.id === orderId
-        ? this.buildLocalOrderEntity(
-          value,
-          order.tab,
-          currentReady,
-          order.view.current.orderPlacedTime || this.currentOrderPlacedTime(),
-          orderId
-        )
-        : order
-    );
-    this.refreshOrdersState(this.getRemoteOrders());
-  }
-
-  private buildLocalOrderEntity(
-    value: NewOrderFormValue,
-    tab: OrderTab,
-    readyForPickup: boolean,
-    orderPlacedTime: string,
-    id?: string
-  ): OrderEntity {
-    const view: OrderView = {
-      orderNo: value.orderNumber,
-      customerName: value.delivery.name,
-      vendorName: value.pickup.name,
-      amount: this.money(value.details.total),
-      distance: '—',
-      orderPlacedTime,
-      pickupTime: this.formatTime(value.pickup.pickupTime),
-      estDeliveryTime: this.formatDateTime(value.delivery.deliveryDate, value.delivery.deliveryTime),
-      readyForPickup,
-      driver: '',
-      orderStatus: this.formatStatusLabel(tab),
-      trackingStatus: 'Inactive'
-    };
-    return {
-      id: id ?? crypto.randomUUID(),
-      tab,
-      full: structuredClone(value),
-      view: {
-        current: { ...view },
-        scheduled: { ...view },
-        completed: { ...view },
-        incomplete: { ...view },
-        history: { ...view }
+      if (selectedOrderId && this.selectedOrderForAssignment?.id === selectedOrderId) {
+        const currentDriverName = this.selectedOrderForAssignment.view.current.driver.trim();
+        this.selectedDriverId = this.availableAssignableDrivers.find((driver) =>
+          driver.id === currentDriverName || driver.name === currentDriverName || driver.contactName === currentDriverName
+        )?.id ?? '';
       }
-    };
+    } catch {
+      this.availableAssignableDrivers = [];
+      this.assignDriverLoadError = 'Unable to load drivers.';
+      this.setFeedback('Unable to load drivers from tenants.', 'error');
+    } finally {
+      this.isLoadingAssignableDrivers = false;
+    }
   }
 
-  private applyAssignedDriver(order: OrderEntity): OrderEntity {
-    const driverName = this.demoDriversService.getAssignedDriver(order.id)?.name ?? '';
-    const next = structuredClone(order);
-    next.view.current.driver = driverName;
-    next.view.scheduled.driver = driverName;
-    next.view.completed.driver = driverName;
-    next.view.incomplete.driver = driverName;
-    next.view.history.driver = driverName;
-    return next;
+  private formatTenantPhone(countryCode: string | null | undefined, number: string | null | undefined): string {
+    const code = String(countryCode ?? '').trim();
+    const phoneNumber = String(number ?? '').trim();
+    if (!code && !phoneNumber) return '';
+    if (!code) return phoneNumber;
+    if (!phoneNumber) return code;
+    return `${code} ${phoneNumber}`;
   }
 
   private mapPaymentDetails(
@@ -1141,7 +1060,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
   private splitPhoneNumber(phone: string): { countryCode: string; number: string } {
     const trimmed = String(phone || '').trim();
     const digits = trimmed.replace(/\D/g, '');
-
     if (digits.length > 10) {
       return {
         countryCode: `+${digits.slice(0, digits.length - 10)}`,
@@ -1179,7 +1097,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     }
   }
 
-  // ─── Private: print ─────────────────────────────────────────────────────────
+  // ─── Private: print ────────────────────────────────────────────────────────
 
   openPrintWindow(order: OrderEntity): void {
     const printContent = this.generatePrintHTML(order);
@@ -1250,7 +1168,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     </body></html>`;
   }
 
-  // ─── Private: helpers ───────────────────────────────────────────────────────
+  // ─── Private: helpers ──────────────────────────────────────────────────────
 
   private toOrderPayload(value: NewOrderFormValue): Record<string, unknown> {
     return {
@@ -1292,10 +1210,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
     return status.charAt(0).toUpperCase() + status.slice(1);
   }
 
-  private currentOrderPlacedTime(): string {
-    return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-  }
-
   private formatTime(time: string): string {
     if (!time) return '';
     const [hours, minutes] = time.split(':').map(Number);
@@ -1320,7 +1234,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (!value || typeof value !== 'object') {
       return { signature: false, picture: false };
     }
-
     const record = value as Record<string, unknown>;
     return {
       signature: Boolean(record['signature']),
@@ -1422,113 +1335,49 @@ export class OrdersComponent implements OnInit, OnDestroy {
         taxRate: 0, deliveryFees: 0, deliveryTips: 0, discount: 0,
         subtotal: 0, taxAmount: 0, total: 0,
         instructions: '', payment: { method: 'cash_on_delivery' },
-        proofOfDelivery: {
-                signature: false,
-                picture: false
-            }
-
+        proofOfDelivery: { signature: false, picture: false }
       }
     };
   }
 
-  private deriveStatusFromForm(value: NewOrderFormValue): OrderTab {
-    const deliveryAt = this.parseDateTime(value.delivery.deliveryDate, value.delivery.deliveryTime);
-    if (!deliveryAt) return 'current';
-    return deliveryAt.getTime() <= Date.now() + (3 * 60 * 60 * 1000) ? 'current' : 'scheduled';
-  }
-
-  private persistLocalDemoOrders(): void {
-    if (!this.showLocalDemoButton || typeof localStorage === 'undefined') return;
-    localStorage.setItem(LOCAL_DEMO_ORDERS_STORAGE_KEY, JSON.stringify(this.localDemoOrders));
-  }
-
-  private restoreLocalDemoOrders(): void {
-    if (!this.showLocalDemoButton || typeof localStorage === 'undefined') return;
-    const raw = localStorage.getItem(LOCAL_DEMO_ORDERS_STORAGE_KEY);
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as OrderEntity[];
-      this.localDemoOrders = Array.isArray(parsed) ? parsed : [];
-      this.localOnlyOrderIds = new Set(this.localDemoOrders.map((o) => o.id));
-      this.refreshOrdersState([]);
-    } catch {
-      localStorage.removeItem(LOCAL_DEMO_ORDERS_STORAGE_KEY);
-      this.localDemoOrders = [];
-      this.localOnlyOrderIds = new Set<string>();
-    }
-  }
-
-  // ─── Demo seed ──────────────────────────────────────────────────────────────
-
-  private buildDemoSeedTargets(): DemoSeedTarget[] {
-    const now = new Date();
-    const statuses: Array<{ desiredStatus: OrderTab; readyForPickup: boolean; offsetHours: number }> = [
-      { desiredStatus: 'current', readyForPickup: true, offsetHours: 1 },
-      { desiredStatus: 'current', readyForPickup: false, offsetHours: 2 },
-      { desiredStatus: 'scheduled', readyForPickup: false, offsetHours: 6 },
-      { desiredStatus: 'scheduled', readyForPickup: true, offsetHours: 9 },
-      { desiredStatus: 'completed', readyForPickup: true, offsetHours: -2 },
-      { desiredStatus: 'completed', readyForPickup: false, offsetHours: -4 },
-      { desiredStatus: 'incomplete', readyForPickup: false, offsetHours: -1 },
-      { desiredStatus: 'history', readyForPickup: false, offsetHours: -24 }
-    ];
-
-    return statuses.map((cfg, index) => {
-      const pickupAt = new Date(now.getTime() + ((cfg.offsetHours - 1) * 3600000));
-      const deliveryAt = new Date(now.getTime() + (cfg.offsetHours * 3600000));
-      const paymentMethod: PaymentMethodType = index % 3 === 0 ? 'credit_card' : 'cash_on_delivery';
-      const baseAmount = 14 + (index * 3);
-      const quantity = (index % 3) + 1;
-      const fee = 4 + (index % 2);
-      const tips = cfg.desiredStatus === 'completed' ? 3 : 1.5;
-      const discount = index % 4 === 0 ? 2 : 0;
-      const subtotal = baseAmount * quantity;
-      const taxRate = 13;
-      const taxAmount = Math.round((subtotal * taxRate / 100) * 100) / 100;
-      const total = Math.round((subtotal + taxAmount + fee + tips - discount) * 100) / 100;
-
-      return {
-        desiredStatus: cfg.desiredStatus,
-        readyForPickup: cfg.readyForPickup,
-        value: {
-          orderNumber: `DEMO-${Date.now()}-${index + 1}`,
-          pickup: {
-            name: this.randomVendor(index),
-            phone: { countryCode: '+1', number: this.randomDigits(10) },
-            address: `${110 + index} ${this.randomStreet()} St, Toronto`,
-            pickupDate: this.formatDateForInput(pickupAt),
-            pickupTime: this.formatTimeForInput(pickupAt)
-          },
-          delivery: {
-            name: this.randomCustomer(index),
-            phone: { countryCode: '+1', number: this.randomDigits(10) },
-            email: `demo+${Date.now()}-${index}@dispatch.local`,
-            address: `${480 + index} ${this.randomStreet()} Ave, Toronto`,
-            deliveryDate: this.formatDateForInput(deliveryAt),
-            deliveryTime: this.formatTimeForInput(deliveryAt)
-          },
-          details: {
-            items: [{ itemName: this.randomItem(index), itemPrice: String(baseAmount), itemQty: String(quantity) }],
-            taxRate, deliveryFees: fee, deliveryTips: tips, discount,
-            subtotal, taxAmount, total,
-            instructions: this.randomInstruction(cfg.desiredStatus),
-            payment: paymentMethod === 'credit_card'
-              ? { method: paymentMethod, creditCard: { cardholderName: 'Demo Customer', cardNumber: '4242424242424242', expiryMonth: '12', expiryYear: '2030', cvc: '123' } }
-              : { method: paymentMethod },
-            proofOfDelivery: {
-        signature: false,
-        picture: false
-    }
-
-          }
-        }
-      };
-    });
-  }
+  // ─── Demo fill data (form only, no table seeding) ──────────────────────────
 
   private buildDemoDraftValue(): NewOrderFormValue {
-    const [draft] = this.buildDemoSeedTargets();
-    return structuredClone(draft?.value ?? this.createDefaultNewOrder());
+    const now = new Date();
+    const pickupAt = new Date(now.getTime() + 1 * 3600000);
+    const deliveryAt = new Date(now.getTime() + 2 * 3600000);
+
+    return {
+      orderNumber: `DEMO-${Date.now()}`,
+      pickup: {
+        name: 'North Fork Kitchen',
+        phone: { countryCode: '+1', number: '4161234567' },
+        address: '110 King St, Toronto',
+        pickupDate: this.formatDateForInput(pickupAt),
+        pickupTime: this.formatTimeForInput(pickupAt)
+      },
+      delivery: {
+        name: 'Maya Chen',
+        phone: { countryCode: '+1', number: '4169876543' },
+        email: `demo+${Date.now()}@dispatch.local`,
+        address: '480 Queen Ave, Toronto',
+        deliveryDate: this.formatDateForInput(deliveryAt),
+        deliveryTime: this.formatTimeForInput(deliveryAt)
+      },
+      details: {
+        items: [{ itemName: 'Burger Combo', itemPrice: '14', itemQty: '2' }],
+        taxRate: 13,
+        deliveryFees: 4,
+        deliveryTips: 1.5,
+        discount: 0,
+        subtotal: 28,
+        taxAmount: 3.64,
+        total: 37.14,
+        instructions: 'Call on arrival.',
+        payment: { method: 'cash_on_delivery' },
+        proofOfDelivery: { signature: false, picture: false }
+      }
+    };
   }
 
   private formatDateForInput(value: Date): string {
@@ -1537,40 +1386,5 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   private formatTimeForInput(value: Date): string {
     return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
-  }
-
-  private randomDigits(length: number): string {
-    let result = '';
-    while (result.length < length) result += Math.floor(Math.random() * 10);
-    return result.slice(0, length);
-  }
-
-  private randomVendor(index: number): string {
-    return ['North Fork Kitchen', 'Golden Pantry', 'Lime Cart', 'Harbor Deli', 'Summit Pizza'][index % 5];
-  }
-
-  private randomCustomer(index: number): string {
-    return ['Maya Chen', 'Owen Patel', 'Lena Brooks', 'Isaac Reed', 'Nadia Flores'][index % 5];
-  }
-
-  private randomStreet(): string {
-    const streets = ['King', 'Queen', 'Bloor', 'Dundas', 'Front', 'Jarvis', 'Bathurst'];
-    return streets[Math.floor(Math.random() * streets.length)] ?? 'King';
-  }
-
-  private randomItem(index: number): string {
-    return ['Burger Combo', 'Sushi Tray', 'Salad Bowl', 'Pasta Box', 'Coffee Pack'][index % 5];
-  }
-
-  private randomInstruction(status: OrderTab): string {
-    const byStatus: Record<OrderTab, string[]> = {
-      current: ['Call on arrival.', 'Leave at concierge.', 'Rush order for lunch service.'],
-      scheduled: ['Deliver after 6 PM.', 'Hold at vendor until notified.', 'Customer requested evening drop.'],
-      completed: ['Delivered to front desk.', 'Completed with signature.', 'Handed off to customer directly.'],
-      incomplete: ['Customer unreachable.', 'Address needs confirmation.', 'Vendor delayed package release.'],
-      history: ['Archived demo record.', 'Previous week recurring order.', 'Kept for reporting demo.']
-    };
-    const options = byStatus[status];
-    return options[Math.floor(Math.random() * options.length)] ?? '';
   }
 }

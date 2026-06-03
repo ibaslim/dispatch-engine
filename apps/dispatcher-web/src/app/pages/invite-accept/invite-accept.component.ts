@@ -26,11 +26,7 @@ import { ToastService } from '../../core/toast/toast.service';
         </div>
 
         @if (success()) {
-          <div class="rounded-md bg-green-50 p-4">
-            <p class="text-sm text-green-800">
-              Account created! Redirecting to login&hellip;
-            </p>
-          </div>
+          
         } @else {
           <form class="mt-8 space-y-6" (ngSubmit)="onSubmit()">
             @if (errorMessage()) {
@@ -106,7 +102,7 @@ import { ToastService } from '../../core/toast/toast.service';
         }
       </div>k
     </div>
-  `,
+  `
 })
 export class InviteAcceptComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
@@ -210,16 +206,13 @@ export class InviteAcceptComponent implements OnInit {
 
       this.success.set(true);
       this.toast.success('Account created successfully.');
+await this.router.navigate(['/login'], {
+  queryParams: {
+    registered: 'true',
+    email: res.email || ''
+  }
+});
 
-      setTimeout(async () => {
-        // Always go to login page after accepting invitation
-        await this.router.navigate(['/login'], { 
-          queryParams: { 
-            registered: 'true',
-            email: res.email || '' 
-          } 
-        });
-      }, 1500);
     } catch (err: unknown) {
       this.toast.error('Invitation failed.');
       this.errorMessage.set(
