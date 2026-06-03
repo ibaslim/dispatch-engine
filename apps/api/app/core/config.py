@@ -48,5 +48,8 @@ class Settings(BaseSettings):
     mail_starttls: bool = False
     mail_ssl: bool = False
 
+    # File uploads
+    uploads_dir: str = "data/uploads"
+
 
 settings = Settings()

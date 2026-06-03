@@ -20,6 +20,8 @@ class RoleEnum(str, enum.Enum):
     central_dispatcher = "central_dispatcher"
     store_dispatcher = "store_dispatcher"
     driver = "driver"
+    vendor = "vendor"
+    individual = "individual"
 
 
 class User(Base, UUIDMixin, TimestampMixin):

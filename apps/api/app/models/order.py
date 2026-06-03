@@ -1,6 +1,7 @@
-from sqlalchemy import Column, String, Integer, Float, DateTime, Boolean, JSON, Enum
+from sqlalchemy import Column, String, Integer, Float, DateTime, Boolean, JSON, Enum, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from app.db.base import Base
 import enum
 import uuid
@@ -14,11 +15,23 @@ class OrderStatus(str, enum.Enum):
     history = "history"
 
 
+class ActivityStatus(str, enum.Enum):
+    driver_not_assigned = "driver_not_assigned"
+    pickup_initiated = "pickup_initiated"
+    picked_up = "picked_up"
+    delivery_initiated = "delivery_initiated"
+    delivery_in_progress = "delivery_in_progress"
+    delivered = "delivered"
+
+
 class Order(Base):
     __tablename__ = "orders"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     order_number = Column(String, unique=True, nullable=False)
+
+    # Driver assignment
+    driver_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True)
 
     pickup_name = Column(String)
     pickup_phone = Column(String)
@@ -46,10 +59,18 @@ class Order(Base):
     instructions = Column(String)
     payment_method = Column(String)
     payment_details = Column(JSON)
+    proof_of_delivery = Column(JSON, nullable=True)
 
     status = Column(Enum(OrderStatus), default=OrderStatus.current)
+    activity_status = Column(
+        Enum(ActivityStatus, name="activitystatus_enum"),
+        default=ActivityStatus.driver_not_assigned,
+    )
     ready_for_pickup = Column(Boolean, default=False)
 
     order_placed_time = Column(String)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    driver = relationship("Tenant", foreign_keys=[driver_id], backref="orders")

@@ -1,28 +1,44 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+import sqlalchemy as sa
+from typing import Union
 
-from app.core.deps import get_db, CurrentUser
+from app.core.deps import get_db, CurrentUserAllowInactiveAndSuspended
 from app.schemas.auth import (
     LoginRequest, TokenResponse, RefreshRequest,
-    MeResponse, ForgotPasswordRequest, ResetPasswordRequest,
+    MeResponse, ForgotPasswordRequest, ResetPasswordRequest, PendingApprovalResponse,
+    SuspendedAccountResponse,
 )
 from app.services.auth_service import (
     authenticate_user, create_token_pair,
     refresh_access_token, revoke_refresh_token,
+    check_pending_approval,
 )
+from app.models.tenant import Tenant
 
 router = APIRouter()
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=Union[TokenResponse, PendingApprovalResponse, SuspendedAccountResponse])
 async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
-    user = await authenticate_user(db, req.email, req.password)
-    if user is None:
+    result = await authenticate_user(db, req.email, req.password)
+    
+    if isinstance(result, (PendingApprovalResponse, SuspendedAccountResponse)):
+        return result
+    
+    if result is None:
+        # Check if user exists but is pending approval (fallback if password was wrong or something)
+        # Actually authenticate_user now handles it if password was correct.
+        # But if we want to support checking even without password (which check_pending_approval seems to do):
+        pending = await check_pending_approval(db, req.email)
+        if pending is not None:
+            return pending
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
-    return await create_token_pair(db, user)
+    return await create_token_pair(db, result)
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -42,13 +58,23 @@ async def logout(req: RefreshRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/me", response_model=MeResponse)
-async def me(current_user: CurrentUser):
+async def me(
+    current_user: CurrentUserAllowInactiveAndSuspended,
+    db: AsyncSession = Depends(get_db),
+):
+    tenant_is_active = None
+    if current_user.tenant_id:
+        tenant_result = await db.execute(sa.select(Tenant).where(Tenant.id == current_user.tenant_id))
+        tenant = tenant_result.scalar_one_or_none()
+        tenant_is_active = tenant.is_active if tenant is not None else None
+
     return MeResponse(
         id=str(current_user.id),
         email=current_user.email,
         name=current_user.name,
         is_platform_admin=current_user.is_platform_admin,
         tenant_id=str(current_user.tenant_id) if current_user.tenant_id else None,
+        tenant_is_active=tenant_is_active,
         roles=[r.role for r in current_user.roles],
     )
 

@@ -1,7 +1,21 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-from app.models.order import OrderStatus
+from app.models.order import OrderStatus, ActivityStatus
 from uuid import UUID
+
+
+class DriverInfo(BaseModel):
+    """Basic driver information"""
+    id: UUID
+    name: str
+    contact_name: Optional[str] = None
+    contact_phone_number: Optional[str] = None
+    contact_phone_country_code: Optional[str] = None
+
+    class Config:
+        from_attributes = True
 
 
 class OrderItem(BaseModel):
@@ -14,7 +28,8 @@ class OrderItem(BaseModel):
 # CREATE ORDER
 # -------------------------
 class OrderCreate(BaseModel):
-    order_number: str
+    order_number: Optional[str] = None
+    driver_id: Optional[UUID] = None
 
     pickup_name: str
     pickup_phone: str
@@ -45,6 +60,7 @@ class OrderCreate(BaseModel):
 
     payment_method: str
     payment_details: Optional[Dict[str, Any]] = None
+    proof_of_delivery: Optional[Dict[str, Any]] = None
 
 
 # -------------------------
@@ -52,6 +68,7 @@ class OrderCreate(BaseModel):
 # -------------------------
 class OrderUpdate(BaseModel):
     order_number: Optional[str] = None
+    driver_id: Optional[UUID] = None
 
     pickup_name: Optional[str] = None
     pickup_phone: Optional[str] = None
@@ -82,6 +99,7 @@ class OrderUpdate(BaseModel):
 
     payment_method: Optional[str] = None
     payment_details: Optional[Dict[str, Any]] = None
+    proof_of_delivery: Optional[Dict[str, Any]] = None
 
     status: Optional[OrderStatus] = None
     ready_for_pickup: Optional[bool] = None
@@ -93,8 +111,13 @@ class OrderUpdate(BaseModel):
 class OrderResponse(OrderCreate):
     id: UUID
     status: OrderStatus
+    activity_status: ActivityStatus
     ready_for_pickup: bool
     order_placed_time: Optional[str] = None
+    proof_of_delivery: Optional[Dict[str, Any]] = None
+    driver: Optional[DriverInfo] = None
+    created_at: Optional[datetime] = None
+
 
     class Config:
         from_attributes = True

@@ -58,14 +58,10 @@ export class OtherOrderDetailsComponent {
     const items = [...(this.value.items || [])];
     let processedValue = value;
 
-    // For price and qty fields, validate and process as positive numbers only
     if (field === 'itemPrice' || field === 'itemQty') {
-      // Remove non-numeric characters except decimal point
       const strValue = String(value ?? '').trim();
 
-      // Allow only positive numbers (digits and single decimal point)
       if (strValue && !/^\d+(\.\d*)?$/.test(strValue)) {
-        // Invalid input, don't update
         return;
       }
 
@@ -82,11 +78,9 @@ export class OtherOrderDetailsComponent {
     const priceFilled = item.itemPrice !== '' && item.itemPrice !== null && item.itemPrice !== undefined;
     const qtyFilled = item.itemQty !== '' && item.itemQty !== null && item.itemQty !== undefined;
 
-    // required logic - both name AND price AND qty must be filled
     if (nameFilled && !priceFilled) errors.push('Price is required');
     if (nameFilled && !qtyFilled) errors.push('Quantity is required');
 
-    // value must be > 0 if filled
     if (priceFilled && price <= 0) errors.push('Price must be greater than 0');
     if (qtyFilled && qty <= 0) errors.push('Quantity must be greater than 0');
 
@@ -94,6 +88,15 @@ export class OtherOrderDetailsComponent {
 
     items[index] = item;
     this.patch({ items });
+  }
+
+  onProofChange(type: 'signature' | 'picture', checked: boolean): void {
+    this.patch({
+      proofOfDelivery: {
+        ...this.value.proofOfDelivery,
+        [type]: checked
+      }
+    });
   }
 
   getFieldErrors(index: number, type: 'price' | 'qty'): string[] {
@@ -113,13 +116,11 @@ export class OtherOrderDetailsComponent {
   private recalc(details: NewOrderFormValue['details']): NewOrderFormValue['details'] {
     const items = details.items || [];
 
-    // SUBTOTAL = price * qty ONLY
     const subtotal = this.round2(
       items.reduce((sum, item) => {
         const price = this.toNumber(item.itemPrice);
         const qty = this.toNumber(item.itemQty);
 
-        // ignore empty rows
         if (!price || !qty) return sum;
 
         return sum + price * qty;
@@ -133,7 +134,6 @@ export class OtherOrderDetailsComponent {
 
     const taxAmount = this.round2((subtotal * taxRate) / 100);
 
-    // TOTAL = subtotal + extras
     const total = this.round2(
       subtotal +
       taxAmount +
@@ -160,7 +160,6 @@ export class OtherOrderDetailsComponent {
     this.valueChange.emit(this.recalc(merged));
   }
 
-  // Validate that at least 1 item exists with name, price, and qty
   hasValidItems(): boolean {
     const items = this.value.items || [];
 

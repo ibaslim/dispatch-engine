@@ -22,14 +22,23 @@ export class NavbarComponent implements OnInit, OnDestroy {
   isNotificationsOn = true;
   private notificationAudio = new Audio('assets/sounds/notify.mp3');
 
-  navItems: NavItem[] = [
+  private readonly allNavItems: NavItem[] = [
     { label: 'Dispatch', route: '/dispatch' },
     { label: 'Orders', route: '/orders' },
-    { label: 'Drivers', route: '/drivers' },
+    // { label: 'Drivers', route: '/drivers' },
     { label: 'Map', route: '/map' },
     { label: 'Reviews', route: '/reviews' },
-    { label: 'Reports', route: '/reports' }
+    { label: 'Reports', route: '/reports' },
+    {label: 'Tenant Management', route:'/tenants'}
   ];
+
+  get navItems(): NavItem[] {
+    const user = this.auth.currentUser();
+    if (user && !user.is_platform_admin) {
+      return this.allNavItems.filter((item) => item.route === '/orders' || item.route === '/map');
+    }
+    return this.allNavItems;
+  }
 
   appName = 'Dispatch Engine';
   appTagline = 'Delivery Management System';

@@ -32,7 +32,32 @@ export interface MeResponse {
   name: string;
   is_platform_admin: boolean;
   tenant_id: string | null;
+  tenant_is_active: boolean | null;
   roles: string[];
+}
+
+export type OnboardingStatus = 'pre_pending' | 'pending' | 'approved' | 'rejected' | 'invited';
+
+export interface OnboardingApplicationCreateRequest {
+  role: string;
+  data: Record<string, unknown>;
+}
+
+export interface OnboardingApplicationReviewRequest {
+  reason?: string | null;
+}
+
+export interface OnboardingApplicationResponse {
+  id: string;
+  user_id: string;
+  tenant_id: string | null;
+  role: string;
+  status: OnboardingStatus;
+  data: Record<string, unknown>;
+  created_at: string;
+  reviewed_at: string | null;
+  reviewed_by_id: string | null;
+  decision_reason: string | null;
 }
 
 export interface InviteTenantAdminRequest {
@@ -45,6 +70,7 @@ export interface AcceptInvitationRequest {
   token: string;
   password: string;
   name?: string;
+  username: string;
 }
 
 export interface StoreResponse {

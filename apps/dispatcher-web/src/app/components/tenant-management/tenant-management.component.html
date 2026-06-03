@@ -1,0 +1,320 @@
+<app-page
+  title="Tenant Management"
+  containerClass="w-full px-6 py-6 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]"
+  contentClass="w-full"
+>
+
+  <!-- PAGE ACTIONS -->
+<div page-actions class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
+  <app-search-bar [value]="searchQuery" (valueChange)="searchQuery = $event" class="flex-1 sm:w-auto"></app-search-bar>
+
+  <app-button
+    variant="primary"
+    label="+ New tenant"
+    (onClick)="openInvitePopup()"
+    [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-3 py-2 rounded-md text-sm whitespace-nowrap flex-shrink-0'">
+  </app-button>
+</div>
+
+<!-- Role Filter Buttons -->
+<div class="flex items-center gap-1.5 mt-4 sm:mt-0 mb-4">
+
+  <!-- Driver -->
+  <button
+    type="button"
+    (click)="toggleRoleFilter(TenantRole.Driver)"
+    title="Filter: Driver"
+    [class.ring-2]="activeRoleFilters.has(TenantRole.Driver)"
+    [class.ring-[#3ddc97]]="activeRoleFilters.has(TenantRole.Driver)"
+    [class.bg-[#3ddc97]/10]="activeRoleFilters.has(TenantRole.Driver)"
+    class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <circle cx="12" cy="10" r="3"/>
+      <path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/>
+    </svg>
+    Driver
+  </button>
+
+  <!-- Vendor -->
+  <button
+    type="button"
+    (click)="toggleRoleFilter(TenantRole.Vendor)"
+    title="Filter: Partner"
+    [class.ring-2]="activeRoleFilters.has(TenantRole.Vendor)"
+    [class.ring-[#3ddc97]]="activeRoleFilters.has(TenantRole.Vendor)"
+    [class.bg-[#3ddc97]/10]="activeRoleFilters.has(TenantRole.Vendor)"
+    class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z"/>
+      <path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"/>
+      <path d="M12 3v6"/>
+    </svg>
+    Partner
+  </button>
+
+  <!-- Individual -->
+  <button
+    type="button"
+    (click)="toggleRoleFilter(TenantRole.Individual)"
+    title="Filter: Individual"
+    [class.ring-2]="activeRoleFilters.has(TenantRole.Individual)"
+    [class.ring-[#3ddc97]]="activeRoleFilters.has(TenantRole.Individual)"
+    [class.bg-[#3ddc97]/10]="activeRoleFilters.has(TenantRole.Individual)"
+    class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
+      <circle cx="12" cy="7" r="4"/>
+    </svg>
+    Individual
+  </button>
+
+</div>
+
+<app-table
+  [columns]="columns"
+  [rows]="filteredTenants"
+  [columnTemplate]="'repeat(8, minmax(0, 1fr))'"
+  [emptyTitle]="'No tenants found'"
+  [emptySubtitle]="'Invite users to start collaborating'"
+  [actionIcon]="'eye'"
+  [actionLabel]="'View details'"
+  (actionClick)="onTableActionClick($event)"
+>
+</app-table>
+</app-page>
+
+<!-- ── Add New Tenant Popup ── -->
+<app-popup
+  [open]="invitePopupOpen"
+  title="Invite New Tenent"
+  [widthClass]="'max-w-md'"
+  (close)="closeInvitePopup()"
+>
+  <div class="space-y-6">
+
+    <div *ngIf="inviteError" class="rounded-md bg-red-50 p-3 text-sm text-red-800">
+      {{ inviteError }}
+    </div>
+    <div *ngIf="inviteSuccess" class="rounded-md bg-green-50 p-3 text-sm text-green-800">
+      {{ inviteSuccess }}
+    </div>
+
+    <app-base-input
+      label="Email address"
+      type="email"
+      [required]="true"
+      [value]="inviteEmail"
+      (valueChange)="inviteEmail = $event; clearInviteFeedback()">
+    </app-base-input>
+
+    <app-dropdown-selector
+      label="Role"
+      [required]="true"
+      [options]="roleOptions"
+      [value]="inviteRole"
+      (valueChange)="inviteRole = $event; clearInviteFeedback()">
+    </app-dropdown-selector>
+  </div>
+
+  <div modal-footer class="flex flex-wrap justify-end gap-2">
+    <app-button
+      variant="ghost-outline"
+      label="Cancel"
+      [disabled]="isInviting"
+      (onClick)="closeInvitePopup()"
+    ></app-button>
+    <app-button
+      variant="primary"
+      label="+ Invite"
+      [disabled]="isInviting"
+      (onClick)="sendInvite()"
+    ></app-button>
+  </div>
+</app-popup>
+
+<!-- ── Suspend Tenant Popup ── -->
+<app-popup
+  [open]="suspendPopupOpen"
+  title="Suspend Tenant"
+  [widthClass]="'max-w-md'"
+  (close)="closeSuspendPopup()"
+>
+  <div class="space-y-4">
+    <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+      Please enter the reason for suspending the tenant <strong>{{ tenantToSuspend?.name }}</strong>. 
+      This explanation will be emailed to the tenant.
+    </p>
+
+    <div class="mt-2">
+      <app-base-input
+        label="Reason for Suspension"
+        placeholder="e.g. Terms of service violation, payment failure"
+        type="text"
+        [required]="true"
+        [value]="suspensionReason"
+        (valueChange)="suspensionReason = $event">
+      </app-base-input>
+    </div>
+  </div>
+
+  <div modal-footer class="flex justify-end gap-2">
+    <app-button
+      variant="ghost-outline"
+      label="Cancel"
+      [disabled]="isSuspending"
+      (onClick)="closeSuspendPopup()"
+    ></app-button>
+    <app-button
+      variant="primary"
+      label="Confirm Suspend"
+      [disabled]="isSuspending || !suspensionReason.trim()"
+      (onClick)="confirmSuspendTenant()"
+      [extraClasses]="'!bg-red-600 !text-white hover:!bg-red-700'"
+    ></app-button>
+  </div>
+</app-popup>
+
+<!-- ── View User Drawer ── -->
+<app-side-drawer
+  [open]="viewDrawerOpen && !!selectedTenant"
+  size="large"
+  title="Tenant Details"
+  subtitle="tenant's information."
+  (closed)="closeViewDrawer()"
+>
+  <!-- Body -->
+  <div *ngIf="selectedTenant" class="flex flex-col h-full">
+    <div class="flex-1 overflow-y-auto pr-2 space-y-8">
+
+      <!-- Basic Info Section -->
+      <section>
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-4 flex items-center gap-2">
+          <i class="ph ph-user-circle text-lg"></i>
+          Basic Information
+        </h3>
+        <div class="grid grid-cols-1 gap-6 bg-gray-50 dark:bg-[#2a2d2a]/30 p-4 rounded-xl border border-gray-100 dark:border-[#2a2d2a]">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <p class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 mb-1">Name</p>
+              <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ selectedTenant.name }}</p>
+            </div>
+            <div>
+              <p class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 mb-1">Status</p>
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                [ngClass]="{
+                  'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400': selectedTenant.status === 'Active' || selectedTenant.status === 'Approved',
+                  'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400': selectedTenant.status === 'Pending' || selectedTenant.status === 'Pending Approval' || selectedTenant.status === 'Pre-Pending',
+                  'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400': selectedTenant.status === 'Invited',
+                  'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400': selectedTenant.status === 'Rejected' || selectedTenant.status === 'Suspended'
+                }">
+                {{ selectedTenant.status }}
+              </span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <p class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 mb-1">Email</p>
+              <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" [title]="selectedTenant.email">{{ selectedTenant.email }}</p>
+            </div>
+            <div *ngIf="selectedTenant.phone">
+              <p class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 mb-1">Phone</p>
+              <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ selectedTenant.phone }}</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <p class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 mb-1">Role</p>
+              <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ getRoleLabel(selectedTenant.role) }}</p>
+            </div>
+            <div *ngIf="selectedTenant.createdAt">
+              <p class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 mb-1">Created at</p>
+              <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ selectedTenant.createdAt }}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Application Data Section -->
+      <section *ngIf="selectedApplicationEntries.length">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-4 flex items-center gap-2">
+          <i class="ph ph-file-text text-lg"></i>
+          Application Details
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div *ngFor="let entry of selectedApplicationEntries"
+               class="p-4 bg-white dark:bg-[#1E201E] border border-gray-100 dark:border-[#2a2d2a] rounded-lg">
+            <p class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 mb-1">{{ entry.label }}</p>
+
+            <div *ngIf="!entry.isFile" class="text-sm text-gray-700 dark:text-gray-300 break-words font-medium">
+              {{ entry.value }}
+            </div>
+
+            <div *ngIf="entry.isFile" class="flex items-center justify-between mt-2 gap-3">
+              <div class="flex items-center gap-2 overflow-hidden">
+                <i class="ph ph-file-pdf text-xl text-red-500"></i>
+                <p class="text-sm text-gray-700 dark:text-gray-300 truncate font-medium">{{ entry.fileName }}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <app-button
+                  variant="ghost-outline"
+                  label="Download"
+                  (onClick)="downloadDocument(selectedApplication!.id, entry.fileName!)"
+                  [extraClasses]="'!py-1 !px-3 !text-[10px] !h-auto uppercase font-bold tracking-tight'">
+                </app-button>
+                <app-button
+                  variant="ghost-outline"
+                  label="View"
+                  (onClick)="previewDocument(selectedApplication!.id, entry.fileName!)"
+                  [extraClasses]="'!py-1 !px-3 !text-[10px] !h-auto uppercase font-bold tracking-tight'"
+                  ariaLabel="View document">
+                  <span data-icon>
+                    <i class="ph ph-eye"></i>
+                  </span>
+                </app-button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div #drawerFooter data-drawer-footer class="flex flex-wrap justify-end gap-2">
+    <app-button
+      *ngIf="selectedApplication?.status === 'pending'"
+      variant="ghost-outline"
+      label="Reject"
+      [disabled]="isReviewing"
+      (onClick)="rejectSelected()"
+    ></app-button>
+    <app-button
+      *ngIf="selectedApplication?.status === 'pending'"
+      variant="primary"
+      label="Approve"
+      [disabled]="isReviewing"
+      (onClick)="approveSelected()"
+    ></app-button>
+    <app-button
+      *ngIf="isSelectedTenantApproved() && !isSelectedTenantSuspended()"
+      variant="ghost-outline"
+      label="Suspend Tenant"
+      (onClick)="openSuspendPopup()"
+    ></app-button>
+    <app-button
+      *ngIf="isSelectedTenantApproved() && isSelectedTenantSuspended()"
+      variant="ghost-outline"
+      label="Unsuspend Tenant"
+      (onClick)="unsuspendTenant()"
+    ></app-button>
+    <app-button
+       variant="ghost-outline"
+       label="Close"
+       (onClick)="closeViewDrawer()"
+     ></app-button>
+  </div>
+</app-side-drawer>

@@ -9,14 +9,19 @@
                     class="flex-shrink-0 w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
                     D
                 </div>
-                <div class="hidden md:flex flex-col">
+                <div class="hidden sm:flex flex-col">
                     <span class="text-lg text-gray-900 dark:text-white">{{ appName }}</span>
                     <span class="text-xs text-gray-600 dark:text-gray-400">{{ appTagline }}</span>
                 </div>
             </div>
 
             <!-- Right Side Actions -->
-            <div class="flex items-center space-x-4 relative">
+            <div class="flex items-center gap-2 sm:gap-4 relative">
+
+                <!-- Mobile Menu Toggle -->
+                <app-button variant="icon" [icon]="menuIcon" (onClick)="toggleMobileMenu()"
+                    [extraClasses]="'md:hidden'" ariaLabel="Toggle menu">
+                </app-button>
 
                 <!-- Desktop Navigation Menu -->
                 <div class="hidden md:flex items-center gap-1">
@@ -100,6 +105,18 @@
                     (logout)="logout()">
                 </user-dropdown-icon>
 
+            </div>
+        </div>
+
+        <!-- Mobile Navigation Menu -->
+        <div *ngIf="isMobileMenuOpen" class="md:hidden border-t border-gray-200 dark:border-[#2a2d2a]">
+            <div class="px-4 py-3 space-y-2">
+                <a *ngFor="let item of navItems" [routerLink]="item.route" (click)="onNavItemClick()"
+                    routerLinkActive="bg-blue-50 text-blue-700 border border-blue-200 dark:bg-[#2a2f2b] dark:text-white dark:border-[#3a3f3b]"
+                    [routerLinkActiveOptions]="{ exact: false }"
+                    class="block px-3 py-2 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 border border-transparent hover:bg-gray-100 dark:hover:bg-[#3C3D37] hover:text-gray-900 dark:hover:text-white transition">
+                    {{ item.label }}
+                </a>
             </div>
         </div>
     </div>

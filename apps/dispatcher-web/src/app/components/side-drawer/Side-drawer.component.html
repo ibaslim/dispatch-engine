@@ -1,0 +1,90 @@
+<!-- Backdrop -->
+<div
+  *ngIf="isVisible"
+  [class]="getBackdropClasses()"
+  (click)="onBackdropClick()"
+  aria-hidden="true"
+></div>
+
+<!-- Drawer Panel -->
+<div
+  *ngIf="isVisible"
+  [class]="getDrawerClasses()"
+  role="dialog"
+  [attr.aria-label]="title || 'Side drawer'"
+  aria-modal="true"
+>
+  <!-- ── Header ── -->
+  <div class="flex items-start justify-between px-5 py-4 border-b border-gray-200 dark:border-[#2a2d2a] shrink-0">
+    <div class="flex flex-col gap-0.5 min-w-0 pr-4">
+      <h2
+        *ngIf="title"
+        class="text-base font-semibold text-gray-900 dark:text-gray-100 truncate"
+      >
+        {{ title }}
+      </h2>
+      <p
+        *ngIf="subtitle"
+        class="text-sm text-gray-500 dark:text-gray-400 truncate"
+      >
+        {{ subtitle }}
+      </p>
+      <!--
+        Optional extra header content.
+        Usage: <span data-drawer-header>...</span>
+      -->
+      <ng-content select="[data-drawer-header]"></ng-content>
+    </div>
+
+    <!-- Close button -->
+    <button
+      (click)="requestClose()"
+      type="button"
+      aria-label="Close drawer"
+      class="shrink-0 w-8 h-8 flex items-center justify-center rounded-md
+             text-gray-500 dark:text-gray-400
+             hover:bg-gray-100 dark:hover:bg-[#2a2d2a]
+             transition duration-200"
+    >
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    </button>
+  </div>
+
+  <!-- ── Body (scrollable) ── -->
+  <div class="flex-1 overflow-y-auto px-5 py-4">
+    <!--
+      DEFAULT slot — all content without a data-* attribute lands here.
+      Usage: just put your content directly inside <app-side-drawer>
+    -->
+    <ng-content></ng-content>
+  </div>
+
+  <!-- ── Footer — only rendered when [data-drawer-footer] is projected ── -->
+  <div
+    *ngIf="showFooter"
+    class="shrink-0 px-5 py-4 border-t border-gray-200 dark:border-[#2a2d2a]"
+  >
+    <!--
+      Footer slot.
+      Usage: <div data-drawer-footer class="flex justify-end gap-2">...</div>
+    -->
+    <ng-content select="[data-drawer-footer]"></ng-content>
+
+    <div *ngIf="showInviteButton" class="flex flex-col gap-2 mt-3">
+      <p *ngIf="inviteError" class="text-xs text-red-500">{{ inviteError }}</p>
+      <p *ngIf="inviteSuccess" class="text-xs text-green-600">{{ inviteSuccess }}</p>
+      <div class="flex justify-end">
+        <app-button
+          variant="primary"
+          [label]="inviteButtonLabel"
+          [disabled]="isInviting"
+          (onClick)="sendInvite()"
+          [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82]'"
+        ></app-button>
+      </div>
+    </div>
+  </div>
+</div>
+

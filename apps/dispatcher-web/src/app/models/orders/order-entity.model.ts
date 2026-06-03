@@ -12,6 +12,7 @@ export interface OrderEntity {
     id: string;
     tab: OrderTab;
     full: NewOrderFormValue;
+    createdAt?: string;
 
     view: {
         current: OrderView;

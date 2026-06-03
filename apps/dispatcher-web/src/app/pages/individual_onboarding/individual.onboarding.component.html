@@ -1,0 +1,42 @@
+<app-page
+  title="Settings"
+  subtitle="Edit account settings."
+  containerClass="w-full px-4 py-8 sm:px-6 lg:px-8 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-screen"
+  contentClass="w-full">
+  <div class="max-w-3xl mx-auto bg-white dark:bg-[#1E201E] border border-gray-200 dark:border-[#2a2d2a] rounded-lg p-6">
+    <app-onboarding-form
+      [form]="form"
+      [showSubmitValidation]="showSubmitValidation"
+      [emailError]="emailError"
+      [submitMessage]="submitMessage"
+      (onSubmit)="applyForApproval()"
+      (formChange)="form = $event">
+
+      <app-base-input
+        label="NTN Number"
+        [required]="true"
+        [value]="form.ntnNumber || ''"
+        [showSubmitValidation]="showSubmitValidation"
+        (valueChange)="form.ntnNumber = $event">
+      </app-base-input>
+
+      <div class="md:col-span-2">
+        <label class="block text-sm text-gray-600 dark:text-gray-200 mb-2">Citizen Card / Driving License Scan</label>
+        <input
+          type="file"
+          accept="image/*,application/pdf"
+          class="block w-full text-sm text-gray-700 dark:text-gray-200 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:bg-gray-100 dark:file:bg-[#2a2d2a] file:text-gray-700 dark:file:text-gray-200"
+          (change)="onNationalIdChange($event)" />
+        <p *ngIf="nationalIdFileError" class="text-xs text-red-500 mt-2">
+          {{ nationalIdFileError }}
+        </p>
+        <p *ngIf="showSubmitValidation && !form.nationalIdFile && !nationalIdFileError" class="text-xs text-red-500 mt-2">
+          Citizen card / driving license scan is required.
+        </p>
+        <p *ngIf="form.nationalIdFile" class="text-xs text-gray-500 mt-2">
+          Selected: {{ form.nationalIdFile?.name }}
+        </p>
+      </div>
+    </app-onboarding-form>
+  </div>
+</app-page>

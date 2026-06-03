@@ -20,6 +20,49 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'pending-approval',
+    loadComponent: () =>
+      import('./pages/pending-approval/pending-approval.component').then(
+        (m) => m.PendingApprovalComponent
+      ),
+  },
+  {
+    path: 'onboarding/driver',
+    loadComponent: () =>
+      import('./pages/driver_onboarding/driver.onboarding.component').then(
+        (m) => m.DriverOnboardingComponent
+      ),
+  },
+  {
+    path: 'onboarding/pending',
+    loadComponent: () =>
+      import('./pages/onboarding-pending/onboarding-pending.component').then(
+        (m) => m.OnboardingPendingComponent
+      ),
+  },
+  {
+    path: 'onboarding/vendor',
+    loadComponent: () =>
+      import('./pages/vendor_onboarding/vendor.onboarding.component').then(
+        (m) => m.VendorOnboardingComponent
+      ),
+  },
+  {
+    path: 'onboarding/individual',
+    loadComponent: () =>
+      import('./pages/individual_onboarding/individual.onboarding.component').then(
+        (m) => m.IndividualOnboardingComponent
+      ),
+  },
+  {
+    path: 'suspended',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/suspended/suspended.component').then(
+        (m) => m.SuspendedComponent
+      ),
+  },
+  {
     path: 'orders',
     canActivate: [authGuard],
     loadComponent: () =>
@@ -57,6 +100,14 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./pages/reports/reports.component').then(
         (m) => m.ReportsComponent
+      ),
+  },
+  {
+    path: 'tenants',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./components/tenant-management/tenant-management.component').then(
+        (m) => m.TenantManagementComponent
       ),
   },
   {

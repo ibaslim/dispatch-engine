@@ -1,0 +1,68 @@
+<div class="mt-6 space-y-4">
+    <!-- Heading -->
+    <div>
+         <h3 class="text-md font-semibold text-gray-900 dark:text-gray-100">Proof of Delivery</h3>
+
+
+        <div class="text-sm text-gray-500 dark:text-gray-400">
+            Select at least one option for proof of delivery
+        </div>
+    </div>
+
+    <!-- Wrapper with validation border -->
+    <div
+        [class]="
+            showError
+            ? 'flex flex-col gap-4 border border-red-500 rounded-2xl p-3 bg-red-50/30 dark:bg-red-900/10'
+            : 'flex flex-col gap-4'
+        "
+    >
+
+        <!-- Signature -->
+        <label
+            class="flex items-center gap-4 p-4 border border-gray-200 dark:border-gray-700 rounded-2xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-all shadow-sm hover:shadow-md"
+        >
+            <input
+                type="checkbox"
+                [checked]="value.signature"
+                (change)="toggleSignature()"
+                class="w-5 h-5 accent-blue-600 cursor-pointer"
+            >
+
+            <div>
+                <p class="font-semibold text-sm text-gray-900 dark:text-gray-100">Signature</p>
+
+                <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    Customer must sign on delivery
+                </div>
+            </div>
+        </label>
+
+        <!-- Picture -->
+        <label
+            class="flex items-center gap-4 p-4 border border-gray-200 dark:border-gray-700 rounded-2xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-all shadow-sm hover:shadow-md"
+        >
+            <input
+                type="checkbox"
+                [checked]="value.picture"
+                (change)="togglePicture()"
+                class="w-5 h-5 accent-blue-600 cursor-pointer"
+            >
+
+            <div>
+                <p class="font-semibold text-sm text-gray-900 dark:text-gray-100">Picture</p>
+
+                <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    Take a photo of the delivered package
+                </div>
+            </div>
+        </label>
+    </div>
+
+    <!-- Error Message -->
+    <app-error-message
+        *ngIf="showError"
+        message="Please select at least one proof of delivery method."
+    >
+    </app-error-message>
+</div>

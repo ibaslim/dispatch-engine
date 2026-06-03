@@ -22,6 +22,8 @@ export class TableComponent {
   @Input() columnTemplate = '';
   @Input() activeMenuRow: any = null;
   @Input() menuItems: any[] = [];
+  @Input() actionIcon: 'dots' | 'eye' = 'dots';
+  @Input() actionLabel = 'Row actions';
 
   @Output() menuSelect = new EventEmitter<any>();
 
@@ -46,6 +48,24 @@ export class TableComponent {
     const parts = name.trim().split(/\s+/);
     if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '';
     return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+
+  getStatusBadgeClasses(status: string): string {
+    if (!status) return 'bg-gray-100 text-gray-700 dark:bg-[#2a2d2a] dark:text-gray-300';
+    const normalized = status.toLowerCase();
+    if (normalized.includes('approved') || normalized.includes('active')) {
+      return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400';
+    }
+    if (normalized.includes('pending')) {
+      return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
+    }
+    if (normalized.includes('invited')) {
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
+    }
+    if (normalized.includes('rejected') || normalized.includes('suspended') || normalized.includes('failed')) {
+      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+    }
+    return 'bg-gray-100 text-gray-700 dark:bg-[#2a2d2a] dark:text-gray-300';
   }
 
   @HostListener('document:click', ['$event'])

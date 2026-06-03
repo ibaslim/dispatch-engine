@@ -4,6 +4,7 @@ from app.models.user import User, UserRole, UserStoreAccess
 from app.models.invitation import Invitation
 from app.models.token import RefreshToken, PushToken
 from app.models.post import Post
+from app.models.onboarding_application import OnboardingApplication
 
 __all__ = [
     "Tenant",
@@ -15,4 +16,5 @@ __all__ = [
     "RefreshToken",
     "PushToken",
     "Post",
+    "OnboardingApplication",
 ]

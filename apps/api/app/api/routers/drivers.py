@@ -1,9 +1,28 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.core.deps import get_db, CurrentUser
+from app.models.tenant import Tenant, TenantRole
+from app.schemas.tenant import TenantResponse
 
 router = APIRouter()
+
+
+@router.get("/available", response_model=list[TenantResponse])
+async def get_available_drivers(
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get list of all available drivers from tenants table where role='driver'."""
+    result = await db.execute(
+        select(Tenant).where(
+            (Tenant.role == TenantRole.driver) &
+            (Tenant.is_active == True)
+        ).order_by(Tenant.name)
+    )
+    drivers = result.scalars().all()
+    return drivers
 
 
 @router.get("/me/jobs")

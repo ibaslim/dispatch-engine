@@ -37,7 +37,7 @@
                 <i data-icon class="ph ph-faders-horizontal text-base"></i>
             </app-button>
 
-            <app-button variant="ghost" ariaLabel="New Order" label="New Order"
+            <app-button *ngIf="!isReadOnlyTenant" variant="ghost" ariaLabel="New Order" label="New Order"
                 [extraClasses]="'bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-emerald-400 flex items-center gap-2'">
                 <i data-icon class="ph ph-plus text-base"></i>
             </app-button>
