@@ -111,6 +111,28 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'configurations',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/configurations/configurations.component').then(
+        (m) => m.ConfigurationsComponent
+      ),
+    children: [
+      {
+        path: '',
+        redirectTo: 'pricing',
+        pathMatch: 'full',
+      },
+      {
+        path: 'pricing',
+        loadComponent: () =>
+          import('./pages/configurations/pricing/pricing.component').then(
+            (m) => m.PricingComponent
+          ),
+      },
+    ],
+  },
+  {
     path: 'my-account',
     canActivate: [authGuard],
     loadComponent: () =>

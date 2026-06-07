@@ -1,0 +1,27 @@
+<div class="flex flex-col min-h-screen bg-gray-50 dark:bg-[#181a18]">
+
+  <!-- Page Header -->
+  <div class="bg-white dark:bg-[#1E201E] border-b border-gray-200 dark:border-[#2a2d2a] px-6 pt-6 pb-0">
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">Configurations</h1>
+
+    <!-- Sub-tabs -->
+    <nav class="flex gap-1" aria-label="Configurations tabs">
+      <a
+        routerLink="pricing"
+        routerLinkActive="border-b-2 border-blue-600 text-blue-700 dark:text-blue-400 dark:border-blue-400"
+        [routerLinkActiveOptions]="{ exact: false }"
+        class="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400
+               hover:text-gray-900 dark:hover:text-white border-b-2 border-transparent
+               transition-colors duration-150 -mb-px"
+        id="tab-pricing"
+      >
+        Pricing
+      </a>
+    </nav>
+  </div>
+
+  <!-- Routed tab content -->
+  <div class="flex-1">
+    <router-outlet></router-outlet>
+  </div>
+</div>

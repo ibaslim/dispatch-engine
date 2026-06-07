@@ -15,8 +15,11 @@ from app.api.routers import (
     orders,
     tenants,
     onboarding,
+    locations,
+    pricing,
 )
 from app.db.seed import seed_platform_admin
+from app.db.seed_locations import seed_locations
 from app.db.init_db import init_db
 
 
@@ -25,6 +28,8 @@ async def lifespan(application: FastAPI):
     await init_db()
     # Startup – auto-seed admin on first boot
     await seed_platform_admin()
+    # Startup – seed geography data on first boot
+    await seed_locations()
     yield
     # Shutdown (optional cleanup)
 
@@ -60,6 +65,8 @@ def create_app() -> FastAPI:
     application.include_router(ws.router, prefix="/api/v1", tags=["websocket"])
     application.include_router(orders.router, prefix="/api/v1/orders", tags=["orders"])
     application.include_router(onboarding.router, prefix="/api/v1/onboarding", tags=["onboarding"])
+    application.include_router(locations.router, prefix="/api/v1/locations", tags=["locations"])
+    application.include_router(pricing.router, prefix="/api/v1/pricing", tags=["pricing"])
 
     return application
 
