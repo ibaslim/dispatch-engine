@@ -5,6 +5,7 @@ from app.models.invitation import Invitation
 from app.models.token import RefreshToken, PushToken
 from app.models.post import Post
 from app.models.onboarding_application import OnboardingApplication
+from app.models.location import Country, State, City, CityPricing
 
 __all__ = [
     "Tenant",
@@ -17,4 +18,8 @@ __all__ = [
     "PushToken",
     "Post",
     "OnboardingApplication",
+    "Country",
+    "State",
+    "City",
+    "CityPricing",
 ]

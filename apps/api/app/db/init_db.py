@@ -5,6 +5,7 @@ from app.db.session import engine
 from app.models.order import Order
 from app.models.user import User
 from app.models.user import UserRole
+from app.models.location import Country, State, City, CityPricing
 
 
 async def init_db():
