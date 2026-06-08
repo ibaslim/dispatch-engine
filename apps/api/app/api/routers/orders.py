@@ -17,6 +17,7 @@ from uuid import UUID
 
 router = APIRouter(tags=["Orders"])
 APP_TIMEZONE = ZoneInfo("Asia/Karachi")
+PUBLISH_WINDOW_MINUTES = 15
 
 
 def parse_order_datetime(date_value: str, time_value: str) -> datetime:
@@ -75,9 +76,22 @@ async def get_orders(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Order).options(selectinload(Order.driver))
-    )
+    query = select(Order).options(selectinload(Order.driver))
+
+    if not current_user.is_platform_admin and current_user.tenant_id:
+        result = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
+        tenant = result.scalar_one_or_none()
+        if tenant:
+            if tenant.role == TenantRole.driver:
+                query = query.where(Order.driver_id == current_user.tenant_id)
+            elif tenant.role == TenantRole.vendor:
+                # Also check pickup_name fallback just in case vendor_id isn't populated
+                query = query.where(
+                    (Order.vendor_id == current_user.tenant_id) |
+                    (Order.pickup_name == tenant.name)
+                )
+
+    result = await db.execute(query)
     return result.scalars().all()
 
 
@@ -234,17 +248,24 @@ async def update_status(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    if not current_user.is_platform_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Read-only access for tenant users.",
-        )
-
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
 
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+
+    if not current_user.is_platform_admin:
+        # Check if the tenant owns the order
+        tenant_result = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
+        tenant = tenant_result.scalar_one_or_none()
+        if not tenant or (
+            (tenant.role == TenantRole.driver and order.driver_id != tenant.id) and 
+            (tenant.role == TenantRole.vendor and order.vendor_id != tenant.id and order.pickup_name != tenant.name)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to update this order's status.",
+            )
 
     order.status = payload.status
     await db.commit()
@@ -334,6 +355,7 @@ async def assign_driver(
 
     try:
         order.driver_id = payload.driver_id
+        order.published = False
         if order.activity_status == ActivityStatus.driver_not_assigned:
             order.activity_status = ActivityStatus.pickup_initiated
 
@@ -352,3 +374,174 @@ async def assign_driver(
             status_code=400,
             detail=f"Error assigning driver: {str(e)}"
         )
+
+
+# -------------------------
+# GET PUBLISHED ORDERS
+# -------------------------
+@router.get("/published", response_model=list[OrderResponse])
+async def get_published_orders(
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Return all orders that are published, not yet accepted (no driver),
+    and within the 15-minute broadcast window.
+    """
+    if not current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only driver tenants can view published orders.",
+        )
+
+    tenant_result = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
+    tenant = tenant_result.scalar_one_or_none()
+    if not tenant or tenant.role != TenantRole.driver:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only driver tenants can view published orders.",
+        )
+
+    cutoff = datetime.now(APP_TIMEZONE) - timedelta(minutes=PUBLISH_WINDOW_MINUTES)
+    result = await db.execute(
+        select(Order)
+        .where(
+            Order.published == True,
+            Order.driver_id == None,
+            Order.published_at >= cutoff,
+        )
+        .options(selectinload(Order.driver))
+        .order_by(Order.published_at.desc())
+    )
+    return result.scalars().all()
+
+
+# -------------------------
+# PUBLISH ORDER
+# -------------------------
+@router.post("/{order_id}/publish", response_model=OrderResponse)
+async def publish_order(
+    order_id: str,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark an order as published and broadcast to all connected driver clients."""
+    if not current_user.is_platform_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only platform admins can publish orders.",
+        )
+
+    result = await db.execute(
+        select(Order).where(Order.id == order_id).options(selectinload(Order.driver))
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    order.published = True
+    order.published_at = datetime.now(APP_TIMEZONE)
+    await db.commit()
+    await db.refresh(order)
+
+    # Re-fetch with relationship
+    result = await db.execute(
+        select(Order).where(Order.id == order.id).options(selectinload(Order.driver))
+    )
+    order = result.scalar_one()
+
+    # Broadcast to all connected drivers
+    from app.api.routers.ws import manager
+    driver_fee = round(order.total * 0.05, 2)
+    await manager.broadcast_to_all_drivers({
+        "type": "new_order",
+        "order": {
+            "id": str(order.id),
+            "order_number": order.order_number,
+            "pickup_address": order.pickup_address,
+            "delivery_address": order.delivery_address,
+            "total": order.total,
+            "driver_fee": driver_fee,
+            "published_at": order.published_at.isoformat() if order.published_at else None,
+        }
+    })
+    # Also broadcast to platform/admin connections so they can update their UI
+    await manager.broadcast_to_all({
+        "type": "order_published",
+        "order_id": str(order.id),
+    })
+
+    return order
+
+
+# -------------------------
+# ACCEPT ORDER (driver self-assigns)
+# -------------------------
+@router.post("/{order_id}/accept", response_model=OrderResponse)
+async def accept_order(
+    order_id: str,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    A driver (tenant with role=driver) accepts a published order.
+    Sets driver_id = current_user.tenant_id and un-publishes the order.
+    """
+    if not current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only driver tenants can accept orders.",
+        )
+
+    # Verify the caller is actually a driver
+    tenant_result = await db.execute(
+        select(Tenant).where(Tenant.id == current_user.tenant_id)
+    )
+    tenant = tenant_result.scalar_one_or_none()
+    if not tenant or tenant.role != TenantRole.driver:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only driver tenants can accept orders.",
+        )
+
+    result = await db.execute(
+        select(Order).where(Order.id == order_id).options(selectinload(Order.driver))
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if not order.published:
+        raise HTTPException(status_code=400, detail="Order is not published.")
+
+    if order.driver_id is not None:
+        raise HTTPException(status_code=409, detail="Order already accepted by another driver.")
+
+    # Check 15-min window
+    cutoff = datetime.now(APP_TIMEZONE) - timedelta(minutes=PUBLISH_WINDOW_MINUTES)
+    if order.published_at and order.published_at < cutoff:
+        raise HTTPException(status_code=410, detail="Order broadcast window has expired.")
+
+    order.driver_id = current_user.tenant_id
+    order.published = False  # Remove from broadcast queue
+    if order.activity_status == ActivityStatus.driver_not_assigned:
+        order.activity_status = ActivityStatus.pickup_initiated
+
+    await db.commit()
+    await db.refresh(order)
+
+    result = await db.execute(
+        select(Order).where(Order.id == order.id).options(selectinload(Order.driver))
+    )
+    order = result.scalar_one()
+
+    # Broadcast to all clients so the card disappears everywhere
+    from app.api.routers.ws import manager
+    await manager.broadcast_to_all({
+        "type": "order_accepted",
+        "order_id": str(order.id),
+        "driver_id": str(current_user.tenant_id),
+        "driver_name": tenant.contact_name or tenant.name,
+    })
+
+    return order

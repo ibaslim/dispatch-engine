@@ -44,7 +44,10 @@ export class DispatchApiClient {
   }
 
   async logout(): Promise<void> {
-    await this.post('/api/v1/auth/logout', {}).catch(() => undefined);
+    const refresh_token = await this.storage.getRefreshToken();
+    if (refresh_token) {
+      await this.post('/api/v1/auth/logout', { refresh_token }, false).catch(() => undefined);
+    }
     await this.storage.clearTokens();
   }
 

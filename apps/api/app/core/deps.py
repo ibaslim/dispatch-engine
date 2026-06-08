@@ -38,16 +38,19 @@ async def _get_current_user(
     try:
         token: str = credentials.credentials
         payload = decode_access_token(token)
+        if payload.get("type") != "access":
+            raise exc
         user_id: str = payload.get("sub", "")
         if not user_id:
             raise exc
-    except JWTError:
+        user_uuid = UUID(user_id)
+    except (JWTError, ValueError):
         raise exc
 
     result = await db.execute(
         select(User)
         .options(selectinload(User.roles))
-        .where(User.id == UUID(user_id))
+        .where(User.id == user_uuid)
     )
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
@@ -82,16 +85,19 @@ async def _get_current_user_allow_inactive(
     try:
         token: str = credentials.credentials
         payload = decode_access_token(token)
+        if payload.get("type") != "access":
+            raise exc
         user_id: str = payload.get("sub", "")
         if not user_id:
             raise exc
-    except JWTError:
+        user_uuid = UUID(user_id)
+    except (JWTError, ValueError):
         raise exc
 
     result = await db.execute(
         select(User)
         .options(selectinload(User.roles))
-        .where(User.id == UUID(user_id))
+        .where(User.id == user_uuid)
     )
     user = result.scalar_one_or_none()
     if user is None:
@@ -126,16 +132,19 @@ async def _get_current_user_allow_inactive_and_suspended(
     try:
         token: str = credentials.credentials
         payload = decode_access_token(token)
+        if payload.get("type") != "access":
+            raise exc
         user_id: str = payload.get("sub", "")
         if not user_id:
             raise exc
-    except JWTError:
+        user_uuid = UUID(user_id)
+    except (JWTError, ValueError):
         raise exc
 
     result = await db.execute(
         select(User)
         .options(selectinload(User.roles))
-        .where(User.id == UUID(user_id))
+        .where(User.id == user_uuid)
     )
     user = result.scalar_one_or_none()
     if user is None:
@@ -192,15 +201,36 @@ def require_same_tenant(tenant_id: UUID, current_user: CurrentUser) -> None:
 
 
 async def get_ws_user(websocket: WebSocket, db: AsyncSession) -> Optional[User]:
-    """Extract and validate bearer token from WebSocket Authorization header."""
-    auth_header = websocket.headers.get("authorization", "")
-    if not auth_header.startswith("Bearer "):
+    """
+    Extract and validate bearer token from:
+      1. ?token=<jwt> query parameter (browser WS clients can't set headers)
+      2. Authorization: Bearer <jwt> header (server / mobile clients)
+    """
+    # Try query param first (browser WS)
+    token = websocket.query_params.get("token")
+
+    # Fall back to Authorization header
+    if not token:
+        auth_header = websocket.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+
+    if not token:
         return None
-    token = auth_header[7:]
+
     try:
         payload = decode_access_token(token)
+        if payload.get("type") != "access":
+            return None
         user_id = payload.get("sub", "")
-        result = await db.execute(select(User).where(User.id == UUID(user_id)))
+        if not user_id:
+            return None
+        user_uuid = UUID(user_id)
+        result = await db.execute(
+            select(User)
+            .options(selectinload(User.roles))
+            .where(User.id == user_uuid)
+        )
         user = result.scalar_one_or_none()
         return user if (user and user.is_active) else None
     except (JWTError, ValueError):

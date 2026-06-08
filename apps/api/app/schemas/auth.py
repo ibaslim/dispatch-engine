@@ -39,6 +39,7 @@ class MeResponse(BaseModel):
     is_platform_admin: bool
     tenant_id: str | None
     tenant_is_active: bool | None = None
+    tenant_role: str | None = None
     roles: list[str]
 
 

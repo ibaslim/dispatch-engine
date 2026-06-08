@@ -13,6 +13,7 @@ export interface OrderEntity {
     tab: OrderTab;
     full: NewOrderFormValue;
     createdAt?: string;
+    isExpiredUnassigned?: boolean;
 
     view: {
         current: OrderView;

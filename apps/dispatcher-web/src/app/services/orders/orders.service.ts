@@ -17,15 +17,11 @@ export class OrdersService {
   }
 
   updateStatus(id: string, status: string): Observable<any> {
-    return this.http.patch(`${this.baseUrl}/${id}/status`, {
-      status
-    });
+    return this.http.patch(`${this.baseUrl}/${id}/status`, { status });
   }
 
   toggleReady(id: string, ready: boolean): Observable<any> {
-    return this.http.patch(`${this.baseUrl}/${id}/ready`, {
-      ready
-    });
+    return this.http.patch(`${this.baseUrl}/${id}/ready`, { ready });
   }
 
   updateOrder(id: string, data: any): Observable<any> {
@@ -46,5 +42,20 @@ export class OrdersService {
 
   deleteOrder(id: string): Observable<any> {
     return this.http.delete(`${this.baseUrl}/${id}`);
+  }
+
+  /** Publish a saved order to all online drivers (platform admin only). */
+  publishOrder(id: string): Observable<any> {
+    return this.http.post(`${this.baseUrl}/${id}/publish`, {});
+  }
+
+  /** Driver accepts a published order — assigns themselves. */
+  acceptOrder(id: string): Observable<any> {
+    return this.http.post(`${this.baseUrl}/${id}/accept`, {});
+  }
+
+  /** Get all currently live published orders (within 15-min window, no driver). */
+  getPublishedOrders(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.baseUrl}/published`);
   }
 }

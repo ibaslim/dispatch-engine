@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import type { MeResponse, LoginRequest } from '@dispatch/shared/contracts';
-import { ToastService} from "../toast/toast.service";
+import { ToastService } from '../toast/toast.service';
 
 const ACCESS_KEY = 'dispatch:access_token';
 const REFRESH_KEY = 'dispatch:refresh_token';
@@ -13,6 +13,11 @@ interface AuthStatusResponse {
   role?: string;
   access_token?: string;
   refresh_token?: string;
+}
+
+interface TokenResponse {
+  access_token: string;
+  refresh_token: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -26,9 +31,19 @@ export class AuthService {
   readonly isPlatformAdmin = computed(
     () => this._currentUser()?.is_platform_admin ?? false
   );
+  readonly isDriver = computed(
+    () => this._currentUser()?.tenant_role === 'driver'
+  );
+  readonly tenantId = computed(
+    () => this._currentUser()?.tenant_id ?? null
+  );
 
   getAccessToken(): string | null {
     return localStorage.getItem(ACCESS_KEY);
+  }
+
+  getRefreshToken(): string | null {
+    return localStorage.getItem(REFRESH_KEY);
   }
 
   storeTokens(accessToken: string, refreshToken: string): void {
@@ -65,9 +80,8 @@ export class AuthService {
         this.storeTokens(res.access_token, res.refresh_token);
       }
       await this.loadCurrentUser();
-      this.toast.error(
-    'Your account has been suspended. Please contact support.'
-  );
+      await this.router.navigate(['/suspended']);
+      this.toast.error('Your account has been suspended. Please contact support.');
       return;
     }
 
@@ -92,13 +106,35 @@ export class AuthService {
     }
   }
   clearTokens(): void {
-  localStorage.removeItem(ACCESS_KEY);
-  localStorage.removeItem(REFRESH_KEY);
-  this._currentUser.set(null);
-}
+    localStorage.removeItem(ACCESS_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+    this._currentUser.set(null);
+  }
+
+  async refreshAccessToken(): Promise<void> {
+    const refreshToken = this.getRefreshToken();
+    if (!refreshToken) {
+      throw new Error('No refresh token available.');
+    }
+
+    const res = await firstValueFrom(
+      this.http.post<TokenResponse>('/api/v1/auth/refresh', {
+        refresh_token: refreshToken,
+      })
+    );
+    this.storeTokens(res.access_token, res.refresh_token);
+  }
+
   async logout(): Promise<void> {
+    const refreshToken = this.getRefreshToken();
     try {
-      await firstValueFrom(this.http.post('/api/v1/auth/logout', {}));
+      if (refreshToken) {
+        await firstValueFrom(
+          this.http.post('/api/v1/auth/logout', {
+            refresh_token: refreshToken,
+          })
+        );
+      }
     } catch { /* ignore */ }
     localStorage.removeItem(ACCESS_KEY);
     localStorage.removeItem(REFRESH_KEY);
