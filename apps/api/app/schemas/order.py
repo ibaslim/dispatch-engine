@@ -30,6 +30,7 @@ class OrderItem(BaseModel):
 class OrderCreate(BaseModel):
     order_number: Optional[str] = None
     driver_id: Optional[UUID] = None
+    vendor_id: Optional[UUID] = None
 
     pickup_name: str
     pickup_phone: str
@@ -69,6 +70,7 @@ class OrderCreate(BaseModel):
 class OrderUpdate(BaseModel):
     order_number: Optional[str] = None
     driver_id: Optional[UUID] = None
+    vendor_id: Optional[UUID] = None
 
     pickup_name: Optional[str] = None
     pickup_phone: Optional[str] = None
@@ -113,6 +115,8 @@ class OrderResponse(OrderCreate):
     status: OrderStatus
     activity_status: ActivityStatus
     ready_for_pickup: bool
+    published: bool = False
+    published_at: Optional[datetime] = None
     order_placed_time: Optional[str] = None
     proof_of_delivery: Optional[Dict[str, Any]] = None
     driver: Optional[DriverInfo] = None

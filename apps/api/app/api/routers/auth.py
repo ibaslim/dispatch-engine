@@ -12,7 +12,6 @@ from app.schemas.auth import (
 from app.services.auth_service import (
     authenticate_user, create_token_pair,
     refresh_access_token, revoke_refresh_token,
-    check_pending_approval,
 )
 from app.models.tenant import Tenant
 
@@ -27,13 +26,6 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
         return result
     
     if result is None:
-        # Check if user exists but is pending approval (fallback if password was wrong or something)
-        # Actually authenticate_user now handles it if password was correct.
-        # But if we want to support checking even without password (which check_pending_approval seems to do):
-        pending = await check_pending_approval(db, req.email)
-        if pending is not None:
-            return pending
-
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -63,10 +55,12 @@ async def me(
     db: AsyncSession = Depends(get_db),
 ):
     tenant_is_active = None
+    tenant_role = None
     if current_user.tenant_id:
         tenant_result = await db.execute(sa.select(Tenant).where(Tenant.id == current_user.tenant_id))
         tenant = tenant_result.scalar_one_or_none()
         tenant_is_active = tenant.is_active if tenant is not None else None
+        tenant_role = tenant.role.value if tenant is not None and tenant.role is not None else None
 
     return MeResponse(
         id=str(current_user.id),
@@ -75,6 +69,7 @@ async def me(
         is_platform_admin=current_user.is_platform_admin,
         tenant_id=str(current_user.tenant_id) if current_user.tenant_id else None,
         tenant_is_active=tenant_is_active,
+        tenant_role=tenant_role,
         roles=[r.role for r in current_user.roles],
     )
 

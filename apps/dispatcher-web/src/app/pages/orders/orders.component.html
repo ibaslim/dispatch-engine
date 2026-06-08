@@ -29,8 +29,78 @@
         </app-button>
     </div>
 
+    <!-- NEW ORDERS TAB (Drivers only) -->
+    <div *ngIf="activeTab === 'New Orders'">
+        <div *ngIf="publishedOrders.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div *ngFor="let card of publishedOrders"
+                class="relative overflow-hidden rounded-xl border-2 transition-all"
+                [class]="card.remainingSeconds <= 0
+                    ? 'border-gray-300 dark:border-[#3a3d3a] opacity-50'
+                    : 'border-[#3ddc97]/40 dark:border-[#3ddc97]/30 bg-white dark:bg-[#1a1d1a] shadow-md hover:shadow-lg'">
+                <!-- Countdown progress bar -->
+                <div class="h-1 w-full bg-gray-200 dark:bg-[#2a2d2a]">
+                    <div class="h-1 transition-all duration-1000 ease-linear rounded-full"
+                        [ngClass]="countdownColor(card)"
+                        [style.width]="countdownPercent(card) + '%'">
+                    </div>
+                </div>
+                <div class="p-4">
+                    <div class="flex items-start justify-between gap-2 mb-3">
+                        <div>
+                            <p class="text-xs font-bold text-[#3ddc97] tracking-wider uppercase">New Order</p>
+                            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">#{{ card.orderNumber }}</p>
+                        </div>
+                        <div class="flex flex-col items-end shrink-0">
+                            <span class="text-xl font-mono font-bold tabular-nums"
+                                [class]="card.remainingSeconds > 300 ? 'text-emerald-500' : card.remainingSeconds > 120 ? 'text-amber-400' : 'text-red-500'">
+                                {{ countdownLabel(card) }}
+                            </span>
+                            <span class="text-[10px] text-gray-400 mt-0.5">remaining</span>
+                        </div>
+                    </div>
+                    <div class="space-y-2 mb-3">
+                        <div class="flex items-start gap-2 text-xs">
+                            <span class="mt-0.5 shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 font-bold text-[10px]">P</span>
+                            <span class="text-gray-700 dark:text-gray-300 leading-snug">{{ card.pickupAddress }}</span>
+                        </div>
+                        <div class="flex items-start gap-2 text-xs">
+                            <span class="mt-0.5 shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 font-bold text-[10px]">D</span>
+                            <span class="text-gray-700 dark:text-gray-300 leading-snug">{{ card.deliveryAddress }}</span>
+                        </div>
+                    </div>
+                    <div class="mb-4 rounded-lg bg-gray-50 dark:bg-[#232623] px-3 py-2">
+                        <div>
+                            <p class="text-[10px] text-gray-400 uppercase tracking-wider">Your Earnings</p>
+                            <p class="text-base font-bold text-[#3ddc97]">C$ {{ card.driverFee.toFixed(2) }}</p>
+                        </div>
+                    </div>
+                    <button type="button"
+                        [disabled]="card.remainingSeconds <= 0 || card.accepting || card.accepted"
+                        (click)="acceptOrder(card)"
+                        class="w-full rounded-lg py-2.5 text-sm font-semibold transition-all focus:outline-none"
+                        [class]="card.remainingSeconds <= 0 || card.accepted
+                            ? 'bg-gray-200 dark:bg-[#2a2d2a] text-gray-400 cursor-not-allowed'
+                            : card.accepting
+                            ? 'bg-[#3ddc97]/70 text-black cursor-wait'
+                            : 'bg-[#3ddc97] text-black hover:bg-[#2fbf82] active:scale-[0.98]'">
+                        <span *ngIf="!card.accepting && !card.accepted && card.remainingSeconds > 0">Accept Order</span>
+                        <span *ngIf="card.accepting">Accepting...</span>
+                        <span *ngIf="card.accepted">Accepted ✓</span>
+                        <span *ngIf="card.remainingSeconds <= 0 && !card.accepted">Expired</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div *ngIf="publishedOrders.length === 0"
+            class="rounded-xl border border-dashed border-gray-300 dark:border-[#3a3d3a] p-12 text-center text-sm text-gray-500 dark:text-gray-400 mt-4">
+            <p class="text-3xl mb-3">📭</p>
+            <p class="font-medium text-lg">No new orders right now</p>
+            <p class="mt-2">New orders published by the admin will appear here in real-time.</p>
+        </div>
+    </div>
+
     <!-- TABLE -->
-    <app-table [columns]="columns" [rows]="rows" [emptyTitle]="emptyTitle" [emptySubtitle]="emptySubtitle"
+    <app-table *ngIf="activeTab !== 'New Orders'" [columns]="columns" [rows]="rows" [emptyTitle]="emptyTitle" [emptySubtitle]="emptySubtitle"
         [activeMenuRow]="activeMenuRow" [menuItems]="getContextMenuItems()"
         (actionClick)="toggleMenu($event)"
         (assignClick)="openAssignDriver($event)"
@@ -62,9 +132,14 @@
                 [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm'">
             </app-button>
 
-            <app-button variant="primary" label="Save" (onClick)="saveNewOrder()"
-                [loading]="isSavingOrder" [disabled]="isSeedingDemoOrders"
-                [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-6 py-2 rounded-md text-sm'">
+            <app-button variant="ghost" label="Save Order" (onClick)="saveNewOrder()"
+                [loading]="isSavingOrder" [disabled]="isPublishingOrder || isSeedingDemoOrders"
+                [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm'">
+            </app-button>
+
+            <app-button variant="primary" label="Publish Order" (onClick)="publishNewOrder()"
+                [loading]="isPublishingOrder" [disabled]="isSavingOrder || isSeedingDemoOrders"
+                [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-6 py-2 rounded-md text-sm flex items-center gap-2'">
             </app-button>
         </div>
     </app-popup>
@@ -212,18 +287,26 @@
                     <div class="space-y-2 mb-3">
                         <div *ngFor="let item of order.full.details.items" class="flex justify-between">
                             <span>{{ item.itemName }} × {{ item.itemQty }}</span>
-                            <span>{{ item.itemPrice }}</span>
+                            <span *ngIf="!isReadOnlyTenant">{{ item.itemPrice }}</span>
                         </div>
                     </div>
                     <div class="border-t border-gray-200 dark:border-[#5a5d5a] pt-3 space-y-1">
-                        <div class="flex justify-between"><span>Subtotal</span><span>{{ order.full.details.subtotal }}</span></div>
-                        <div class="flex justify-between"><span>Tax ({{ order.full.details.taxRate }}%)</span><span>{{ order.full.details.taxAmount }}</span></div>
-                        <div class="flex justify-between"><span>Delivery Fees</span><span>{{ order.full.details.deliveryFees }}</span></div>
-                        <div class="flex justify-between"><span>Tips</span><span>{{ order.full.details.deliveryTips }}</span></div>
-                        <div class="flex justify-between"><span>Discount</span><span>{{ order.full.details.discount }}</span></div>
-                        <div class="flex justify-between font-semibold text-gray-900 dark:text-white pt-2">
-                            <span>Total</span><span>{{ order.full.details.total }}</span>
-                        </div>
+                        <ng-container *ngIf="!isReadOnlyTenant">
+                            <div class="flex justify-between"><span>Subtotal</span><span>{{ order.full.details.subtotal }}</span></div>
+                            <div class="flex justify-between"><span>Tax ({{ order.full.details.taxRate }}%)</span><span>{{ order.full.details.taxAmount }}</span></div>
+                            <div class="flex justify-between"><span>Delivery Fees</span><span>{{ order.full.details.deliveryFees }}</span></div>
+                            <div class="flex justify-between"><span>Tips</span><span>{{ order.full.details.deliveryTips }}</span></div>
+                            <div class="flex justify-between"><span>Discount</span><span>{{ order.full.details.discount }}</span></div>
+                            <div class="flex justify-between font-semibold text-gray-900 dark:text-white pt-2">
+                                <span>Total</span><span>{{ order.full.details.total }}</span>
+                            </div>
+                        </ng-container>
+                        <ng-container *ngIf="isReadOnlyTenant">
+                            <div class="flex justify-between font-semibold text-[#3ddc97] pt-2">
+                                <span>Driver Earnings</span>
+                                <span>{{ driverEarningsLabel(order.full.details.total) }}</span>
+                            </div>
+                        </ng-container>
                     </div>
                 </div>
 

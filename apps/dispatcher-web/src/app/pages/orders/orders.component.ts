@@ -55,6 +55,8 @@ type BackendOrder = {
   payment_details?: Record<string, unknown> | null;
   proof_of_delivery?: Record<string, unknown> | null;
   status: OrderTab;
+  published?: boolean;
+  published_at?: string | null;
   ready_for_pickup: boolean;
   order_placed_time?: string | null;
   driver?: {
@@ -75,6 +77,8 @@ type AssignableDriver = {
   address: string;
 };
 
+const PUBLISH_WINDOW_MS = 15 * 60 * 1000;
+
 @Component({
   selector: 'app-orders',
   standalone: true,
@@ -93,7 +97,13 @@ type AssignableDriver = {
 export class OrdersComponent implements OnInit, OnDestroy {
 
   // ─── Tabs ──────────────────────────────────────────────────────────────────
-  tabs = ['Current', 'Scheduled', 'Completed', 'Incomplete', 'History'];
+  get tabs(): string[] {
+    if (this.auth.isDriver()) {
+      return ['New Orders', 'Current', 'Scheduled', 'Completed', 'Incomplete', 'History'];
+    }
+
+    return ['Current', 'Scheduled', 'Completed', 'Incomplete', 'History', 'Unassigned'];
+  }
   activeTab = 'Current';
 
   // ─── Form ──────────────────────────────────────────────────────────────────
@@ -107,6 +117,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   // ─── New order modal ───────────────────────────────────────────────────────
   isNewOrderOpen = false;
   isSavingOrder = false;
+  isPublishingOrder = false;
   newOrderValue: NewOrderFormValue = this.createDefaultNewOrder();
 
   // ─── Table menu ────────────────────────────────────────────────────────────
@@ -138,6 +149,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   searchQuery = '';
   feedbackMessage = '';
   feedbackTone: 'success' | 'error' | 'info' = 'info';
+  private notifiedUnassignedOrderIds = new Set<string>();
 
   showLocalDemoButton = this.isLocalhost();
 
@@ -145,20 +157,25 @@ export class OrdersComponent implements OnInit, OnDestroy {
   private scheduledRefreshHandle: ReturnType<typeof setInterval> | null = null;
   private scheduledPromotionInFlight = false;
 
+  private ws: WebSocket | null = null;
+  private countdownHandle: ReturnType<typeof setInterval> | null = null;
+
+  publishedOrders: any[] = [];
+  
   // ─── Details menu items ────────────────────────────────────────────────────
   get detailsMenuItems(): Array<{ label: string; action: string; icon: string; danger?: boolean }> {
-    if (this.isReadOnlyTenant) {
-      return [
-        { label: 'Download PDF', action: 'pdf', icon: 'ph ph-download' }
-      ];
-    }
-    return [
-      { label: 'Mark as Done', action: 'done', icon: 'ph ph-check' },
-      { label: 'Move to History', action: 'history', icon: 'ph ph-archive-box' },
+    const items: Array<{ label: string; action: string; icon: string; danger?: boolean }> = [
+      { label: 'Mark as Done', action: 'done', icon: 'ph ph-check-circle' },
+      { label: 'Mark as Failed', action: 'failed', icon: 'ph ph-x-circle' },
+      { label: 'Move to History', action: 'history', icon: 'ph ph-archive' },
       { label: 'Download PDF', action: 'pdf', icon: 'ph ph-download' },
-      { label: 'Mark as Failed', action: 'failed', icon: 'ph ph-x', danger: true },
-      { label: 'Delete', action: 'delete', icon: 'ph ph-trash', danger: true }
     ];
+    
+    if (!this.isReadOnlyTenant) {
+      items.push({ label: 'Delete Order', action: 'delete', icon: 'ph ph-trash', danger: true });
+    }
+    
+    return items;
   }
 
   constructor(
@@ -174,16 +191,30 @@ export class OrdersComponent implements OnInit, OnDestroy {
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
   ngOnInit(): void {
+    if (this.auth.isDriver()) {
+      this.activeTab = 'New Orders';
+    }
+    
     this.loadOrders();
     this.scheduledRefreshHandle = setInterval(() => {
       void this.checkAndUpdateScheduledOrders();
     }, 6000);
+
+    if (this.auth.isDriver()) {
+      this.loadPublishedOrders();
+      this.connectWebSocket();
+      this.countdownHandle = setInterval(() => this.tickCountdowns(), 1000);
+    }
   }
 
   ngOnDestroy(): void {
     if (this.scheduledRefreshHandle) {
       clearInterval(this.scheduledRefreshHandle);
     }
+    if (this.countdownHandle) {
+      clearInterval(this.countdownHandle);
+    }
+    this.ws?.close();
   }
 
   // ─── Tab ───────────────────────────────────────────────────────────────────
@@ -198,6 +229,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.ordersService.getOrders().subscribe({
       next: (res: BackendOrder[]) => {
         this.orders = res.map((order) => this.mapBackendOrder(order));
+        this.notifyNewUnassignedOrders();
         this.readyForPickupMap.clear();
         for (const order of this.orders) {
           this.readyForPickupMap.set(order.id, !!order.view.current.readyForPickup);
@@ -238,14 +270,134 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
     if (showPickupAndDriver) {
       return this.isReadOnlyTenant
-        ? this.unifiedColumns.filter((c) => c.key !== 'readyForPickup' && c.key !== 'actions')
+        ? this.unifiedColumns.filter((c) => c.key !== 'readyForPickup')
         : this.unifiedColumns;
     }
 
     const filtered = this.unifiedColumns.filter((c) => c.key !== 'readyForPickup' && c.key !== 'driver');
     return this.isReadOnlyTenant
-      ? filtered.filter((c) => c.key !== 'actions')
+      ? filtered
       : filtered;
+  }
+
+  // ─── Driver Broadcast ──────────────────────────────────────────────────────
+
+  private connectWebSocket(): void {
+    const token = this.auth.getAccessToken();
+    if (!token) return;
+
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsUrl = `${proto}://${window.location.host}/api/v1/ws?token=${encodeURIComponent(token)}`;
+
+    try {
+      this.ws = new WebSocket(wsUrl);
+      this.ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data as string);
+          if (msg.type === 'new_order') {
+            const o = msg.order;
+            if (!o || this.publishedOrders.some(p => p.id === String(o.id))) return;
+
+            const publishedAt = o.published_at ? new Date(o.published_at) : new Date();
+            const elapsed = Math.floor((Date.now() - publishedAt.getTime()) / 1000);
+            const remaining = Math.max(0, 900 - elapsed); // 15 mins
+
+            this.publishedOrders = [{
+              id: String(o.id),
+              orderNumber: String(o.order_number ?? ''),
+              pickupAddress: String(o.pickup_address ?? ''),
+              deliveryAddress: String(o.delivery_address ?? ''),
+              total: Number(o.total ?? 0),
+              driverFee: Number(o.driver_fee ?? 0),
+              publishedAt,
+              remainingSeconds: remaining,
+              accepting: false,
+              accepted: false,
+            }, ...this.publishedOrders];
+          } else if (msg.type === 'order_accepted') {
+            this.publishedOrders = this.publishedOrders.filter(p => p.id !== String(msg.order_id));
+            this.loadOrders();
+          }
+        } catch { /* ignore */ }
+      };
+      this.ws.onclose = () => setTimeout(() => this.connectWebSocket(), 5000);
+    } catch { /* ignore */ }
+  }
+
+  private loadPublishedOrders(): void {
+    this.ordersService.getPublishedOrders().subscribe({
+      next: (orders) => {
+        const now = Date.now();
+        this.publishedOrders = orders.map(o => {
+          const publishedAt = o.published_at ? new Date(o.published_at) : new Date();
+          const elapsed = Math.floor((now - publishedAt.getTime()) / 1000);
+          return {
+            id: String(o.id),
+            orderNumber: String(o.order_number ?? ''),
+            pickupAddress: String(o.pickup_address ?? ''),
+            deliveryAddress: String(o.delivery_address ?? ''),
+            total: Number(o.total ?? 0),
+            driverFee: Math.round(Number(o.total ?? 0) * 0.05 * 100) / 100,
+            publishedAt,
+            remainingSeconds: Math.max(0, 900 - elapsed),
+            accepting: false,
+            accepted: false,
+          };
+        }).filter(o => o.remainingSeconds > 0);
+      }
+    });
+  }
+
+  private tickCountdowns(): void {
+    let changed = false;
+    for (const card of this.publishedOrders) {
+      if (card.remainingSeconds > 0) {
+        card.remainingSeconds--;
+        changed = true;
+      }
+    }
+    const before = this.publishedOrders.length;
+    this.publishedOrders = this.publishedOrders.filter(p => p.remainingSeconds > 0 || p.accepting);
+    if (changed || this.publishedOrders.length !== before) {
+      this.publishedOrders = [...this.publishedOrders];
+    }
+  }
+
+  async acceptOrder(card: any): Promise<void> {
+    if (card.accepting || card.accepted || card.remainingSeconds <= 0) return;
+    card.accepting = true;
+    try {
+      const acceptedOrder = await firstValueFrom(this.ordersService.acceptOrder(card.id));
+      const mappedOrder = this.mapBackendOrder(acceptedOrder as BackendOrder);
+      card.accepted = true;
+      this.publishedOrders = this.publishedOrders.filter(p => p.id !== card.id);
+      this.loadOrders();
+      this.setActiveTab(this.toTabLabel(mappedOrder.tab));
+      this.selectedOrderForDetails = mappedOrder;
+      this.isDetailsOpen = true;
+    } catch (err: any) {
+      this.setFeedback(err?.error?.detail || 'Failed to accept order.', 'error');
+      if (err?.status === 409 || err?.status === 410) {
+        this.publishedOrders = this.publishedOrders.filter(p => p.id !== card.id);
+      }
+    } finally {
+      card.accepting = false;
+    }
+  }
+
+  countdownPercent(card: any): number { return Math.round((card.remainingSeconds / 900) * 100); }
+  
+  countdownLabel(card: any): string {
+    const m = Math.floor(card.remainingSeconds / 60);
+    const s = card.remainingSeconds % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+  
+  countdownColor(card: any): string {
+    const pct = this.countdownPercent(card);
+    if (pct > 50) return 'bg-emerald-500';
+    if (pct > 20) return 'bg-amber-400';
+    return 'bg-red-500';
   }
 
   // ─── Table rows ────────────────────────────────────────────────────────────
@@ -255,7 +407,11 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const q = this.searchQuery.trim().toLowerCase();
 
     return this.orders
-  .filter((order) => order.tab === tabKey)
+  .filter((order) =>
+    this.activeTab === 'Unassigned'
+      ? this.isExpiredUnassignedOrder(order)
+      : order.tab === tabKey && !this.isExpiredUnassignedOrder(order)
+  )
   .filter((order) => {
     if (!q) return true;
 
@@ -292,8 +448,17 @@ export class OrdersComponent implements OnInit, OnDestroy {
   });
   }
 
-  emptyTitle = 'No data available';
-  emptySubtitle = '';
+  get emptyTitle(): string {
+    return this.activeTab === 'Unassigned'
+      ? 'No unassigned orders'
+      : 'No data available';
+  }
+
+  get emptySubtitle(): string {
+    return this.activeTab === 'Unassigned'
+      ? 'Expired published orders that no driver accepted will appear here.'
+      : '';
+  }
 
   // ─── Context menu ──────────────────────────────────────────────────────────
 
@@ -313,6 +478,15 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (this.activeTab === 'History') {
       return [
         { label: 'Details', action: 'details', icon: 'ph ph-eye' },
+        { label: 'Print Order', action: 'print', icon: 'ph ph-printer' },
+        { label: 'Print Label', action: 'printLabel', icon: 'ph ph-tag' }
+      ];
+    }
+
+    if (this.activeTab === 'Unassigned') {
+      return [
+        { label: 'Details', action: 'details', icon: 'ph ph-eye' },
+        { label: 'Assign Driver', action: 'assignDriver', icon: 'ph ph-user-plus' },
         { label: 'Print Order', action: 'print', icon: 'ph ph-printer' },
         { label: 'Print Label', action: 'printLabel', icon: 'ph ph-tag' }
       ];
@@ -425,11 +599,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   async handleDetailsMenu(action: string): Promise<void> {
     if (!this.selectedOrderForDetails) return;
-
-    if (this.isReadOnlyTenant && action !== 'pdf') {
-      this.setFeedback('Read-only access for tenant users.', 'info');
-      return;
-    }
 
     const selectedOrder = this.selectedOrderForDetails;
     const id = selectedOrder.id;
@@ -590,7 +759,7 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
       return;
     }
     this.formSubmitted.set(true);
-    if (this.checkFormErrors() || this.isSavingOrder) return;
+    if (this.checkFormErrors() || this.isSavingOrder || this.isPublishingOrder) return;
 
     this.isSavingOrder = true;
     const payload = this.toOrderPayload(this.newOrderValue);
@@ -612,6 +781,43 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
       this.setFeedback(error?.error?.detail || `Failed to save order.`, 'error');
     } finally {
       this.isSavingOrder = false;
+    }
+  }
+
+  async publishNewOrder(): Promise<void> {
+    if (this.isReadOnlyTenant) {
+      this.setFeedback('Read-only access for tenant users.', 'info');
+      return;
+    }
+    this.formSubmitted.set(true);
+    if (this.checkFormErrors() || this.isSavingOrder || this.isPublishingOrder) return;
+
+    this.isPublishingOrder = true;
+    const payload = this.toOrderPayload(this.newOrderValue);
+
+    try {
+      let orderId: string;
+
+      if (this.editingOrderId) {
+        const updated = await firstValueFrom(this.ordersService.updateOrder(this.editingOrderId, payload));
+        orderId = this.editingOrderId;
+      } else {
+        const created = await firstValueFrom(this.ordersService.createOrder(payload));
+        orderId = created.id;
+      }
+
+      // Now publish — triggers WS broadcast to all online drivers
+      await firstValueFrom(this.ordersService.publishOrder(orderId));
+
+      this.setFeedback('Order published to drivers successfully! Drivers have 15 minutes to accept.', 'success');
+      this.loadOrders();
+      this.closeNewOrder();
+      this.formSubmitted.set(false);
+      this.editingOrderId = null;
+    } catch (error: any) {
+      this.setFeedback(error?.error?.detail || 'Failed to publish order.', 'error');
+    } finally {
+      this.isPublishingOrder = false;
     }
   }
 
@@ -924,25 +1130,29 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
     const pickupPhone = this.splitPhoneNumber(order.pickup_phone);
     const deliveryPhone = this.splitPhoneNumber(order.delivery_phone);
     const payment = this.mapPaymentDetails(order.payment_method, order.payment_details);
+    const isExpiredUnassigned = this.isExpiredUnassignedBackendOrder(order);
 
     const view: OrderView = {
       orderNo: order.order_number,
       customerName: order.delivery_name,
       vendorName: order.pickup_name,
-      amount: this.money(order.total),
+      amount: this.auth.isDriver()
+        ? this.driverEarningsLabel(order.total)
+        : this.money(order.total),
       distance: '?',
       orderPlacedTime: order.order_placed_time || '',
       pickupTime: this.formatTime(order.pickup_time),
       estDeliveryTime: this.formatDateTime(order.delivery_date, order.delivery_time),
       readyForPickup: order.ready_for_pickup ?? false,
       driver: order.driver?.contact_name || order.driver?.name || '',
-      orderStatus: this.formatStatusLabel(order.status),
+      orderStatus: isExpiredUnassigned ? 'Unassigned' : this.formatStatusLabel(order.status),
       trackingStatus: 'Inactive'
     };
 
     return {
       id: order.id,
       createdAt: order.created_at,
+      isExpiredUnassigned,
       full: {
         orderNumber: order.order_number,
         pickup: {
@@ -1290,6 +1500,52 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
   private toNumber(value: unknown): number {
     const parsed = typeof value === 'number' ? value : parseFloat(String(value ?? '').trim());
     return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  driverEarningsLabel(total: unknown): string {
+    return this.money(Math.round(this.toNumber(total) * 0.05 * 100) / 100);
+  }
+
+  private isExpiredUnassignedOrder(order: OrderEntity): boolean {
+    return order.isExpiredUnassigned === true;
+  }
+
+  private isExpiredUnassignedBackendOrder(order: BackendOrder): boolean {
+    if (!order.published || order.driver?.id) return false;
+    if (!order.published_at) return false;
+
+    const publishedAt = new Date(order.published_at).getTime();
+    return Number.isFinite(publishedAt) && Date.now() - publishedAt >= PUBLISH_WINDOW_MS;
+  }
+
+  private notifyNewUnassignedOrders(): void {
+    if (this.isReadOnlyTenant) return;
+
+    const unassignedOrders = this.orders.filter((order) => this.isExpiredUnassignedOrder(order));
+    const newUnassigned = unassignedOrders.filter((order) => !this.notifiedUnassignedOrderIds.has(order.id));
+
+    for (const order of unassignedOrders) {
+      this.notifiedUnassignedOrderIds.add(order.id);
+    }
+
+    if (newUnassigned.length === 0) return;
+
+    const label = newUnassigned.length === 1
+      ? `Order ${newUnassigned[0].full.orderNumber} is unassigned.`
+      : `${newUnassigned.length} orders are unassigned.`;
+
+    this.setFeedback(`${label} Assign a driver from the Unassigned tab.`, 'info');
+  }
+
+  private toTabLabel(tab: OrderTab): string {
+    const labels: Record<OrderTab, string> = {
+      current: 'Current',
+      scheduled: 'Scheduled',
+      completed: 'Completed',
+      incomplete: 'Incomplete',
+      history: 'History',
+    };
+    return labels[tab];
   }
 
   private todayYYYYMMDD(): string {

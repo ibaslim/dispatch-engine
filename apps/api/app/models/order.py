@@ -5,6 +5,7 @@ from sqlalchemy.orm import relationship
 from app.db.base import Base
 import enum
 import uuid
+from datetime import datetime
 
 
 class OrderStatus(str, enum.Enum):
@@ -32,6 +33,7 @@ class Order(Base):
 
     # Driver assignment
     driver_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True)
+    vendor_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True)
 
     pickup_name = Column(String)
     pickup_phone = Column(String)
@@ -68,9 +70,14 @@ class Order(Base):
     )
     ready_for_pickup = Column(Boolean, default=False)
 
+    # Broadcast / publish state
+    published = Column(Boolean, default=False, nullable=False)
+    published_at = Column(DateTime(timezone=True), nullable=True)
+
     order_placed_time = Column(String)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     driver = relationship("Tenant", foreign_keys=[driver_id], backref="orders")
+    vendor = relationship("Tenant", foreign_keys=[vendor_id], backref="vendor_orders")

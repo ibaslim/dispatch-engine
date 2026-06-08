@@ -22,6 +22,15 @@ def _hash_token(raw: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
+async def _is_tenant_suspended(db: AsyncSession, user: User) -> bool:
+    if not user.tenant_id:
+        return False
+
+    tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
+    tenant = tenant_result.scalar_one_or_none()
+    return tenant is not None and not tenant.is_active
+
+
 async def authenticate_user(
     db: AsyncSession,
     email: str,
@@ -35,15 +44,14 @@ async def authenticate_user(
         return None
 
     # Allow login for suspended tenants so frontend can route to suspension screen.
-    if user.tenant_id:
-        tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
-        tenant = tenant_result.scalar_one_or_none()
-        if tenant is not None and not tenant.is_active:
-            return SuspendedAccountResponse(
-                status="suspended",
-                message="Your account is suspended. Please contact support.",
-
-            )
+    if await _is_tenant_suspended(db, user):
+        tokens = await create_token_pair(db, user)
+        return SuspendedAccountResponse(
+            status="suspended",
+            message="Your account is suspended. Please contact support.",
+            access_token=tokens.access_token,
+            refresh_token=tokens.refresh_token,
+        )
 
     # Check for pre-pending and pending
     app_result = await db.execute(
@@ -88,43 +96,6 @@ async def authenticate_user(
             await db.refresh(user)
 
     return user
-
-async def check_pending_approval(db: AsyncSession, email: str) -> PendingApprovalResponse | None:
-    """Check if a user with given email has pending approval. Returns PendingApprovalResponse if pending."""
-    result = await db.execute(select(User).where(User.email == email.lower()))
-    user = result.scalar_one_or_none()
-    if user is None:
-        return None
-
-    app_result = await db.execute(
-        select(OnboardingApplication).where(
-            OnboardingApplication.user_id == user.id,
-            OnboardingApplication.status.in_([ApplicationStatus.pending, ApplicationStatus.pre_pending]),
-        )
-    )
-    app = app_result.scalar_one_or_none()
-    if app is not None:
-        if app.status == ApplicationStatus.pending:
-            tokens = await create_token_pair(db, user)
-            return PendingApprovalResponse(
-                status="pending",
-                message="Your account is pending approval from an administrator.",
-                role=app.role.value if hasattr(app.role, 'value') else str(app.role),
-                access_token=tokens.access_token,
-                refresh_token=tokens.refresh_token,
-            )
-        if app.status == ApplicationStatus.pre_pending:
-            tokens = await create_token_pair(db, user)
-            return PendingApprovalResponse(
-                status="pre_pending",
-                message="Please complete your onboarding process.",
-                role=app.role.value if hasattr(app.role, 'value') else str(app.role),
-                access_token=tokens.access_token,
-                refresh_token=tokens.refresh_token,
-            )
-
-    return None
-
 
 async def create_token_pair(db: AsyncSession, user: User) -> TokenResponse:
     # Get onboarding status
@@ -180,19 +151,19 @@ async def create_token_pair(db: AsyncSession, user: User) -> TokenResponse:
 async def refresh_access_token(db: AsyncSession, raw_refresh: str) -> TokenResponse | None:
     token_hash = _hash_token(raw_refresh)
     result = await db.execute(
-        select(RefreshToken).where(RefreshToken.token_hash == token_hash)
+        select(RefreshToken)
+        .where(RefreshToken.token_hash == token_hash)
+        .with_for_update()
     )
     record = result.scalar_one_or_none()
     if record is None or not record.is_valid():
         return None
 
-    # Rotate refresh token
-    record.is_revoked = True
-    db.add(record)
-
     user_result = await db.execute(select(User).where(User.id == record.user_id))
     user = user_result.scalar_one_or_none()
     if user is None:
+        return None
+    if await _is_tenant_suspended(db, user):
         return None
     if not user.is_active:
         pending_result = await db.execute(
@@ -205,6 +176,10 @@ async def refresh_access_token(db: AsyncSession, raw_refresh: str) -> TokenRespo
         )
         if pending_result.scalar_one_or_none() is None:
             return None
+
+    # Rotate refresh token while the existing row is locked.
+    record.is_revoked = True
+    db.add(record)
 
     return await create_token_pair(db, user)
 

@@ -6,12 +6,9 @@
         <app-button variant="ghost" label="Refresh" [loading]="isLoading" (onClick)="refreshDispatchState()"
             [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-3 py-2 rounded-md text-sm'">
         </app-button>
-
-<!--        <app-button *ngIf="showLocalDemoTools && !isReadOnlyTenant" variant="ghost-danger" label="Reset Demo Cache"-->
-<!--            [disabled]="isLoading" (onClick)="resetLocalDemoCache()">-->
-<!--        </app-button>-->
     </div>
 
+    <!-- Loading state -->
     <div *ngIf="isLoading"
         class="mx-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:border-blue-900 dark:bg-[#132033] dark:text-blue-200">
         Loading dispatch board. Orders and assignments are being fetched.
@@ -21,55 +18,140 @@
         {{ feedbackMessage }}
     </p>
 
-    <div
-        class="grid grid-cols-1 lg:grid-cols-[280px_1fr_380px] text-sm font-medium text-gray-700 dark:text-gray-300 px-2">
-<!--        <span>Assigned orders by driver</span>-->
-        <span></span>
-<!--        <span class="text-left">New Orders</span>-->
+    <!-- ══════════════════════════════════════════════════════════════════════
+         DRIVER VIEW — New Orders broadcast panel (only visible to drivers)
+    ══════════════════════════════════════════════════════════════════════ -->
+    <div *ngIf="isDriver && publishedOrders.length > 0" class="mb-2">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2 px-1">
+            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#3ddc97] text-black text-xs font-bold">
+                {{ publishedOrders.length }}
+            </span>
+            New Orders Available
+        </h3>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div *ngFor="let card of publishedOrders"
+                class="relative overflow-hidden rounded-xl border-2 transition-all"
+                [class]="card.remainingSeconds <= 0
+                    ? 'border-gray-300 dark:border-[#3a3d3a] opacity-50'
+                    : 'border-[#3ddc97]/40 dark:border-[#3ddc97]/30 bg-white dark:bg-[#1a1d1a] shadow-md hover:shadow-lg'">
+
+                <!-- Countdown progress bar (shrinks from right to left) -->
+                <div class="h-1 w-full bg-gray-200 dark:bg-[#2a2d2a]">
+                    <div class="h-1 transition-all duration-1000 ease-linear rounded-full"
+                        [ngClass]="countdownColor(card)"
+                        [style.width]="countdownPercent(card) + '%'">
+                    </div>
+                </div>
+
+                <div class="p-4">
+                    <!-- Header row -->
+                    <div class="flex items-start justify-between gap-2 mb-3">
+                        <div>
+                            <p class="text-xs font-bold text-[#3ddc97] tracking-wider uppercase">New Order</p>
+                            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">
+                                #{{ card.orderNumber }}
+                            </p>
+                        </div>
+                        <!-- Timer badge -->
+                        <div class="flex flex-col items-end shrink-0">
+                            <span class="text-xl font-mono font-bold tabular-nums"
+                                [class]="card.remainingSeconds > 300
+                                    ? 'text-emerald-500'
+                                    : card.remainingSeconds > 120
+                                    ? 'text-amber-400'
+                                    : 'text-red-500'">
+                                {{ countdownLabel(card) }}
+                            </span>
+                            <span class="text-[10px] text-gray-400 mt-0.5">remaining</span>
+                        </div>
+                    </div>
+
+                    <!-- Route info -->
+                    <div class="space-y-2 mb-3">
+                        <div class="flex items-start gap-2 text-xs">
+                            <span class="mt-0.5 shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-bold text-[10px]">P</span>
+                            <span class="text-gray-700 dark:text-gray-300 leading-snug">{{ card.pickupAddress }}</span>
+                        </div>
+                        <div class="flex items-start gap-2 text-xs">
+                            <span class="mt-0.5 shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold text-[10px]">D</span>
+                            <span class="text-gray-700 dark:text-gray-300 leading-snug">{{ card.deliveryAddress }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Earnings row -->
+                    <div class="mb-4 rounded-lg bg-gray-50 dark:bg-[#232623] px-3 py-2">
+                        <div>
+                            <p class="text-[10px] text-gray-400 uppercase tracking-wider">Your Earnings</p>
+                            <p class="text-base font-bold text-[#3ddc97]">C$ {{ card.driverFee.toFixed(2) }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Accept button -->
+                    <button type="button"
+                        [disabled]="card.remainingSeconds <= 0 || card.accepting || card.accepted"
+                        (click)="acceptOrder(card)"
+                        class="w-full rounded-lg py-2.5 text-sm font-semibold transition-all focus:outline-none"
+                        [class]="card.remainingSeconds <= 0 || card.accepted
+                            ? 'bg-gray-200 dark:bg-[#2a2d2a] text-gray-400 cursor-not-allowed'
+                            : card.accepting
+                            ? 'bg-[#3ddc97]/70 text-black cursor-wait'
+                            : 'bg-[#3ddc97] text-black hover:bg-[#2fbf82] active:scale-[0.98]'">
+                        <span *ngIf="!card.accepting && !card.accepted && card.remainingSeconds > 0">Accept Order</span>
+                        <span *ngIf="card.accepting">Accepting...</span>
+                        <span *ngIf="card.accepted">Accepted ✓</span>
+                        <span *ngIf="card.remainingSeconds <= 0 && !card.accepted">Expired</span>
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
+    <!-- Empty driver state (no published orders) -->
+    <div *ngIf="isDriver && publishedOrders.length === 0 && !isLoading"
+        class="rounded-xl border border-dashed border-gray-300 dark:border-[#3a3d3a] p-6 text-center text-sm text-gray-500 dark:text-gray-400 mb-2">
+        <p class="text-2xl mb-2">📭</p>
+        <p class="font-medium">No new orders right now</p>
+        <p class="text-xs mt-1">New orders published by the admin will appear here in real-time.</p>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         ADMIN / STANDARD dispatch board (3-column layout)
+    ══════════════════════════════════════════════════════════════════════ -->
+
+    <!-- Skeleton loader -->
     <div *ngIf="isLoading"
         class="grid grid-cols-1 lg:grid-cols-[280px_1fr_380px] gap-0 border border-gray-200 dark:border-[#2a2d2a] rounded-md overflow-hidden flex-1 animate-pulse">
         <div class="bg-gray-50 dark:bg-[#151a18] border-r border-gray-200 dark:border-[#2a2d2a] p-4 space-y-4">
             <div class="h-20 rounded-lg bg-gray-200 dark:bg-[#232623]"></div>
             <div class="h-20 rounded-lg bg-gray-200 dark:bg-[#232623]"></div>
-            <div class="h-20 rounded-lg bg-gray-200 dark:bg-[#232623]"></div>
         </div>
-
         <div class="bg-white dark:bg-[#1E201E] p-6 space-y-4">
             <div class="h-7 w-48 rounded bg-gray-200 dark:bg-[#232623]"></div>
             <div class="grid md:grid-cols-2 gap-6">
                 <div class="space-y-3">
                     <div class="h-4 w-28 rounded bg-gray-200 dark:bg-[#232623]"></div>
                     <div class="h-4 w-full rounded bg-gray-200 dark:bg-[#232623]"></div>
-                    <div class="h-4 w-4/5 rounded bg-gray-200 dark:bg-[#232623]"></div>
-                    <div class="h-4 w-3/5 rounded bg-gray-200 dark:bg-[#232623]"></div>
                 </div>
                 <div class="space-y-3">
                     <div class="h-4 w-28 rounded bg-gray-200 dark:bg-[#232623]"></div>
                     <div class="h-4 w-full rounded bg-gray-200 dark:bg-[#232623]"></div>
-                    <div class="h-4 w-4/5 rounded bg-gray-200 dark:bg-[#232623]"></div>
-                    <div class="h-4 w-3/5 rounded bg-gray-200 dark:bg-[#232623]"></div>
                 </div>
             </div>
-            <div class="h-4 w-24 rounded bg-gray-200 dark:bg-[#232623]"></div>
-            <div class="h-4 w-full rounded bg-gray-200 dark:bg-[#232623]"></div>
-            <div class="h-4 w-5/6 rounded bg-gray-200 dark:bg-[#232623]"></div>
         </div>
-
         <div class="bg-white dark:bg-[#1E201E] border-l border-gray-200 dark:border-[#2a2d2a] p-4 space-y-3">
             <div class="h-5 w-24 rounded bg-gray-200 dark:bg-[#232623]"></div>
-            <div class="h-16 rounded-lg bg-gray-200 dark:bg-[#232623]"></div>
             <div class="h-16 rounded-lg bg-gray-200 dark:bg-[#232623]"></div>
             <div class="h-16 rounded-lg bg-gray-200 dark:bg-[#232623]"></div>
         </div>
     </div>
 
+    <!-- Live 3-column board -->
     <div *ngIf="!isLoading"
         class="grid grid-cols-1 lg:grid-cols-[280px_1fr_380px] gap-0 border border-gray-200 dark:border-[#2a2d2a] rounded-md overflow-hidden flex-1 min-h-0">
 
-        <div
-            class="bg-gray-50 dark:bg-[#151a18] border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-[#2a2d2a] p-4 space-y-4 overflow-auto max-h-[400px] lg:max-h-none">
+        <!-- LEFT: Assigned drivers -->
+        <div class="bg-gray-50 dark:bg-[#151a18] border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-[#2a2d2a] p-4 space-y-4 overflow-auto max-h-[400px] lg:max-h-none">
             <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Assigned orders by driver</h4>
             <div *ngFor="let driver of assignedDrivers"
                 class="rounded-lg border border-gray-200 dark:border-[#2a2d2a] p-3 bg-white dark:bg-[#1E201E]">
@@ -94,6 +176,7 @@
             </div>
         </div>
 
+        <!-- CENTRE: Order details -->
         <div class="bg-white dark:bg-[#1E201E] p-6 overflow-auto max-h-[500px] lg:max-h-none">
             <ng-container *ngIf="selectedOrder as order; else emptySelection">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Order {{ order.orderNumber }}</h3>
@@ -104,45 +187,36 @@
                         <p class="text-sm text-gray-600 dark:text-gray-400">{{ order.pickup.name }}</p>
                         <p class="text-sm text-gray-600 dark:text-gray-400">{{ order.pickup.phone }}</p>
                         <p class="text-sm text-gray-600 dark:text-gray-400">{{ order.pickup.address }}</p>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">Pickup: {{ order.pickup.date }} • {{
-                            order.pickup.time }}</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Pickup: {{ order.pickup.date }} • {{ order.pickup.time }}</p>
                     </div>
-
                     <div>
                         <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Deliver To</h4>
                         <p class="text-sm text-gray-600 dark:text-gray-400">{{ order.delivery.name }}</p>
                         <p class="text-sm text-gray-600 dark:text-gray-400">{{ order.delivery.phone }}</p>
                         <p class="text-sm text-gray-600 dark:text-gray-400">{{ order.delivery.address }}</p>
-
-                        <p class="text-sm text-gray-600 dark:text-gray-400">Delivery: {{ order.delivery.date }} • {{
-                            order.delivery.time }}</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Delivery: {{ order.delivery.date }} • {{ order.delivery.time }}</p>
                     </div>
+
                     <!-- Proof of Delivery -->
-<div class="mt-6">
-    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-        Proof of Delivery
-    </h4>
-
-    <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-
-        <div *ngIf="order.proofOfDelivery?.signature"
-            class="flex items-center gap-2 rounded-md bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2">
-            <span class="text-emerald-500">✓</span>
-            <span>Signature Required</span>
-        </div>
-
-        <div *ngIf="order.proofOfDelivery?.picture"
-            class="flex items-center gap-2 rounded-md bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2">
-            <span class="text-emerald-500">✓</span>
-            <span>Picture Required</span>
-        </div>
-
-        <div *ngIf="!order.proofOfDelivery?.signature && !order.proofOfDelivery?.picture"
-            class="text-gray-500 dark:text-gray-400 italic">
-            No proof of delivery required.
-        </div>
-    </div>
-</div>
+                    <div class="mt-2 md:col-span-2">
+                        <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Proof of Delivery</h4>
+                        <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                            <div *ngIf="order.proofOfDelivery?.signature"
+                                class="flex items-center gap-2 rounded-md bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2">
+                                <span class="text-emerald-500">✓</span>
+                                <span>Signature Required</span>
+                            </div>
+                            <div *ngIf="order.proofOfDelivery?.picture"
+                                class="flex items-center gap-2 rounded-md bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2">
+                                <span class="text-emerald-500">✓</span>
+                                <span>Picture Required</span>
+                            </div>
+                            <div *ngIf="!order.proofOfDelivery?.signature && !order.proofOfDelivery?.picture"
+                                class="text-gray-500 dark:text-gray-400 italic">
+                                No proof of delivery required.
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="mt-6">
@@ -150,21 +224,27 @@
                     <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
                         <div *ngFor="let item of order.items" class="flex justify-between">
                             <span>{{ item.name }} × {{ item.qty }}</span>
-                            <span>C$ {{ item.price.toFixed(2) }}</span>
+                            <span *ngIf="!isDriver">C$ {{ item.price.toFixed(2) }}</span>
                         </div>
                     </div>
                 </div>
 
-                <div class="mt-6 grid md:grid-cols-2 gap-4 text-sm text-gray-600 dark:text-gray-400">
+                <div *ngIf="!isDriver" class="mt-6 grid md:grid-cols-2 gap-4 text-sm text-gray-600 dark:text-gray-400">
                     <div>Tax Rate: {{ order.taxRate }}%</div>
                     <div>Delivery Fee: C$ {{ order.deliveryFee.toFixed(2) }}</div>
                     <div>Tip: C$ {{ order.tip.toFixed(2) }}</div>
                     <div>Discount: C$ {{ order.discount.toFixed(2) }}</div>
                     <div>Payment: {{ order.payment }}</div>
-                    <div>Total: C$ {{ order.total.toFixed(2) }}</div>
+                    <div class="font-semibold text-gray-900 dark:text-gray-100">Total: C$ {{ order.total.toFixed(2) }}</div>
+                </div>
+                <div *ngIf="isDriver" class="mt-6 rounded-lg bg-gray-50 dark:bg-[#232623] px-3 py-2 text-sm">
+                    <p class="text-[10px] text-gray-400 uppercase tracking-wider">Your Earnings</p>
+                    <p class="text-base font-bold text-[#3ddc97]">{{ driverEarningsLabel(order.total) }}</p>
                 </div>
 
-                <p class="mt-4 text-sm text-gray-600 dark:text-gray-400">Instruction: {{ order.instructions || 'No instructions provided.' }}</p>
+                <p class="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                    Instruction: {{ order.instructions || 'No instructions provided.' }}
+                </p>
             </ng-container>
 
             <ng-template #emptySelection>
@@ -174,30 +254,25 @@
             </ng-template>
         </div>
 
+        <!-- RIGHT: Today's orders list (admin sees all; driver sees unassigned) -->
         <div class="bg-white dark:bg-[#1E201E] border-t lg:border-t-0 lg:border-l border-gray-200 dark:border-[#2a2d2a] p-4 overflow-auto max-h-[400px] lg:max-h-none">
-            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">New Orders</h4>
+            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Today's Orders</h4>
             <div class="space-y-3">
                 <button *ngFor="let order of newOrders" type="button"
-    class="w-full text-left rounded-lg border border-gray-200 dark:border-[#2a2d2a] p-3 bg-gray-50 dark:bg-[#151a18] transition hover:bg-gray-100 dark:hover:bg-[#232623]"
-    (click)="selectOrder(order.realId)">
-    <div class="font-medium text-sm text-gray-900 dark:text-gray-100">{{ order.id }}</div>
-    <div class="text-xs text-gray-600 dark:text-gray-400">{{ order.pickup }} → {{ order.dropoff }}</div>
-    <div class="text-[11px] text-gray-500 dark:text-gray-400">ETA: {{ order.eta }} · {{ order.total }}</div>
-</button>
+                    class="w-full text-left rounded-lg border border-gray-200 dark:border-[#2a2d2a] p-3 bg-gray-50 dark:bg-[#151a18] transition hover:bg-gray-100 dark:hover:bg-[#232623]"
+                    (click)="selectOrder(order.realId)">
+                    <div class="font-medium text-sm text-gray-900 dark:text-gray-100">{{ order.id }}</div>
+                    <div class="text-xs text-gray-600 dark:text-gray-400">{{ order.pickup }} → {{ order.dropoff }}</div>
+                    <div class="text-[11px] text-gray-500 dark:text-gray-400">ETA: {{ order.eta }} · {{ order.total }}</div>
+                </button>
             </div>
 
             <div *ngIf="newOrders.length === 0"
                 class="mt-2 rounded-lg border border-dashed border-gray-300 dark:border-[#3a3d3a] p-4 text-sm text-gray-500 dark:text-gray-400">
-                No unassigned current or scheduled orders right now.
+                No orders scheduled for today.
             </div>
-
-<!--            <div *ngIf="!isReadOnlyTenant" class="mt-6 flex items-center justify-center">-->
-<!--                <app-button variant="icon" ariaLabel="Add new order" [icon]="'M12 5v14M5 12h14'" -->
-<!--                    [extraClasses]="'w-12 h-12 rounded-md bg-[#2ecc8a] text-white hover:bg-[#27b87b] flex items-center justify-center'">-->
-<!--                </app-button>-->
-<!--            </div>-->
-
         </div>
 
     </div>
+
 </app-page>

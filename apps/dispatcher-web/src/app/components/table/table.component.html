@@ -1,4 +1,4 @@
-<div class="w-full overflow-x-auto transition-all duration-300" [ngClass]="{'pb-32': activeMenuRow}">
+<div class="w-full overflow-x-auto lg:overflow-visible transition-all duration-300" [ngClass]="{'pb-32': activeMenuRow}">
   <div
       class="min-w-[900px] lg:min-w-0 w-full border-t border-gray-200 dark:border-[#2a2d2a] bg-white dark:bg-[#1E201E] text-gray-800 dark:text-gray-200">
 
@@ -28,6 +28,7 @@
     <div *ngIf="rows.length > 0" class="divide-y divide-gray-200 dark:divide-[#2a2d2a]">
 
         <div *ngFor="let row of rows" class="grid items-center gap-4 px-4 py-3 text-sm"
+            [ngClass]="activeMenuRow?.id === row.id ? 'relative z-40' : 'relative z-0'"
             [style.gridTemplateColumns]="columnTemplate ? columnTemplate : ('repeat(' + columns.length + ', minmax(0, 1fr))')">
 
             <div *ngFor="let col of columns" class="items-center w-full"
