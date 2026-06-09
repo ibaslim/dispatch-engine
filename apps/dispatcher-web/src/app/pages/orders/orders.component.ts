@@ -106,6 +106,11 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
   activeTab = 'Current';
 
+  get hasUnassignedOrders(): boolean {
+    return !this.isReadOnlyTenant
+      && this.orders.some((order) => this.isExpiredUnassignedOrder(order));
+  }
+
   // ─── Form ──────────────────────────────────────────────────────────────────
   formSubmitted = signal(false);
 
