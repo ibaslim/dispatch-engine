@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { PageComponent } from '../page/page.component';
 import { ButtonComponent } from '../button/button.component';
 import { TableComponent } from '../table/table.component';
 import { SideDrawerComponent } from '../side-drawer/Side-drawer.component';
@@ -64,7 +63,6 @@ interface TenantInvitation {
   imports: [
     CommonModule,
     FormsModule,
-    PageComponent,
     ButtonComponent,
     TableComponent,
     SideDrawerComponent,
