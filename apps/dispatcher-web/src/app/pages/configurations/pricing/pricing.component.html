@@ -1,52 +1,28 @@
-<div class="p-6">
+<div class="w-full px-6 py-6 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]">
+  <div class="w-full">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <h1 class="text-2xl sm:text-xl font-bold text-gray-900 dark:text-gray-100">Pricing</h1>
 
-  <!-- ── Toolbar ──────────────────────────────────────────────────────────── -->
-  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-    <!-- Search -->
-    <div class="relative w-full sm:w-80">
-      <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-      </svg>
-      <input
-        id="pricing-search"
-        type="text"
-        [(ngModel)]="searchQuery"
-        placeholder="Search by city, state or country…"
-        class="w-full pl-9 pr-3 h-10 rounded-lg border border-gray-300 dark:border-[#3a3d3a]
-               bg-white dark:bg-[#1E201E] text-sm text-gray-900 dark:text-gray-100
-               placeholder-gray-400 dark:placeholder-gray-500
-               focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-      />
+      <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
+        <app-search-bar
+          [value]="searchQuery"
+          (valueChange)="searchQuery = $event"
+          placeholder="Search city, state or country"
+          class="flex-1 sm:w-auto">
+        </app-search-bar>
+
+        <app-button
+          id="open-pricing-settings"
+          variant="primary"
+          label="Settings"
+          (onClick)="openDrawer()"
+          [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-3 py-2 rounded-md text-sm whitespace-nowrap flex-shrink-0'">
+        </app-button>
+      </div>
     </div>
 
-    <!-- Settings button -->
-    <button
-      id="open-pricing-settings"
-      (click)="openDrawer()"
-      class="inline-flex items-center gap-2 px-4 py-2 rounded-lg
-             bg-blue-600 hover:bg-blue-700 active:bg-blue-800
-             text-white text-sm font-medium shadow-sm
-             transition-colors duration-150"
-    >
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0
-                 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0
-                 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0
-                 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0
-                 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0
-                 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0
-                 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0
-                 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07
-                 2.572-1.065z"/>
-        <circle cx="12" cy="12" r="3"/>
-      </svg>
-      Settings
-    </button>
-  </div>
-
   <!-- ── Loading / error ────────────────────────────────────────────────────── -->
-  <div *ngIf="isLoadingTable" class="flex items-center justify-center h-48 text-gray-500 dark:text-gray-400">
+  <div *ngIf="isLoadingTable" class="mt-4 flex items-center justify-center h-48 text-gray-500 dark:text-gray-400">
     <svg class="animate-spin w-6 h-6 mr-2" fill="none" viewBox="0 0 24 24">
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
@@ -54,10 +30,10 @@
     Loading pricing data…
   </div>
 
-  <div *ngIf="tableError" class="text-red-500 text-sm mb-4">{{ tableError }}</div>
+  <div *ngIf="tableError" class="mt-4 text-red-500 text-sm mb-4">{{ tableError }}</div>
 
   <!-- ── Pricing Table ──────────────────────────────────────────────────────── -->
-  <div *ngIf="!isLoadingTable" class="overflow-x-auto rounded-xl border border-gray-200 dark:border-[#2a2d2a] shadow-sm">
+  <div *ngIf="!isLoadingTable" class="mt-4 overflow-x-auto rounded-xl border border-gray-200 dark:border-[#2a2d2a] shadow-sm">
     <table class="w-full text-sm">
       <!-- Head -->
       <thead class="bg-gray-50 dark:bg-[#252825] text-gray-600 dark:text-gray-400 uppercase text-xs tracking-wider">
@@ -189,6 +165,7 @@
                 text-xs text-gray-500 dark:text-gray-400">
       Showing {{ filteredRows.length }} of {{ pricingRows.length }} cities
     </div>
+  </div>
   </div>
 </div>
 

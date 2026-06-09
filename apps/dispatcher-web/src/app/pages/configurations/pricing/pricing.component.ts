@@ -10,13 +10,21 @@ import {
   CityPricing,
 } from '../../../services/locations/locations.service';
 import { SideDrawerComponent } from '../../../components/side-drawer/Side-drawer.component';
+import { SearchBarComponent } from '../../../components/search-bar/search-bar.component';
+import { ButtonComponent } from '../../../components/button/button.component';
 
 type DrawerMode = 'add' | 'edit';
 
 @Component({
   selector: 'app-pricing',
   standalone: true,
-  imports: [CommonModule, FormsModule, SideDrawerComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    SideDrawerComponent,
+    SearchBarComponent,
+    ButtonComponent,
+  ],
   templateUrl: './pricing.component.html',
 })
 export class PricingComponent implements OnInit {
