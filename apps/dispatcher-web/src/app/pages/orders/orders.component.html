@@ -25,7 +25,13 @@
     <!-- TABS -->
     <div class="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-[#2a2d2a] pb-2 mt-2 overflow-x-auto whitespace-nowrap scrollbar-none">
         <app-button *ngFor="let tab of tabs" variant="tab" [label]="tab" (onClick)="setActiveTab(tab)"
-            [extraClasses]="(activeTab === tab ? 'text-[#3ddc97] border-b-2 border-[#3ddc97]' : 'text-gray-500') + ' whitespace-nowrap'">
+            [extraClasses]="(
+                tab === 'Unassigned' && hasUnassignedOrders
+                    ? 'text-red-600 dark:text-red-400 border-b-2 border-red-600 dark:border-red-400'
+                    : activeTab === tab
+                        ? 'text-[#3ddc97] border-b-2 border-[#3ddc97]'
+                        : 'text-gray-500'
+            ) + ' whitespace-nowrap'">
         </app-button>
     </div>
 
