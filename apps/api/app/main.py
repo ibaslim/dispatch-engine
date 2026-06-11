@@ -17,9 +17,10 @@ from app.api.routers import (
     onboarding,
     locations,
     pricing,
+    driver_payroll,
 )
 from app.db.seed import seed_platform_admin
-from app.db.seed_locations import seed_locations
+from app.db.seed_locations import seed_canadian_pricing, seed_locations
 from app.db.init_db import init_db
 
 
@@ -30,6 +31,7 @@ async def lifespan(application: FastAPI):
     await seed_platform_admin()
     # Startup – seed geography data on first boot
     await seed_locations()
+    await seed_canadian_pricing()
     yield
     # Shutdown (optional cleanup)
 
@@ -67,6 +69,11 @@ def create_app() -> FastAPI:
     application.include_router(onboarding.router, prefix="/api/v1/onboarding", tags=["onboarding"])
     application.include_router(locations.router, prefix="/api/v1/locations", tags=["locations"])
     application.include_router(pricing.router, prefix="/api/v1/pricing", tags=["pricing"])
+    application.include_router(
+        driver_payroll.router,
+        prefix="/api/v1/driver-payroll",
+        tags=["driver-payroll"],
+    )
 
     return application
 

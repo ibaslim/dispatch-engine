@@ -1,0 +1,191 @@
+<div class="min-h-[calc(100vh-4rem)] w-full bg-white px-6 py-6 text-gray-900 dark:bg-[#1E201E] dark:text-gray-100">
+  <div class="mx-auto max-w-7xl">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div>
+        <h1 class="text-2xl font-bold sm:text-xl">Driver Payroll</h1>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Base salary and per-delivery commission by driver, province and city.
+        </p>
+      </div>
+
+      <app-search-bar
+        class="w-full lg:w-auto"
+        [value]="searchQuery"
+        (valueChange)="onSearchChange($event)"
+        placeholder="Search driver, province or city"
+      ></app-search-bar>
+    </div>
+
+    <div *ngIf="isLoading" class="mt-8 flex h-40 items-center justify-center text-gray-500 dark:text-gray-400">
+      <svg class="mr-2 h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+      </svg>
+      Loading drivers...
+    </div>
+
+    <div *ngIf="errorMessage" class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
+      {{ errorMessage }}
+    </div>
+    <div *ngIf="successMessage" class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
+      {{ successMessage }}
+    </div>
+
+    <div *ngIf="!isLoading" class="mt-6 space-y-4">
+      <section *ngFor="let view of filteredDriverViews" class="overflow-hidden rounded-xl border border-gray-200 shadow-sm dark:border-[#343734]">
+        <div class="bg-[#FFD150]/10 p-4">
+          <div class="flex flex-col gap-4 xl:flex-row xl:items-end">
+            <button
+              type="button"
+              class="flex min-w-52 items-center gap-3 self-start text-left"
+              (click)="toggleDriver(view)"
+              [attr.aria-expanded]="isDriverExpanded(view)"
+            >
+              <ng-container *ngTemplateOutlet="chevron; context: { expanded: isDriverExpanded(view) }"></ng-container>
+              <span>
+                <span class="block font-semibold">{{ view.driver.name }}</span>
+                <span class="block text-xs font-normal text-gray-500 dark:text-gray-400">
+                  {{ view.loaded ? view.states.length + ' provinces and territories' : 'Expand to load payroll compensation' }}
+                </span>
+              </span>
+            </button>
+
+            <div *ngIf="view.loaded" class="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
+              <ng-container *ngTemplateOutlet="rateInput; context: { label: 'Base salary', model: view.defaultRates, field: 'base_salary', id: 'driver-default-salary-' + view.driver.id }"></ng-container>
+              <ng-container *ngTemplateOutlet="rateInput; context: { label: 'Commission / delivery', model: view.defaultRates, field: 'commission_per_delivery', id: 'driver-default-commission-' + view.driver.id }"></ng-container>
+            </div>
+
+            <button
+              *ngIf="view.loaded"
+              type="button"
+              class="h-10 rounded-lg bg-[#FFD150] px-5 text-sm font-semibold text-black hover:bg-yellow-500 disabled:opacity-60"
+              [disabled]="isSaving(driverSavingId(view))"
+              (click)="requestDriverOverride(view)"
+            >
+              {{ isSaving(driverSavingId(view)) ? 'Updating...' : 'Override all' }}
+            </button>
+          </div>
+        </div>
+
+        <div *ngIf="isDriverExpanded(view)" class="bg-white dark:bg-[#1E201E]">
+          <div *ngIf="view.loading" class="flex h-24 items-center justify-center text-sm text-gray-500">
+            Loading {{ view.driver.name }} payroll compensation...
+          </div>
+
+          <div *ngIf="view.loaded" class="divide-y divide-gray-100 dark:divide-[#303330]">
+            <section *ngFor="let state of visibleStates(view)">
+              <div class="bg-gray-50 p-4 pl-8 dark:bg-[#252825]">
+                <div class="flex flex-col gap-4 xl:flex-row xl:items-end">
+                  <button
+                    type="button"
+                    class="flex min-w-48 items-center gap-3 self-start text-left"
+                    (click)="toggleState(view, state.state_id)"
+                    [attr.aria-expanded]="isStateExpanded(view, state)"
+                  >
+                    <ng-container *ngTemplateOutlet="chevron; context: { expanded: isStateExpanded(view, state) }"></ng-container>
+                    <span>
+                      <span class="block font-medium">{{ state.state_name }}</span>
+                      <span class="block text-xs text-gray-500 dark:text-gray-400">{{ state.cities.length }} cities</span>
+                    </span>
+                  </button>
+
+                  <div class="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
+                    <ng-container *ngTemplateOutlet="rateInput; context: { label: 'Base salary', model: state, field: 'base_salary', id: 'driver-state-salary-' + view.driver.id + '-' + state.state_id }"></ng-container>
+                    <ng-container *ngTemplateOutlet="rateInput; context: { label: 'Commission / delivery', model: state, field: 'commission_per_delivery', id: 'driver-state-commission-' + view.driver.id + '-' + state.state_id }"></ng-container>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="h-10 rounded-lg bg-[#FFD150] px-5 text-sm font-semibold text-black hover:bg-yellow-500 disabled:opacity-60"
+                    [disabled]="isSaving(stateSavingId(view, state))"
+                    (click)="requestStateOverride(view, state)"
+                  >
+                    {{ isSaving(stateSavingId(view, state)) ? 'Updating...' : 'Override' }}
+                  </button>
+                </div>
+              </div>
+
+              <div *ngIf="isStateExpanded(view, state)" class="divide-y divide-gray-100 dark:divide-[#303330]">
+                <div *ngFor="let city of visibleCities(state)" class="p-4 pl-12">
+                  <div class="flex flex-col gap-4 xl:flex-row xl:items-end">
+                    <div class="min-w-44">
+                      <p class="font-medium">{{ city.city_name }}</p>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">City override</p>
+                    </div>
+                    <div class="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
+                      <ng-container *ngTemplateOutlet="rateInput; context: { label: 'Base salary', model: city, field: 'base_salary', id: 'driver-city-salary-' + view.driver.id + '-' + city.city_id }"></ng-container>
+                      <ng-container *ngTemplateOutlet="rateInput; context: { label: 'Commission / delivery', model: city, field: 'commission_per_delivery', id: 'driver-city-commission-' + view.driver.id + '-' + city.city_id }"></ng-container>
+                    </div>
+                    <button
+                      type="button"
+                      class="h-10 rounded-lg border border-gray-300 px-5 text-sm font-semibold hover:bg-gray-100 disabled:opacity-60 dark:border-[#4a4d4a] dark:hover:bg-[#2a2d2a]"
+                      [disabled]="isSaving(citySavingId(view, city))"
+                      (click)="requestCityOverride(view, state, city)"
+                    >
+                      {{ isSaving(citySavingId(view, city)) ? 'Updating...' : 'Override' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <div *ngIf="filteredDriverViews.length === 0 && !errorMessage" class="rounded-xl border border-dashed border-gray-300 p-10 text-center text-sm text-gray-500 dark:border-[#3a3d3a] dark:text-gray-400">
+        {{ searchQuery.trim() ? 'No drivers, provinces or cities match your search.' : 'No active drivers are available.' }}
+      </div>
+    </div>
+  </div>
+</div>
+
+<ng-template #rateInput let-label="label" let-model="model" let-field="field" let-id="id">
+  <label class="block">
+    <span class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ label }}</span>
+    <span class="relative block">
+      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">C$</span>
+      <input
+        [id]="id"
+        type="number"
+        min="0"
+        step="0.01"
+        required
+        [(ngModel)]="model[field]"
+        class="h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm outline-none focus:border-[#FFD150] focus:ring-2 focus:ring-[#FFD150]/30 dark:border-[#454845] dark:bg-[#1E201E]"
+      />
+    </span>
+  </label>
+</ng-template>
+
+<ng-template #chevron let-expanded="expanded">
+  <svg class="h-5 w-5 flex-none transition-transform" [class.rotate-180]="expanded" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+  </svg>
+</ng-template>
+
+<app-popup
+  [open]="confirmationTarget !== null"
+  title="Confirm payroll override"
+  widthClass="max-w-lg"
+  (close)="closeConfirmation()"
+>
+  <p class="text-sm leading-6 text-gray-600 dark:text-gray-300">{{ confirmationMessage() }}</p>
+  <div modal-footer class="flex justify-end gap-3">
+    <button
+      type="button"
+      class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-100 disabled:opacity-60 dark:border-[#4a4d4a] dark:hover:bg-[#2a2d2a]"
+      [disabled]="isConfirmationSaving()"
+      (click)="closeConfirmation()"
+    >
+      Cancel
+    </button>
+    <button
+      type="button"
+      class="rounded-lg bg-[#FFD150] px-4 py-2 text-sm font-semibold text-black hover:bg-yellow-500 disabled:opacity-60"
+      [disabled]="isConfirmationSaving()"
+      (click)="confirmOverride()"
+    >
+      {{ isConfirmationSaving() ? 'Updating...' : 'Yes, update payroll' }}
+    </button>
+  </div>
+</app-popup>

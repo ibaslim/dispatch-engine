@@ -37,14 +37,56 @@ def upgrade() -> None:
         """
     )
     
-    # Add the activity_status column to orders table
-    op.add_column(
-        'orders',
-        sa.Column('activity_status', postgresql.ENUM('driver_not_assigned', 'pickup_initiated', 'picked_up', 'delivery_initiated', 'delivery_in_progress', 'delivered', name='activitystatus_enum'), nullable=True, server_default='driver_not_assigned')
-    )
+    conn = op.get_bind()
+    orders_exists = conn.execute(
+        sa.text("SELECT to_regclass('public.orders') IS NOT NULL")
+    ).scalar()
+    if orders_exists:
+        existing_columns = {
+            row[0]
+            for row in conn.execute(
+                sa.text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema='public' AND table_name='orders'"
+                )
+            )
+        }
+        if "activity_status" not in existing_columns:
+            op.add_column(
+                "orders",
+                sa.Column(
+                    "activity_status",
+                    postgresql.ENUM(
+                        "driver_not_assigned",
+                        "pickup_initiated",
+                        "picked_up",
+                        "delivery_initiated",
+                        "delivery_in_progress",
+                        "delivered",
+                        name="activitystatus_enum",
+                        create_type=False,
+                    ),
+                    nullable=True,
+                    server_default="driver_not_assigned",
+                ),
+            )
 
 
 def downgrade() -> None:
-    op.drop_column('orders', 'activity_status')
+    conn = op.get_bind()
+    orders_exists = conn.execute(
+        sa.text("SELECT to_regclass('public.orders') IS NOT NULL")
+    ).scalar()
+    if orders_exists:
+        existing_columns = {
+            row[0]
+            for row in conn.execute(
+                sa.text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema='public' AND table_name='orders'"
+                )
+            )
+        }
+        if "activity_status" in existing_columns:
+            op.drop_column("orders", "activity_status")
     op.execute("DROP TYPE IF EXISTS activitystatus_enum")
-

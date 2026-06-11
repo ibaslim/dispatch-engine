@@ -9,6 +9,11 @@ from fastapi.responses import FileResponse
 import os
 from app.core.config import settings
 from app.models.onboarding_application import ApplicationStatus, OnboardingApplication
+from app.models.location import (
+    DEFAULT_DRIVER_BASE_SALARY,
+    DEFAULT_DRIVER_COMMISSION_PER_DELIVERY,
+    DriverPricing,
+)
 from app.models.tenant import Tenant
 from app.models.user import RoleEnum, User, UserRole
 from app.schemas.onboarding import (
@@ -106,6 +111,24 @@ async def _ensure_tenant_for_application(
     await db.flush()
 
     return tenant
+
+
+async def _ensure_default_driver_payroll(
+    db: AsyncSession,
+    tenant: Tenant,
+) -> DriverPricing:
+    """Create the default payroll row once for an onboarded driver."""
+    payroll = await db.scalar(
+        select(DriverPricing).where(DriverPricing.driver_id == tenant.id)
+    )
+    if payroll is None:
+        payroll = DriverPricing(
+            driver_id=tenant.id,
+            base_salary=DEFAULT_DRIVER_BASE_SALARY,
+            commission_per_delivery=DEFAULT_DRIVER_COMMISSION_PER_DELIVERY,
+        )
+        db.add(payroll)
+    return payroll
 
 
 @router.post("/applications", response_model=OnboardingApplicationResponse)
@@ -257,6 +280,8 @@ async def approve_application(
             tenant = await _ensure_tenant_for_application(db, application)
         if tenant is not None:
             user.tenant_id = tenant.id
+            if application.role == RoleEnum.driver.value:
+                await _ensure_default_driver_payroll(db, tenant)
 
     user.is_active = True
 

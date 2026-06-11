@@ -32,7 +32,10 @@ trap cleanup EXIT INT TERM
 
 CURRENT_HASH=$(sha256sum "$LOCK_FILE" | awk '{print $1}')
 
-if [ -f "$STAMP_FILE" ] && [ "$(cat "$STAMP_FILE")" = "$CURRENT_HASH" ]; then
+if [ -f "$STAMP_FILE" ] \
+  && [ "$(cat "$STAMP_FILE")" = "$CURRENT_HASH" ] \
+  && [ -x "$NODE_MODULES_DIR/.bin/nx" ] \
+  && [ -f "$NODE_MODULES_DIR/.package-lock.json" ]; then
   echo "[node] Workspace dependencies are up to date."
   exit 0
 fi

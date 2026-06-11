@@ -7,7 +7,15 @@ Runs idempotently: skips if any Country already exists.
 import logging
 from sqlalchemy import select, func
 from app.db.session import async_session_factory
-from app.models.location import Country, State, City
+from app.db.canada_official_cities import CANADIAN_PROVINCES_AND_CITIES
+from app.models.location import (
+    City,
+    CityPricing,
+    Country,
+    GlobalPricing,
+    State,
+    StatePricing,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,13 +77,7 @@ GEO_DATA: dict[str, tuple[str, dict[str, list[str]]]] = {
         "Western Australia": ["Perth", "Fremantle", "Bunbury", "Geraldton", "Kalgoorlie", "Albany"],
         "South Australia": ["Adelaide", "Mount Gambier", "Whyalla", "Murray Bridge"],
     }),
-    "Canada": ("CA", {
-        "Ontario": ["Toronto", "Ottawa", "Mississauga", "Brampton", "Hamilton", "London", "Windsor"],
-        "British Columbia": ["Vancouver", "Victoria", "Kelowna", "Abbotsford", "Nanaimo", "Kamloops"],
-        "Quebec": ["Montreal", "Quebec City", "Laval", "Gatineau", "Longueuil", "Sherbrooke"],
-        "Alberta": ["Calgary", "Edmonton", "Red Deer", "Lethbridge", "Medicine Hat", "Fort McMurray"],
-        "Manitoba": ["Winnipeg", "Brandon", "Steinbach", "Thompson"],
-    }),
+    "Canada": ("CA", CANADIAN_PROVINCES_AND_CITIES),
 }
 
 
@@ -113,3 +115,83 @@ async def seed_locations() -> None:
             "[seed:locations] ✅ Seeded %d countries, %d states, %d cities.",
             total_countries, total_states, total_cities,
         )
+
+
+async def seed_canadian_pricing() -> None:
+    """Ensure every seeded Canadian province and city starts at CAD 2 per unit."""
+    async with async_session_factory() as db:
+        global_pricing = await db.scalar(
+            select(GlobalPricing).where(GlobalPricing.key == "canada")
+        )
+        if global_pricing is None:
+            db.add(GlobalPricing(
+                key="canada",
+                partner_price_per_km=2.0,
+                partner_price_per_kg=2.0,
+                individual_price_per_km=2.0,
+                individual_price_per_kg=2.0,
+            ))
+
+        canada = await db.scalar(select(Country).where(Country.code == "CA"))
+        if canada is None:
+            canada = Country(name="Canada", code="CA")
+            db.add(canada)
+            await db.flush()
+
+        _, canadian_states = GEO_DATA["Canada"]
+        for state_name, city_names in canadian_states.items():
+            state = await db.scalar(
+                select(State).where(
+                    State.country_id == canada.id,
+                    State.name == state_name,
+                )
+            )
+            if state is None:
+                state = State(name=state_name, country_id=canada.id)
+                db.add(state)
+                await db.flush()
+
+            existing_city_names = set((await db.scalars(
+                select(City.name).where(City.state_id == state.id)
+            )).all())
+            for city_name in city_names:
+                if city_name not in existing_city_names:
+                    db.add(City(name=city_name, state_id=state.id))
+
+        await db.flush()
+        result = await db.execute(
+            select(State)
+            .join(Country)
+            .where(Country.code == "CA")
+        )
+        states = result.scalars().all()
+
+        for state in states:
+            state_pricing = await db.scalar(
+                select(StatePricing).where(StatePricing.state_id == state.id)
+            )
+            if state_pricing is None:
+                db.add(StatePricing(
+                    state_id=state.id,
+                    partner_price_per_km=2.0,
+                    partner_price_per_kg=2.0,
+                    individual_price_per_km=2.0,
+                    individual_price_per_kg=2.0,
+                ))
+
+            city_result = await db.execute(select(City).where(City.state_id == state.id))
+            for city in city_result.scalars().all():
+                city_pricing = await db.scalar(
+                    select(CityPricing).where(CityPricing.city_id == city.id)
+                )
+                if city_pricing is None:
+                    db.add(CityPricing(
+                        city_id=city.id,
+                        partner_price_per_km=2.0,
+                        partner_price_per_kg=2.0,
+                        individual_price_per_km=2.0,
+                        individual_price_per_kg=2.0,
+                    ))
+
+        await db.commit()
+        logger.info("[seed:pricing] Canadian default pricing is ready.")
