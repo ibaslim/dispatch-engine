@@ -1,350 +1,503 @@
-import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
-import {
-  LocationsService,
-  Country,
-  State,
-  City,
-  CityPricing,
-} from '../../../services/locations/locations.service';
-import { SideDrawerComponent } from '../../../components/side-drawer/Side-drawer.component';
-import { SearchBarComponent } from '../../../components/search-bar/search-bar.component';
-import { ButtonComponent } from '../../../components/button/button.component';
 
-type DrawerMode = 'add' | 'edit';
+import { PopupComponent } from '../../../components/popup/popup.component';
+import { SearchBarComponent } from '../../../components/search-bar/search-bar.component';
+import {
+  CanadianCityPricing,
+  CanadianStatePricing,
+  LocationsService,
+  PartnerRates,
+  PricingPartner,
+  PricingRates,
+} from '../../../services/locations/locations.service';
+
+type PricingScope = 'general' | 'partners';
+
+interface PartnerPricingView {
+  partner: PricingPartner;
+  defaultRates: PricingRates;
+  states: CanadianStatePricing[];
+  expanded: boolean;
+  loading: boolean;
+  loaded: boolean;
+  expandedStateIds: Set<string>;
+}
+
+type PricingTarget =
+  | { type: 'general-default' }
+  | { type: 'general-state'; state: CanadianStatePricing }
+  | { type: 'general-city'; state: CanadianStatePricing; city: CanadianCityPricing }
+  | { type: 'partner-default'; view: PartnerPricingView }
+  | { type: 'partner-state'; view: PartnerPricingView; state: CanadianStatePricing }
+  | {
+      type: 'partner-city';
+      view: PartnerPricingView;
+      state: CanadianStatePricing;
+      city: CanadianCityPricing;
+    };
 
 @Component({
   selector: 'app-pricing',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    SideDrawerComponent,
-    SearchBarComponent,
-    ButtonComponent,
-  ],
+  imports: [CommonModule, FormsModule, PopupComponent, SearchBarComponent],
   templateUrl: './pricing.component.html',
 })
 export class PricingComponent implements OnInit {
   private readonly locationsSvc = inject(LocationsService);
 
-  // ── Table data ─────────────────────────────────────────────────────────────
-  pricingRows: CityPricing[] = [];
-  isLoadingTable = false;
-  tableError = '';
-
-  // ── Settings drawer ────────────────────────────────────────────────────────
-  isDrawerOpen = false;
-  addPanelOpen = true;
-  editPanelOpen = false;
-
-  // ── Shared location data ───────────────────────────────────────────────────
-  countries: Country[] = [];
-  // Add-panel state
-  addCountryId = '';
-  addStates: State[] = [];
-  addSelectedStateIds: string[] = [];
-  addCities: City[] = [];   // cities for ALL selected states combined
-  addSelectedCityIds: string[] = [];
-
-  // Edit-panel state (select a single existing pricing row to edit)
-  editRowId = '';          // city_id of the row being edited
-  editCountryId = '';
-  editStates: State[] = [];
-  editSelectedStateIds: string[] = [];
-  editCities: City[] = [];
-  editSelectedCityIds: string[] = [];
-
-  // ── Pricing fields (shared between add/edit – each panel has its own) ──────
-  // Add
-  addPartnerKm: number | null = null;
-  addPartnerKg: number | null = null;
-  addIndivKm: number | null = null;
-  addIndivKg: number | null = null;
-
-  // Edit
-  editPartnerKm: number | null = null;
-  editPartnerKg: number | null = null;
-  editIndivKm: number | null = null;
-  editIndivKg: number | null = null;
-
-  // ── Search / filter ────────────────────────────────────────────────────────
+  scope: PricingScope = 'general';
+  states: CanadianStatePricing[] = [];
+  defaultRates: PricingRates = this.emptyRates();
+  partnerViews: PartnerPricingView[] = [];
+  expandedStateIds = new Set<string>();
+  savingIds = new Set<string>();
+  confirmationTarget: PricingTarget | null = null;
+  isLoading = false;
+  errorMessage = '';
+  successMessage = '';
   searchQuery = '';
 
-  // ── Feedback ──────────────────────────────────────────────────────────────
-  isSavingAdd = false;
-  isSavingEdit = false;
-  addError = '';
-  addSuccess = '';
-  editError = '';
-  editSuccess = '';
+  get filteredStates(): CanadianStatePricing[] {
+    return this.filterStates(this.states);
+  }
 
-  // ── Delete ────────────────────────────────────────────────────────────────
-  deletingCityId: string | null = null;
-
-  get filteredRows(): CityPricing[] {
-    if (!this.searchQuery.trim()) return this.pricingRows;
-    const q = this.searchQuery.toLowerCase();
-    return this.pricingRows.filter(
-      (r) =>
-        r.city_name.toLowerCase().includes(q) ||
-        r.state_name.toLowerCase().includes(q) ||
-        r.country_name.toLowerCase().includes(q)
+  get filteredPartnerViews(): PartnerPricingView[] {
+    const query = this.normalizedSearchQuery();
+    if (!query) return this.partnerViews;
+    return this.partnerViews.filter(
+      (view) =>
+        view.partner.name.toLowerCase().includes(query) ||
+        view.states.some(
+          (state) =>
+            state.state_name.toLowerCase().includes(query) ||
+            state.cities.some((city) => city.city_name.toLowerCase().includes(query))
+        )
     );
   }
 
   async ngOnInit(): Promise<void> {
-    await Promise.all([this.loadTable(), this.loadCountries()]);
-  }
-
-  async loadTable(): Promise<void> {
-    this.isLoadingTable = true;
-    this.tableError = '';
+    this.isLoading = true;
     try {
-      this.pricingRows = await firstValueFrom(this.locationsSvc.getAllPricing());
+      const [partners, defaultRates, states] = await Promise.all([
+        firstValueFrom(this.locationsSvc.getPricingPartners()),
+        firstValueFrom(this.locationsSvc.getDefaultPricing()),
+        firstValueFrom(this.locationsSvc.getCanadianPricing()),
+      ]);
+      this.defaultRates = defaultRates;
+      this.states = states;
+      this.partnerViews = partners.map((partner) => ({
+        partner,
+        defaultRates: this.emptyRates(),
+        states: [],
+        expanded: false,
+        loading: false,
+        loaded: false,
+        expandedStateIds: new Set<string>(),
+      }));
     } catch {
-      this.tableError = 'Failed to load pricing data.';
+      this.errorMessage = 'Failed to load Canadian pricing.';
     } finally {
-      this.isLoadingTable = false;
+      this.isLoading = false;
     }
   }
 
-  async loadCountries(): Promise<void> {
+  async onScopeChange(): Promise<void> {
+    this.confirmationTarget = null;
+    this.clearFeedback();
+    if (this.scope === 'partners' && this.normalizedSearchQuery()) {
+      await this.loadAllPartners();
+    }
+  }
+
+  async togglePartner(view: PartnerPricingView): Promise<void> {
+    view.expanded = !view.expanded;
+    if (view.expanded && !view.loaded) {
+      await this.loadPartner(view);
+    }
+  }
+
+  async loadPartner(view: PartnerPricingView): Promise<void> {
+    view.loading = true;
+    this.errorMessage = '';
     try {
-      this.countries = await firstValueFrom(this.locationsSvc.getCountries());
+      [view.defaultRates, view.states] = await Promise.all([
+        firstValueFrom(this.locationsSvc.getDefaultPricing(view.partner.id)),
+        firstValueFrom(this.locationsSvc.getCanadianPricing(view.partner.id)),
+      ]);
+      view.loaded = true;
     } catch {
-      // silent – countries are only needed when drawer is open
+      this.errorMessage = `Failed to load pricing for ${view.partner.name}.`;
+    } finally {
+      view.loading = false;
     }
   }
 
-  openDrawer(): void {
-    this.isDrawerOpen = true;
-    this.resetAddForm();
-    this.resetEditForm();
-  }
-
-  closeDrawer(): void {
-    this.isDrawerOpen = false;
-  }
-
-  toggleAddPanel(): void {
-    this.addPanelOpen = !this.addPanelOpen;
-  }
-
-  toggleEditPanel(): void {
-    this.editPanelOpen = !this.editPanelOpen;
-  }
-
-  // ─── Add panel ────────────────────────────────────────────────────────────
-
-  async onAddCountryChange(): Promise<void> {
-    this.addStates = [];
-    this.addSelectedStateIds = [];
-    this.addCities = [];
-    this.addSelectedCityIds = [];
-    if (!this.addCountryId) return;
-    this.addStates = await firstValueFrom(this.locationsSvc.getStates(this.addCountryId));
-  }
-
-  isAllStatesSelected(): boolean {
-    return this.addStates.length > 0 && this.addSelectedStateIds.length === this.addStates.length;
-  }
-
-  toggleAllStates(): void {
-    if (this.isAllStatesSelected()) {
-      this.addSelectedStateIds = [];
-      this.addCities = [];
-      this.addSelectedCityIds = [];
-    } else {
-      this.addSelectedStateIds = this.addStates.map((s) => s.id);
-      this.onAddStatesChange();
+  async onSearchChange(value: string): Promise<void> {
+    this.searchQuery = value;
+    if (this.scope === 'partners' && this.normalizedSearchQuery()) {
+      await this.loadAllPartners();
     }
   }
 
-  toggleState(stateId: string): void {
-    const idx = this.addSelectedStateIds.indexOf(stateId);
-    if (idx >= 0) {
-      this.addSelectedStateIds.splice(idx, 1);
-    } else {
-      this.addSelectedStateIds.push(stateId);
+  toggleGeneralState(stateId: string): void {
+    this.toggleSetValue(this.expandedStateIds, stateId);
+  }
+
+  togglePartnerState(view: PartnerPricingView, stateId: string): void {
+    this.toggleSetValue(view.expandedStateIds, stateId);
+  }
+
+  isGeneralStateExpanded(state: CanadianStatePricing): boolean {
+    return this.expandedStateIds.has(state.state_id) || this.hasCityMatch(state);
+  }
+
+  isPartnerStateExpanded(view: PartnerPricingView, state: CanadianStatePricing): boolean {
+    return view.expandedStateIds.has(state.state_id) || this.hasCityMatch(state);
+  }
+
+  isPartnerExpanded(view: PartnerPricingView): boolean {
+    return view.expanded || this.partnerHasSearchMatch(view);
+  }
+
+  visibleCities(state: CanadianStatePricing): CanadianCityPricing[] {
+    const query = this.normalizedSearchQuery();
+    if (!query || state.state_name.toLowerCase().includes(query)) {
+      return state.cities;
     }
-    this.onAddStatesChange();
+    return state.cities.filter((city) => city.city_name.toLowerCase().includes(query));
   }
 
-  isStateSelected(stateId: string): boolean {
-    return this.addSelectedStateIds.includes(stateId);
+  visiblePartnerStates(view: PartnerPricingView): CanadianStatePricing[] {
+    const query = this.normalizedSearchQuery();
+    if (query && view.partner.name.toLowerCase().includes(query)) {
+      return view.states;
+    }
+    return this.filterStates(view.states);
   }
 
-  async onAddStatesChange(): Promise<void> {
-    this.addCities = [];
-    this.addSelectedCityIds = [];
-    if (!this.addSelectedStateIds.length) return;
-    const results = await Promise.all(
-      this.addSelectedStateIds.map((sid) =>
-        firstValueFrom(this.locationsSvc.getCities(sid))
+  requestGeneralDefaultOverride(): void {
+    if (this.validateRates(this.defaultRates, 'general Canadian pricing', false)) {
+      this.confirmationTarget = { type: 'general-default' };
+    }
+  }
+
+  requestGeneralStateOverride(state: CanadianStatePricing): void {
+    if (this.validateRates(state, state.state_name, false)) {
+      this.confirmationTarget = { type: 'general-state', state };
+    }
+  }
+
+  requestGeneralCityOverride(
+    state: CanadianStatePricing,
+    city: CanadianCityPricing
+  ): void {
+    if (this.validateRates(city, city.city_name, false)) {
+      this.confirmationTarget = { type: 'general-city', state, city };
+    }
+  }
+
+  requestPartnerDefaultOverride(view: PartnerPricingView): void {
+    if (this.validateRates(view.defaultRates, view.partner.name, true)) {
+      this.confirmationTarget = { type: 'partner-default', view };
+    }
+  }
+
+  requestPartnerStateOverride(
+    view: PartnerPricingView,
+    state: CanadianStatePricing
+  ): void {
+    if (this.validateRates(state, `${state.state_name} for ${view.partner.name}`, true)) {
+      this.confirmationTarget = { type: 'partner-state', view, state };
+    }
+  }
+
+  requestPartnerCityOverride(
+    view: PartnerPricingView,
+    state: CanadianStatePricing,
+    city: CanadianCityPricing
+  ): void {
+    if (this.validateRates(city, `${city.city_name} for ${view.partner.name}`, true)) {
+      this.confirmationTarget = { type: 'partner-city', view, state, city };
+    }
+  }
+
+  closeConfirmation(): void {
+    if (!this.isConfirmationSaving()) {
+      this.confirmationTarget = null;
+    }
+  }
+
+  async confirmOverride(): Promise<void> {
+    const target = this.confirmationTarget;
+    if (!target) return;
+    const savingId = this.targetSavingId(target);
+    this.savingIds.add(savingId);
+    this.clearFeedback();
+
+    try {
+      await this.saveTarget(target);
+      this.confirmationTarget = null;
+    } catch {
+      this.errorMessage = `Failed to update ${this.targetName()}. Please try again.`;
+    } finally {
+      this.savingIds.delete(savingId);
+    }
+  }
+
+  confirmationMessage(): string {
+    const target = this.confirmationTarget;
+    if (!target) return '';
+    switch (target.type) {
+      case 'general-default':
+        return 'Are you sure you want to update the general Canadian prices? This will replace every province and city rate.';
+      case 'general-state':
+        return `Are you sure you want to update prices for ${target.state.state_name}? This will replace every city rate in the province.`;
+      case 'general-city':
+        return `Are you sure you want to update prices for ${target.city.city_name}?`;
+      case 'partner-default':
+        return `Are you sure you want to update general prices for ${target.view.partner.name}? This will replace all of this partner's province and city rates.`;
+      case 'partner-state':
+        return `Are you sure you want to update ${target.state.state_name} prices for ${target.view.partner.name}? This will replace all city rates in the province for this partner.`;
+      case 'partner-city':
+        return `Are you sure you want to update ${target.city.city_name} prices for ${target.view.partner.name}?`;
+    }
+  }
+
+  targetName(): string {
+    const target = this.confirmationTarget;
+    if (!target) return '';
+    switch (target.type) {
+      case 'general-default':
+        return 'general Canadian pricing';
+      case 'general-state':
+      case 'partner-state':
+        return target.state.state_name;
+      case 'general-city':
+      case 'partner-city':
+        return target.city.city_name;
+      case 'partner-default':
+        return target.view.partner.name;
+    }
+  }
+
+  isSaving(id: string): boolean {
+    return this.savingIds.has(id);
+  }
+
+  isConfirmationSaving(): boolean {
+    return this.confirmationTarget
+      ? this.isSaving(this.targetSavingId(this.confirmationTarget))
+      : false;
+  }
+
+  generalDefaultSavingId(): string {
+    return 'general:default';
+  }
+
+  partnerDefaultSavingId(view: PartnerPricingView): string {
+    return `partner:${view.partner.id}:default`;
+  }
+
+  generalStateSavingId(state: CanadianStatePricing): string {
+    return `general:state:${state.state_id}`;
+  }
+
+  generalCitySavingId(city: CanadianCityPricing): string {
+    return `general:city:${city.city_id}`;
+  }
+
+  partnerStateSavingId(
+    view: PartnerPricingView,
+    state: CanadianStatePricing
+  ): string {
+    return `partner:${view.partner.id}:state:${state.state_id}`;
+  }
+
+  partnerCitySavingId(view: PartnerPricingView, city: CanadianCityPricing): string {
+    return `partner:${view.partner.id}:city:${city.city_id}`;
+  }
+
+  private async saveTarget(target: PricingTarget): Promise<void> {
+    switch (target.type) {
+      case 'general-default': {
+        const rates = this.toRates(this.defaultRates);
+        await firstValueFrom(this.locationsSvc.updateDefaultPricing(rates));
+        this.states.forEach((state) => {
+          Object.assign(state, rates);
+          state.cities.forEach((city) => Object.assign(city, rates));
+        });
+        this.successMessage = 'General Canadian pricing was updated.';
+        return;
+      }
+      case 'general-state': {
+        const rates = this.toRates(target.state);
+        await firstValueFrom(
+          this.locationsSvc.updateStatePricing(target.state.state_id, rates)
+        );
+        target.state.cities.forEach((city) => Object.assign(city, rates));
+        this.successMessage = `${target.state.state_name} pricing was updated.`;
+        return;
+      }
+      case 'general-city':
+        await firstValueFrom(
+          this.locationsSvc.updateCityPricing(
+            target.city.city_id,
+            this.toRates(target.city)
+          )
+        );
+        this.successMessage = `${target.city.city_name} pricing was updated.`;
+        return;
+      case 'partner-default': {
+        const rates = this.toPartnerRates(target.view.defaultRates);
+        await firstValueFrom(
+          this.locationsSvc.updatePartnerDefault(target.view.partner.id, rates)
+        );
+        target.view.states.forEach((state) => {
+          this.assignPartnerRates(state, rates);
+          state.cities.forEach((city) => this.assignPartnerRates(city, rates));
+        });
+        this.successMessage = `${target.view.partner.name}'s general pricing was updated.`;
+        return;
+      }
+      case 'partner-state': {
+        const rates = this.toPartnerRates(target.state);
+        await firstValueFrom(
+          this.locationsSvc.updatePartnerState(
+            target.view.partner.id,
+            target.state.state_id,
+            rates
+          )
+        );
+        target.state.cities.forEach((city) => this.assignPartnerRates(city, rates));
+        this.successMessage = `${target.state.state_name} pricing for ${target.view.partner.name} was updated.`;
+        return;
+      }
+      case 'partner-city':
+        await firstValueFrom(
+          this.locationsSvc.updatePartnerCity(
+            target.view.partner.id,
+            target.city.city_id,
+            this.toPartnerRates(target.city)
+          )
+        );
+        this.successMessage = `${target.city.city_name} pricing for ${target.view.partner.name} was updated.`;
+    }
+  }
+
+  private async loadAllPartners(): Promise<void> {
+    await Promise.all(
+      this.partnerViews
+        .filter((view) => !view.loaded && !view.loading)
+        .map((view) => this.loadPartner(view))
+    );
+  }
+
+  private filterStates(states: CanadianStatePricing[]): CanadianStatePricing[] {
+    const query = this.normalizedSearchQuery();
+    if (!query) return states;
+    return states.filter(
+      (state) =>
+        state.state_name.toLowerCase().includes(query) ||
+        state.cities.some((city) => city.city_name.toLowerCase().includes(query))
+    );
+  }
+
+  private partnerHasSearchMatch(view: PartnerPricingView): boolean {
+    const query = this.normalizedSearchQuery();
+    if (!query) return false;
+    return (
+      view.partner.name.toLowerCase().includes(query) ||
+      view.states.some(
+        (state) =>
+          state.state_name.toLowerCase().includes(query) ||
+          state.cities.some((city) => city.city_name.toLowerCase().includes(query))
       )
     );
-    this.addCities = results.flat();
   }
 
-  isAllCitiesSelected(): boolean {
-    return this.addCities.length > 0 && this.addSelectedCityIds.length === this.addCities.length;
+  private hasCityMatch(state: CanadianStatePricing): boolean {
+    const query = this.normalizedSearchQuery();
+    return !!query && state.cities.some((city) => city.city_name.toLowerCase().includes(query));
   }
 
-  toggleAllCities(): void {
-    if (this.isAllCitiesSelected()) {
-      this.addSelectedCityIds = [];
+  private validateRates(rates: PricingRates, name: string, partnerOnly: boolean): boolean {
+    this.clearFeedback();
+    const values = partnerOnly
+      ? [rates.partner_price_per_km, rates.partner_price_per_kg]
+      : [
+          rates.partner_price_per_km,
+          rates.partner_price_per_kg,
+          rates.individual_price_per_km,
+          rates.individual_price_per_kg,
+        ];
+    const valid = values.every(
+      (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0
+    );
+    if (!valid) {
+      this.errorMessage = `Enter valid non-negative rates for ${name}.`;
+    }
+    return valid;
+  }
+
+  private targetSavingId(target: PricingTarget): string {
+    switch (target.type) {
+      case 'general-default':
+        return this.generalDefaultSavingId();
+      case 'general-state':
+        return this.generalStateSavingId(target.state);
+      case 'general-city':
+        return this.generalCitySavingId(target.city);
+      case 'partner-default':
+        return this.partnerDefaultSavingId(target.view);
+      case 'partner-state':
+        return this.partnerStateSavingId(target.view, target.state);
+      case 'partner-city':
+        return this.partnerCitySavingId(target.view, target.city);
+    }
+  }
+
+  private toggleSetValue(values: Set<string>, id: string): void {
+    if (values.has(id)) {
+      values.delete(id);
     } else {
-      this.addSelectedCityIds = this.addCities.map((c) => c.id);
+      values.add(id);
     }
   }
 
-  toggleCity(cityId: string): void {
-    const idx = this.addSelectedCityIds.indexOf(cityId);
-    if (idx >= 0) {
-      this.addSelectedCityIds.splice(idx, 1);
-    } else {
-      this.addSelectedCityIds.push(cityId);
-    }
+  private toRates(rates: PricingRates): PricingRates {
+    return { ...rates };
   }
 
-  isCitySelected(cityId: string): boolean {
-    return this.addSelectedCityIds.includes(cityId);
+  private toPartnerRates(rates: PricingRates): PartnerRates {
+    return {
+      price_per_km: rates.partner_price_per_km,
+      price_per_kg: rates.partner_price_per_kg,
+    };
   }
 
-  sameAsPartnerAdd(): void {
-    this.addIndivKm = this.addPartnerKm;
-    this.addIndivKg = this.addPartnerKg;
+  private assignPartnerRates(target: PricingRates, rates: PartnerRates): void {
+    target.partner_price_per_km = rates.price_per_km;
+    target.partner_price_per_kg = rates.price_per_kg;
   }
 
-  async saveAdd(): Promise<void> {
-    this.addError = '';
-    this.addSuccess = '';
-    if (!this.addSelectedCityIds.length) {
-      this.addError = 'Please select at least one city.';
-      return;
-    }
-    this.isSavingAdd = true;
-    try {
-      await firstValueFrom(
-        this.locationsSvc.upsertPricing({
-          city_ids: this.addSelectedCityIds,
-          partner_price_per_km: this.addPartnerKm,
-          partner_price_per_kg: this.addPartnerKg,
-          individual_price_per_km: this.addIndivKm,
-          individual_price_per_kg: this.addIndivKg,
-        })
-      );
-      this.addSuccess = `Pricing saved for ${this.addSelectedCityIds.length} city/cities.`;
-      await this.loadTable();
-      this.resetAddForm();
-    } catch {
-      this.addError = 'Failed to save pricing. Please try again.';
-    } finally {
-      this.isSavingAdd = false;
-    }
+  private clearFeedback(): void {
+    this.errorMessage = '';
+    this.successMessage = '';
   }
 
-  resetAddForm(): void {
-    this.addCountryId = '';
-    this.addStates = [];
-    this.addSelectedStateIds = [];
-    this.addCities = [];
-    this.addSelectedCityIds = [];
-    this.addPartnerKm = null;
-    this.addPartnerKg = null;
-    this.addIndivKm = null;
-    this.addIndivKg = null;
-    this.addError = '';
-    this.addSuccess = '';
+  private normalizedSearchQuery(): string {
+    return this.searchQuery.trim().toLowerCase();
   }
 
-  // ─── Edit panel ───────────────────────────────────────────────────────────
-
-  startEdit(row: CityPricing): void {
-    this.editPanelOpen = true;
-    this.addPanelOpen = false;
-    this.isDrawerOpen = true;
-    this.editRowId = row.city_id;
-    this.editPartnerKm = row.partner_price_per_km;
-    this.editPartnerKg = row.partner_price_per_kg;
-    this.editIndivKm = row.individual_price_per_km;
-    this.editIndivKg = row.individual_price_per_kg;
-    this.editError = '';
-    this.editSuccess = '';
-  }
-
-  sameAsPartnerEdit(): void {
-    this.editIndivKm = this.editPartnerKm;
-    this.editIndivKg = this.editPartnerKg;
-  }
-
-  async saveEdit(): Promise<void> {
-    this.editError = '';
-    this.editSuccess = '';
-    if (!this.editRowId) {
-      this.editError = 'No city selected to edit.';
-      return;
-    }
-    this.isSavingEdit = true;
-    try {
-      await firstValueFrom(
-        this.locationsSvc.upsertPricing({
-          city_ids: [this.editRowId],
-          partner_price_per_km: this.editPartnerKm,
-          partner_price_per_kg: this.editPartnerKg,
-          individual_price_per_km: this.editIndivKm,
-          individual_price_per_kg: this.editIndivKg,
-        })
-      );
-      this.editSuccess = 'Pricing updated successfully.';
-      await this.loadTable();
-    } catch {
-      this.editError = 'Failed to update pricing. Please try again.';
-    } finally {
-      this.isSavingEdit = false;
-    }
-  }
-
-  resetEditForm(): void {
-    this.editRowId = '';
-    this.editCountryId = '';
-    this.editStates = [];
-    this.editSelectedStateIds = [];
-    this.editCities = [];
-    this.editSelectedCityIds = [];
-    this.editPartnerKm = null;
-    this.editPartnerKg = null;
-    this.editIndivKm = null;
-    this.editIndivKg = null;
-    this.editError = '';
-    this.editSuccess = '';
-  }
-
-  getEditingCityName(): string {
-    const row = this.pricingRows.find((r) => r.city_id === this.editRowId);
-    return row ? `${row.city_name}, ${row.state_name}` : 'Selected city';
-  }
-
-  // ─── Delete ───────────────────────────────────────────────────────────────
-
-  async deleteRow(cityId: string): Promise<void> {
-    if (!confirm('Remove pricing for this city?')) return;
-    this.deletingCityId = cityId;
-    try {
-      await firstValueFrom(this.locationsSvc.deletePricing(cityId));
-      this.pricingRows = this.pricingRows.filter((r) => r.city_id !== cityId);
-    } catch {
-      alert('Failed to delete pricing.');
-    } finally {
-      this.deletingCityId = null;
-    }
-  }
-
-  formatPrice(val: number | null): string {
-    if (val === null || val === undefined) return '—';
-    return `$${val.toFixed(2)}`;
+  private emptyRates(): PricingRates {
+    return {
+      partner_price_per_km: 2,
+      partner_price_per_kg: 2,
+      individual_price_per_km: 2,
+      individual_price_per_kg: 2,
+    };
   }
 }

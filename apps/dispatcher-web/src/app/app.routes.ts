@@ -134,6 +134,13 @@ export const routes: Routes = [
             (m) => m.TenantManagementComponent
           ),
       },
+      {
+        path: 'driver-payroll',
+        loadComponent: () =>
+          import('./pages/configurations/driver-payroll/driver-payroll.component').then(
+            (m) => m.DriverPayrollComponent
+          ),
+      },
     ],
   },
   {

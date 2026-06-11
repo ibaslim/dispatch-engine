@@ -5,7 +5,20 @@ from app.models.invitation import Invitation
 from app.models.token import RefreshToken, PushToken
 from app.models.post import Post
 from app.models.onboarding_application import OnboardingApplication
-from app.models.location import Country, State, City, CityPricing
+from app.models.location import (
+    City,
+    CityPricing,
+    Country,
+    DriverCityPricing,
+    DriverPricing,
+    DriverStatePricing,
+    GlobalPricing,
+    PartnerCityPricing,
+    PartnerPricing,
+    PartnerStatePricing,
+    State,
+    StatePricing,
+)
 
 __all__ = [
     "Tenant",
@@ -22,4 +35,12 @@ __all__ = [
     "State",
     "City",
     "CityPricing",
+    "StatePricing",
+    "GlobalPricing",
+    "DriverPricing",
+    "DriverStatePricing",
+    "DriverCityPricing",
+    "PartnerPricing",
+    "PartnerStatePricing",
+    "PartnerCityPricing",
 ]

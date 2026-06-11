@@ -58,9 +58,11 @@ def upgrade() -> None:
     if "countries" not in existing_tables:
         op.create_table(
             "countries",
-            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
             sa.Column("name", sa.String(length=100), nullable=False),
             sa.Column("code", sa.String(length=10), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
             sa.PrimaryKeyConstraint("id"),
             sa.UniqueConstraint("code"),
             sa.UniqueConstraint("name"),
@@ -69,36 +71,47 @@ def upgrade() -> None:
     if "states" not in existing_tables:
         op.create_table(
             "states",
-            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-            sa.Column("name", sa.String(length=100), nullable=False),
-            sa.Column("country_id", sa.Integer(), nullable=False),
+            sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column("name", sa.String(length=150), nullable=False),
+            sa.Column("country_id", postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
             sa.ForeignKeyConstraint(["country_id"], ["countries.id"], ondelete="CASCADE"),
             sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("name", "country_id", name="uq_state_country"),
         )
+        op.create_index("ix_states_country_id", "states", ["country_id"])
 
     if "cities" not in existing_tables:
         op.create_table(
             "cities",
-            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-            sa.Column("name", sa.String(length=100), nullable=False),
-            sa.Column("state_id", sa.Integer(), nullable=False),
+            sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column("name", sa.String(length=150), nullable=False),
+            sa.Column("state_id", postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
             sa.ForeignKeyConstraint(["state_id"], ["states.id"], ondelete="CASCADE"),
             sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("name", "state_id", name="uq_city_state"),
         )
+        op.create_index("ix_cities_state_id", "cities", ["state_id"])
 
     if "city_pricing" not in existing_tables:
         op.create_table(
             "city_pricing",
-            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-            sa.Column("city_id", sa.Integer(), nullable=False),
-            sa.Column("partner_price_per_km", sa.Float(), nullable=False, server_default="0"),
-            sa.Column("partner_price_per_kg", sa.Float(), nullable=False, server_default="0"),
-            sa.Column("individual_price_per_km", sa.Float(), nullable=False, server_default="0"),
-            sa.Column("individual_price_per_kg", sa.Float(), nullable=False, server_default="0"),
+            sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column("city_id", postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column("partner_price_per_km", sa.Float(), nullable=True),
+            sa.Column("partner_price_per_kg", sa.Float(), nullable=True),
+            sa.Column("individual_price_per_km", sa.Float(), nullable=True),
+            sa.Column("individual_price_per_kg", sa.Float(), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
             sa.ForeignKeyConstraint(["city_id"], ["cities.id"], ondelete="CASCADE"),
             sa.PrimaryKeyConstraint("id"),
             sa.UniqueConstraint("city_id"),
         )
+        op.create_index("ix_city_pricing_city_id", "city_pricing", ["city_id"], unique=True)
 
 
 def downgrade() -> None:

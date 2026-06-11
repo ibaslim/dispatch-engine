@@ -17,9 +17,41 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('orders', sa.Column('proof_of_delivery', sa.JSON(), nullable=True))
+    conn = op.get_bind()
+    orders_exists = conn.execute(
+        sa.text("SELECT to_regclass('public.orders') IS NOT NULL")
+    ).scalar()
+    if orders_exists:
+        existing_columns = {
+            row[0]
+            for row in conn.execute(
+                sa.text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema='public' AND table_name='orders'"
+                )
+            )
+        }
+        if "proof_of_delivery" not in existing_columns:
+            op.add_column(
+                "orders",
+                sa.Column("proof_of_delivery", sa.JSON(), nullable=True),
+            )
 
 
 def downgrade() -> None:
-    op.drop_column('orders', 'proof_of_delivery')
-
+    conn = op.get_bind()
+    orders_exists = conn.execute(
+        sa.text("SELECT to_regclass('public.orders') IS NOT NULL")
+    ).scalar()
+    if orders_exists:
+        existing_columns = {
+            row[0]
+            for row in conn.execute(
+                sa.text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema='public' AND table_name='orders'"
+                )
+            )
+        }
+        if "proof_of_delivery" in existing_columns:
+            op.drop_column("orders", "proof_of_delivery")

@@ -15,4 +15,4 @@ sh "$ROOT_DIR/infra/scripts/install-node-deps.sh"
 
 cd "$ROOT_DIR"
 echo "[web] Starting $PROJECT_NAME..."
-exec npx nx serve "$PROJECT_NAME" --host 0.0.0.0 "$@"
+exec "$ROOT_DIR/node_modules/.bin/nx" serve "$PROJECT_NAME" --host 0.0.0.0 "$@"
