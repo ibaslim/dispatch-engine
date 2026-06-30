@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "start": "node --dns-result-order=ipv4first ./node_modules/expo/bin/cli start",
-    "start:offline": "node --dns-result-order=ipv4first ./node_modules/expo/bin/cli start --offline",
+    "start": "NODE_OPTIONS=--dns-result-order=ipv4first expo start",
+    "start:offline": "NODE_OPTIONS=--dns-result-order=ipv4first expo start --offline",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "lint": "eslint src --ext .ts,.tsx",
