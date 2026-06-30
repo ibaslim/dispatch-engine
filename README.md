@@ -63,6 +63,20 @@ docker compose up -d
 
 This is the default development path for the repo.
 
+On Windows, use Docker Desktop with the WSL 2 backend. The repo includes
+`.gitattributes` rules that keep Linux container scripts checked out with LF
+line endings, so `infra/scripts/*.sh` can run correctly inside Docker. If a
+checkout existed before those rules were added, run `git add --renormalize .`
+once and review the resulting diff.
+
+You can also use the cross-platform npm shortcuts:
+
+```bash
+npm run dev
+npm run dev:logs
+npm run dev:down
+```
+
 Open:
 
 - http://localhost:4200 for the dispatcher portal
@@ -1361,4 +1375,3 @@ Before opening a pull request, verify the following for the app(s) you changed:
 | Shared lib tests pass | `npx nx test shared-domain && npx nx test shared-api-client` |
 | `.env.local.example` updated | If new env vars were added |
 | README updated | If new setup steps, endpoints, or env vars were added |
-
