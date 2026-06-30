@@ -77,7 +77,7 @@ services:
       - ../../apps/api:/app
       - ../../:/workspace
       - pip_cache:/root/.cache/pip
-    command: ["sh", "/workspace/infra/scripts/dev-api.sh"]
+    command: ["sh", "-c", "for script in /workspace/infra/scripts/*.sh; do tmp=\"$$script.tmp\"; tr -d '\\r' < \"$$script\" > \"$$tmp\" && mv \"$$tmp\" \"$$script\"; done && sh /workspace/infra/scripts/dev-api.sh"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/openapi.json"]
       interval: 10s
@@ -108,7 +108,7 @@ services:
       - ../../apps/api:/app
       - ../../:/workspace
       - pip_cache:/root/.cache/pip
-    command: ["sh", "/workspace/infra/scripts/dev-celery.sh"]
+    command: ["sh", "-c", "for script in /workspace/infra/scripts/*.sh; do tmp=\"$$script.tmp\"; tr -d '\\r' < \"$$script\" > \"$$tmp\" && mv \"$$tmp\" \"$$script\"; done && sh /workspace/infra/scripts/dev-celery.sh"]
 
   # ── Web apps ─────────────────────────────────────────────────────────────
 
@@ -124,7 +124,7 @@ services:
       - ../../:/workspace
       - node_modules:/workspace/node_modules
       - npm_cache:/root/.npm
-    command: ["sh", "/workspace/infra/scripts/dev-web.sh", "dispatcher-web", "--port", "4200"]
+    command: ["sh", "-c", "for script in /workspace/infra/scripts/*.sh; do tmp=\"$$script.tmp\"; tr -d '\\r' < \"$$script\" > \"$$tmp\" && mv \"$$tmp\" \"$$script\"; done && sh /workspace/infra/scripts/dev-web.sh dispatcher-web --port 4200"]
     depends_on:
       api:
         condition: service_healthy
@@ -141,7 +141,7 @@ services:
       - ../../:/workspace
       - node_modules:/workspace/node_modules
       - npm_cache:/root/.npm
-    command: ["sh", "/workspace/infra/scripts/dev-web.sh", "tracking-web", "--port", "4300"]
+    command: ["sh", "-c", "for script in /workspace/infra/scripts/*.sh; do tmp=\"$$script.tmp\"; tr -d '\\r' < \"$$script\" > \"$$tmp\" && mv \"$$tmp\" \"$$script\"; done && sh /workspace/infra/scripts/dev-web.sh tracking-web --port 4300"]
     depends_on:
       api:
         condition: service_healthy
@@ -153,4 +153,3 @@ volumes:
   node_modules:
   npm_cache:
   pip_cache:
-
