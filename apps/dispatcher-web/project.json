@@ -63,7 +63,8 @@
       "defaultConfiguration": "development",
       "options": {
         "port": 4200,
-        "proxyConfig": "proxy.conf.json"
+        "proxyConfig": "proxy.conf.json",
+        "poll": 1000
       },
       "continuous": true
     },

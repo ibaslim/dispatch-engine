@@ -2,20 +2,62 @@
 Email sending via aiosmtplib (SMTP).
 Used by Celery tasks (synchronous wrapper) and for direct sends.
 """
+from __future__ import annotations
+from app.core.config import settings
 import smtplib
+from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from app.core.config import settings
+from html import escape
+from io import BytesIO
+from typing import Any
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    Flowable,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 
-def send_email_sync(to: str, subject: str, html_body: str) -> None:
+def send_email_sync(
+    to: str,
+    subject: str,
+    html_body: str,
+    attachments: list[dict[str, Any]] | None = None,
+) -> None:
     """Send email synchronously (called from Celery worker)."""
-    msg = MIMEMultipart("alternative")
+    attachments = attachments or []
+    msg = MIMEMultipart("mixed") if attachments else MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = settings.mail_from
     msg["To"] = to
-    msg.attach(MIMEText(html_body, "html"))
+
+    if attachments:
+        body = MIMEMultipart("alternative")
+        body.attach(MIMEText(html_body, "html"))
+        msg.attach(body)
+    else:
+        msg.attach(MIMEText(html_body, "html"))
+
+    for attachment in attachments:
+        content = attachment["content"]
+        content_type = attachment.get("content_type", "application/octet-stream")
+        subtype = content_type.split("/", 1)[1] if "/" in content_type else "octet-stream"
+        part = MIMEApplication(content, _subtype=subtype)
+        part.add_header(
+            "Content-Disposition",
+            "attachment",
+            filename=attachment["filename"],
+        )
+        msg.attach(part)
 
     with smtplib.SMTP(settings.mail_host, settings.mail_port) as server:
         if settings.mail_starttls:
@@ -147,5 +189,462 @@ def build_tenant_unsuspended_email(tenant_name: str) -> str:
     </body>
     </html>
     """
+
+##Invoice Styling
+INK = colors.HexColor("#111827")
+SLATE = colors.HexColor("#475569")
+FOG = colors.HexColor("#94A3B8")
+HAIRLINE = colors.HexColor("#E5E7EB")
+PAPER = colors.HexColor("#F8FAFC")
+AMBER = colors.HexColor("#D97706")
+AMBER_SOFT = colors.HexColor("#FEF3E2")
+ALERT = colors.HexColor("#DC2626")
+WHITE = colors.white
+
+PAGE_MARGIN = 18 * mm
+CONTENT_WIDTH = A4[0] - 2 * PAGE_MARGIN
+
+
+def _html(value: Any) -> str:
+    return escape(str(value or ""), quote=True)
+
+
+def _field(source: Any, name: str, default: Any = "") -> Any:
+    if isinstance(source, dict):
+        return source.get(name, default)
+    return getattr(source, name, default)
+
+
+def _money(value: Any) -> str:
+    try:
+        amount = float(value or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    return f"C$ {amount:,.2f}"
+
+
+def _format_order_status(value: Any) -> str:
+    raw = getattr(value, "value", value)
+    return str(raw or "").replace("_", " ").title()
+
+
+def _format_payment_method(value: Any) -> str:
+    raw = str(value or "").replace("_", " ").strip()
+    return raw.title() if raw else ""
+
+
+def _mask_card(card_number: Any) -> str:
+    digits = "".join(ch for ch in str(card_number or "") if ch.isdigit())
+    if len(digits) < 4:
+        return ""
+    return f"**** **** **** {digits[-4:]}"
+
+
+def _tracked(text: str, gap: str = " ") -> str:
+    """Letter-space short uppercase strings for the eyebrow / wordmark treatment."""
+    return gap.join(list(text.upper()))
+
+
+STATUS_COLORS = {
+    "delivered": (colors.HexColor("#ECFDF5"), colors.HexColor("#047857")),
+    "cancelled": (colors.HexColor("#FEF2F2"), colors.HexColor("#B91C1C")),
+    "declined": (colors.HexColor("#FEF2F2"), colors.HexColor("#B91C1C")),
+}
+
+
+def _status_colors(raw_status: str) -> tuple:
+    key = str(raw_status or "").lower().replace(" ", "_")
+    return STATUS_COLORS.get(key, (AMBER_SOFT, AMBER))
+
+
+# ---------------------------------------------------------------------------
+# Styles
+# ---------------------------------------------------------------------------
+
+_styles = getSampleStyleSheet()
+
+BODY = ParagraphStyle(
+    "InvoiceBody", parent=_styles["BodyText"],
+    fontName="Helvetica", fontSize=9, leading=13, textColor=SLATE,
+)
+BODY_BOLD = ParagraphStyle(
+    "InvoiceBodyBold", parent=BODY, fontName="Helvetica-Bold", textColor=INK,
+)
+MUTED = ParagraphStyle(
+    "InvoiceMuted", parent=BODY, fontSize=8, textColor=FOG,
+)
+RIGHT_MUTED = ParagraphStyle(
+    "InvoiceRightMuted", parent=MUTED, alignment=2,
+)
+EYEBROW = ParagraphStyle(
+    "InvoiceEyebrow", parent=BODY,
+    fontName="Helvetica-Bold", fontSize=7.5, leading=10,
+    textColor=FOG, spaceAfter=7,
+)
+ORDER_TITLE = ParagraphStyle(
+    "InvoiceOrderTitle", parent=_styles["Title"],
+    fontName="Times-Bold", fontSize=22, leading=24, alignment=0, textColor=INK,
+)
+WORDMARK = ParagraphStyle(
+    "InvoiceWordmark", parent=BODY,
+    fontName="Times-Bold", fontSize=12, leading=14, alignment=2, textColor=INK,
+)
+TAGLINE = ParagraphStyle(
+    "InvoiceTagline", parent=RIGHT_MUTED, fontSize=7,
+)
+TABLE_HEAD = ParagraphStyle(
+    "InvoiceTableHead", parent=BODY,
+    fontName="Helvetica-Bold", fontSize=7.5, textColor=FOG,
+)
+CELL = ParagraphStyle(
+    "InvoiceCell", parent=BODY, fontSize=9,
+)
+CELL_RIGHT = ParagraphStyle(
+    "InvoiceCellRight", parent=CELL, alignment=2,
+)
+TOTAL_LABEL = ParagraphStyle(
+    "InvoiceTotalLabel", parent=BODY_BOLD, fontSize=12,
+)
+TOTAL_VALUE = ParagraphStyle(
+    "InvoiceTotalValue", parent=TOTAL_LABEL, alignment=2, textColor=AMBER,
+)
+STATUS_TEXT = ParagraphStyle(
+    "InvoiceStatusText", parent=BODY,
+    fontName="Helvetica-Bold", fontSize=8, alignment=1,
+)
+
+
+def _p(value: Any, style: ParagraphStyle = BODY) -> Paragraph:
+    return Paragraph(_html(value), style)
+
+
+# ---------------------------------------------------------------------------
+# Signature element: the route line
+# ---------------------------------------------------------------------------
+
+class RouteLine(Flowable):
+    """Two dots — Pickup, Delivery — joined by a dashed line.
+    """
+
+    def __init__(self, width: float, height: float = 13 * mm):
+        super().__init__()
+        self.width = width
+        self.height = height
+
+    def wrap(self, avail_width, avail_height):
+        return self.width, self.height
+
+    def draw(self):
+        c = self.canv
+        y = self.height * 0.62
+        left_x = 2 * mm
+        right_x = self.width - 2 * mm
+        radius = 2.6
+
+        c.setStrokeColor(AMBER)
+        c.setLineWidth(1)
+        c.setDash(2, 2)
+        c.line(left_x + radius + 3, y, right_x - radius - 3, y)
+        c.setDash()
+
+        c.setFillColor(AMBER)
+        c.circle(left_x, y, radius, stroke=0, fill=1)
+        c.setFillColor(WHITE)
+        c.setStrokeColor(AMBER)
+        c.setLineWidth(1.4)
+        c.circle(right_x, y, radius, stroke=1, fill=1)
+        c.setFillColor(AMBER)
+        c.circle(right_x, y, radius * 0.4, stroke=0, fill=1)
+
+        c.setFont("Helvetica-Bold", 7)
+        c.setFillColor(INK)
+        c.drawString(left_x - 1, y - 10, _tracked("Pickup", ""))
+        c.drawRightString(right_x + 1, y - 10, _tracked("Delivery", ""))
+
+
+class RoundedTag(Flowable):
+    """Status pill — rounded rect, filled by state color."""
+
+    def __init__(self, text: str, fill: colors.Color, text_color: colors.Color,
+                 width: float = 30 * mm, height: float = 6.4 * mm):
+        super().__init__()
+        self.text = text
+        self.fill = fill
+        self.text_color = text_color
+        self.width = width
+        self.height = height
+
+    def wrap(self, avail_width, avail_height):
+        return self.width, self.height
+
+    def draw(self):
+        c = self.canv
+        c.setFillColor(self.fill)
+        c.roundRect(0, 0, self.width, self.height, self.height / 2, stroke=0, fill=1)
+        c.setFillColor(self.text_color)
+        c.setFont("Helvetica-Bold", 7.5)
+        c.drawCentredString(self.width / 2, self.height / 2 - 2.6, self.text.upper())
+
+
+# ---------------------------------------------------------------------------
+# Message body (HTML email)
+# ---------------------------------------------------------------------------
+
+def build_order_invoice_message(order: Any) -> str:
+    """Email sent to the sender alongside the order invoice PDF."""
+    order_number = _html(_field(order, "order_number"))
+    pickup_name = _html(_field(order, "pickup_name")) or "there"
+    pickup_city = _html(_field(order, "pickup_address"))
+    delivery_name = _html(_field(order, "delivery_name")) or "—"
+    delivery_city = _html(_field(order, "delivery_address"))
+    total = _html(_money(_field(order, "total")))
+    status = _html(_format_order_status(_field(order, "status")) or "Pending")
+
+    return f"""
+    <html>
+    <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #111827;">
+        <p style="color: #94a3b8; font-size: 12px; font-weight: bold; letter-spacing: 1px; margin: 0 0 4px;">
+            DISPATCH DELIVERY
+        </p>
+        <h2 style="color: #D97706; margin: 0 0 4px;">Invoice for Order #{order_number}</h2>
+        <p style="color: #6b7280; font-size: 13px; margin: 0 0 20px;">Status: {status}</p>
+
+        <p>Hi {pickup_name},</p>
+        <p>Your invoice for <strong>Order #{order_number}</strong> is attached as a PDF. Here's a quick summary:</p>
+
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr>
+                <td style="border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; padding: 14px 0;">
+                    <table style="width: 100%;">
+                        <tr>
+                            <td style="color: #94a3b8; font-size: 11px; font-weight: bold; letter-spacing: 0.5px;">PICKUP</td>
+                            <td style="color: #94a3b8; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; text-align: right;">DELIVERY</td>
+                        </tr>
+                        <tr>
+                            <td style="color: #111827; font-weight: bold; padding-top: 4px;">{pickup_name}</td>
+                            <td style="color: #111827; font-weight: bold; padding-top: 4px; text-align: right;">{delivery_name}</td>
+                        </tr>
+                        <tr>
+                            <td style="color: #475569; font-size: 13px;">{pickup_city}</td>
+                            <td style="color: #475569; font-size: 13px; text-align: right;">{delivery_city}</td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+
+        <p style="margin: 0;">
+            Total &nbsp;
+            <strong style="color: #D97706; font-size: 18px;">{total}</strong>
+        </p>
+
+        <p style="margin-top: 24px;">Thank you for shipping with us.<br/>Dispatch Delivery</p>
+
+        <br/>
+        <p style="color: #6b7280; font-size: 14px;">
+            This is an automated message. Please do not reply directly to this email.
+        </p>
+    </body>
+    </html>
+    """
+
+
+# ---------------------------------------------------------------------------
+# PDF body
+# ---------------------------------------------------------------------------
+
+def build_order_invoice_pdf(order: Any) -> bytes:
+    """Build an order invoice PDF attachment from an Order model or dict."""
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=PAGE_MARGIN,
+        leftMargin=PAGE_MARGIN,
+        topMargin=PAGE_MARGIN,
+        bottomMargin=PAGE_MARGIN,
+        title=f"Invoice {_field(order, 'order_number', '')}",
+    )
+
+    order_number = _field(order, "order_number")
+    status_raw = _format_order_status(_field(order, "status"))
+    payment_details = _field(order, "payment_details", {}) or {}
+    credit_card = _field(payment_details, "creditCard", {}) or {}
+    masked_card = _mask_card(_field(credit_card, "cardNumber", ""))
+    status_fill, status_ink = _status_colors(status_raw)
+
+    story: list[Any] = []
+
+    # --- Header: order number + status  |  wordmark + placed date --------
+    header = Table(
+        [[
+            [
+                Paragraph(f"Order #{_html(order_number)}", ORDER_TITLE),
+                Spacer(1, 4),
+                RoundedTag(status_raw or "Pending", status_fill, status_ink),
+            ],
+            [
+                Paragraph(_tracked("Dispatch Delivery"), WORDMARK),
+                Paragraph("Courier & Parcel Invoice", TAGLINE),
+                Spacer(1, 6),
+                Paragraph(
+                    f"Placed &nbsp; {_html(_field(order, 'order_placed_time'))}",
+                    RIGHT_MUTED,
+                ),
+            ],
+        ]],
+        colWidths=[CONTENT_WIDTH * 0.55, CONTENT_WIDTH * 0.45],
+    )
+    header.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.append(header)
+    story.append(Spacer(1, 10))
+    story.append(RouteLine(CONTENT_WIDTH))
+    story.append(Spacer(1, 4))
+
+    rule = Table([[""]], colWidths=[CONTENT_WIDTH], rowHeights=[0.1])
+    rule.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 0.75, HAIRLINE)]))
+    story.append(rule)
+    story.append(Spacer(1, 14))
+
+    # --- Pickup / Delivery ------------------------------------------------
+    pickup_block = [
+        Paragraph(_tracked("Pickup", ""), EYEBROW),
+        Paragraph(_html(_field(order, "pickup_name")), BODY_BOLD),
+        _p(_field(order, "pickup_phone")),
+        _p(_field(order, "pickup_email")),
+        _p(_field(order, "pickup_address")),
+        Spacer(1, 4),
+        Paragraph(
+            f"{_html(_field(order, 'pickup_date'))} &nbsp;·&nbsp; "
+            f"{_html(_field(order, 'pickup_time'))}",
+            MUTED,
+        ),
+    ]
+    delivery_block = [
+        Paragraph(_tracked("Delivery", ""), EYEBROW),
+        Paragraph(_html(_field(order, "delivery_name")), BODY_BOLD),
+        _p(_field(order, "delivery_phone")),
+        _p(_field(order, "delivery_email")),
+        _p(_field(order, "delivery_address")),
+        Spacer(1, 4),
+        Paragraph(
+            f"{_html(_field(order, 'delivery_date'))} &nbsp;·&nbsp; "
+            f"{_html(_field(order, 'delivery_time'))}",
+            MUTED,
+        ),
+    ]
+    info = Table(
+        [[pickup_block, "", delivery_block]],
+        colWidths=[CONTENT_WIDTH * 0.46, CONTENT_WIDTH * 0.08, CONTENT_WIDTH * 0.46],
+    )
+    info.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LINEAFTER", (0, 0), (0, 0), 0.75, HAIRLINE),
+    ]))
+    story.append(info)
+    story.append(Spacer(1, 18))
+
+    # --- Items --------------------------------------------------------
+    story.append(Paragraph(_tracked("Items", ""), EYEBROW))
+
+    header_row = [
+        Paragraph("ITEM", TABLE_HEAD),
+        Paragraph("QTY", ParagraphStyle("h", parent=TABLE_HEAD, alignment=2)),
+        Paragraph("PRICE", ParagraphStyle("h", parent=TABLE_HEAD, alignment=2)),
+    ]
+    item_rows = [header_row]
+    items = _field(order, "items", []) or []
+    for item in items:
+        item_rows.append([
+            Paragraph(_html(_field(item, "itemName")), CELL),
+            Paragraph(_html(_field(item, "itemQty")), CELL_RIGHT),
+            Paragraph(_html(_money(_field(item, "itemPrice"))), CELL_RIGHT),
+        ])
+
+    items_table = Table(item_rows, colWidths=[104 * mm, 22 * mm, 34 * mm])
+    style_cmds = [
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.75, INK),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]
+    for row_idx in range(1, len(item_rows)):
+        if row_idx % 2 == 0:
+            style_cmds.append(("BACKGROUND", (0, row_idx), (-1, row_idx), PAPER))
+    items_table.setStyle(TableStyle(style_cmds))
+    story.append(items_table)
+    story.append(Spacer(1, 4))
+    close_rule = Table([[""]], colWidths=[CONTENT_WIDTH], rowHeights=[0.1])
+    close_rule.setStyle(TableStyle([("LINEABOVE", (0, 0), (-1, -1), 0.75, HAIRLINE)]))
+    story.append(close_rule)
+    story.append(Spacer(1, 16))
+
+    # --- Totals -------------------------------------------------------
+    line_items = [
+        ("Subtotal", _money(_field(order, "subtotal")), False),
+        (f"Tax ({_field(order, 'tax_rate')}%)", _money(_field(order, "tax_amount")), False),
+        ("Delivery fees", _money(_field(order, "delivery_fees")), False),
+        ("Tips", _money(_field(order, "delivery_tips")), False),
+    ]
+    discount_val = _field(order, "discount")
+    rows = []
+    for label, value, _ in line_items:
+        rows.append([_p(label, MUTED), Paragraph(_html(value), RIGHT_MUTED)])
+    try:
+        has_discount = float(discount_val or 0) > 0
+    except (TypeError, ValueError):
+        has_discount = False
+    if has_discount:
+        rows.append([
+            _p("Discount", MUTED),
+            Paragraph(
+                f"-{_html(_money(discount_val))}",
+                ParagraphStyle("disc", parent=RIGHT_MUTED, textColor=ALERT),
+            ),
+        ])
+    rows.append([
+        Paragraph("Total", TOTAL_LABEL),
+        Paragraph(_html(_money(_field(order, "total"))), TOTAL_VALUE),
+    ])
+
+    totals_table = Table(rows, colWidths=[CONTENT_WIDTH - 60 * mm, 60 * mm])
+    totals_style = [
+        ("TOPPADDING", (0, 0), (-1, -2), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -2), 3),
+        ("TOPPADDING", (0, -1), (-1, -1), 10),
+        ("LINEABOVE", (0, -1), (-1, -1), 1.4, AMBER),
+    ]
+    totals_table.setStyle(TableStyle(totals_style))
+    story.append(totals_table)
+    story.append(Spacer(1, 20))
+
+    # --- Payment footer -------------------------------------------------
+    payment_bits = [f"Paid via {_format_payment_method(_field(order, 'payment_method'))}"]
+    if masked_card:
+        payment_bits.append(masked_card)
+    footer_rule = Table([[""]], colWidths=[CONTENT_WIDTH], rowHeights=[0.1])
+    footer_rule.setStyle(TableStyle([("LINEABOVE", (0, 0), (-1, -1), 0.75, HAIRLINE)]))
+    story.append(footer_rule)
+    story.append(Spacer(1, 8))
+    footer = Table(
+        [[
+            Paragraph(_html("  ·  ".join(payment_bits)), MUTED),
+            Paragraph(_tracked(" ", ""), RIGHT_MUTED),
+        ]],
+        colWidths=[CONTENT_WIDTH * 0.7, CONTENT_WIDTH * 0.3],
+    )
+    footer.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+    story.append(footer)
+
+    doc.build(story)
+    return buffer.getvalue()
+
 
 

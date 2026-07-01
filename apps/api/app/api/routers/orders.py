@@ -13,6 +13,7 @@ from app.core.deps import CurrentUser
 from app.models.order import Order, OrderStatus, ActivityStatus
 from app.models.tenant import Tenant, TenantRole
 from app.schemas.order import OrderCreate, OrderResponse, OrderUpdate
+from app.workers.tasks import send_order_sender_invoice_email
 from uuid import UUID
 
 router = APIRouter(tags=["Orders"])
@@ -310,6 +311,75 @@ async def toggle_ready(
 
 
 # -------------------------
+# SEND SENDER INVOICE
+# -------------------------
+@router.post("/{order_id}/notify/sender" ,description="Sends invoice to the sender as attachment")
+async def send_sender_invoice(
+    order_id: str,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Email the order invoice slip to the pickup/sender email address."""
+    if not current_user.is_platform_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only platform admins can email order invoices.",
+        )
+
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    pickup_email = (order.pickup_email or "").strip()
+    if not pickup_email:
+        raise HTTPException(
+            status_code=400,
+            detail="Order sender does not have a pickup email address.",
+        )
+
+    order_data = {
+        "order_number": order.order_number,
+        "status": order.status.value if order.status else "",
+        "order_placed_time": order.order_placed_time,
+        "pickup_name": order.pickup_name,
+        "pickup_phone": order.pickup_phone,
+        "pickup_email": order.pickup_email,
+        "pickup_address": order.pickup_address,
+        "pickup_date": order.pickup_date,
+        "pickup_time": order.pickup_time,
+        "delivery_name": order.delivery_name,
+        "delivery_phone": order.delivery_phone,
+        "delivery_email": order.delivery_email,
+        "delivery_address": order.delivery_address,
+        "delivery_date": order.delivery_date,
+        "delivery_time": order.delivery_time,
+        "items": order.items or [],
+        "subtotal": order.subtotal,
+        "tax_rate": order.tax_rate,
+        "tax_amount": order.tax_amount,
+        "delivery_fees": order.delivery_fees,
+        "delivery_tips": order.delivery_tips,
+        "discount": order.discount,
+        "total": order.total,
+        "payment_method": order.payment_method,
+        "payment_details": order.payment_details or {},
+    }
+
+    send_order_sender_invoice_email.delay(
+        email=pickup_email,
+        order_number=order.order_number,
+        order_data=order_data,
+    )
+
+    return {
+        "success": True,
+        "email": pickup_email,
+        "order_id": order_id,
+    }
+
+# -------------------------
 # ASSIGN DRIVER
 # -------------------------
 class AssignDriverRequest(BaseModel):
@@ -545,3 +615,5 @@ async def accept_order(
     })
 
     return order
+
+

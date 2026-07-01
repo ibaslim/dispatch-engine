@@ -40,6 +40,7 @@ export class NewOrderFormComponent {
       pickup: {
         name: '',
         phone: { countryCode: '+1', number: '' },
+        email:'',
         address: '',
         pickupDate: this.todayYYYYMMDD(),
         pickupTime: ''

@@ -396,6 +396,7 @@
                             <h3 class="font-bold text-xs uppercase tracking-wider text-gray-400 mb-2">Pickup Information</h3>
                             <p class="font-semibold">{{ order.full.pickup.name }}</p>
                             <p>{{ order.full.pickup.phone.countryCode }} {{ order.full.pickup.phone.number }}</p>
+                            <p class="mt-1 break-words">{{ order.full.pickup.email }}</p>
                             <p class="mt-1 break-words">{{ order.full.pickup.address }}</p>
                             <p class="mt-2 text-xs text-gray-500">Date: {{ order.full.pickup.pickupDate }} {{ order.full.pickup.pickupTime }}</p>
                         </div>
@@ -457,6 +458,11 @@
         <div modal-footer class="flex items-center justify-end gap-3">
             <app-button variant="ghost" label="Cancel" (onClick)="closePrintOrder()"
                 [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm'">
+            </app-button>
+
+            <app-button variant="primary" label="Send by Email" (onClick)="sendSelectedOrderByEmail()"
+                [loading]="isSendingOrderEmail" [disabled]="!selectedOrderForPrint?.full?.pickup?.email || isSendingOrderEmail"
+                [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-4 py-2 rounded-md text-sm'">
             </app-button>
 
             <app-button variant="primary" label="Print Order" (onClick)="openPrintWindow(selectedOrderForPrint!)"
@@ -554,3 +560,4 @@
     </app-popup>
 
 </app-page>
+

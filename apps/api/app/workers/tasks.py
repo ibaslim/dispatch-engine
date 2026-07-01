@@ -7,6 +7,8 @@ from app.services.email_service import (
     build_onboarding_rejected_email,
     build_tenant_suspended_email,
     build_tenant_unsuspended_email,
+    build_order_invoice_message,
+    build_order_invoice_pdf,
 )
 from typing import Optional
 
@@ -147,4 +149,35 @@ def send_tenant_unsuspended_email(
     except Exception as exc:
         raise self.retry(exc=exc, countdown=60)
 
+
+@celery_app.task(name="send_order_sender_invoice_email", bind=True, max_retries=3)
+def send_order_sender_invoice_email(
+    self,
+    email: Optional[str] = None,
+    order_number: Optional[str] = None,
+    order_data: Optional[dict] = None,
+    **kwargs,
+) -> None:
+    """Send an order invoice slip to the pickup/sender email address."""
+    email_value = email or kwargs.get("email") or ""
+    order_number_value = order_number or kwargs.get("order_number") or ""
+    order_data_value = order_data or kwargs.get("order_data") or {}
+    try:
+        html = build_order_invoice_message(order_data_value)
+        pdf = build_order_invoice_pdf(order_data_value)
+        subject = f"Dispatch Delivery Invoice - Order #{order_number_value}"
+        send_email_sync(
+            email_value,
+            subject,
+            html,
+            attachments=[
+                {
+                    "filename": f"invoice-{order_number_value}.pdf",
+                    "content": pdf,
+                    "content_type": "application/pdf",
+                }
+            ],
+        )
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=60)
 
