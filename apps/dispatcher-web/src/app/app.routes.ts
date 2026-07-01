@@ -102,11 +102,14 @@ export const routes: Routes = [
         (m) => m.ReportsComponent
       ),
   },
-  {
-    path: 'tenants',
-    redirectTo: '/configurations/tenants',
-    pathMatch: 'full',
-  },
+    {
+        path: 'tenants',
+        canActivate: [authGuard],
+        loadComponent: () =>
+          import('./components/tenant-management/tenant-management.component').then(
+            (m) => m.TenantManagementComponent
+          ),
+      },
   {
     path: 'configurations',
     canActivate: [authGuard],
@@ -125,13 +128,6 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./pages/configurations/pricing/pricing.component').then(
             (m) => m.PricingComponent
-          ),
-      },
-      {
-        path: 'tenants',
-        loadComponent: () =>
-          import('./components/tenant-management/tenant-management.component').then(
-            (m) => m.TenantManagementComponent
           ),
       },
       {
