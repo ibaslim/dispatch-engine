@@ -1,13 +1,13 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { PageComponent } from '../../components/page/page.component';
-import { OnboardingService } from '../../core/onboarding/onboarding.service';
-import { AuthService } from '../../core/auth/auth.service';
+import { PageComponent } from '@components/page/page.component';
+import { OnboardingService } from '@core/onboarding/onboarding.service';
+import { AuthService } from '@core/auth/auth.service';
+import { OnboardingFormComponent, OnboardingFormValues } from '@components/onboarding-form/onboarding-form.component';
+import { FileUploadComponent } from '@components/file-upload/file-upload.component';
+import { ToastService } from '@core/toast/toast.service';
 import { TenantRole } from '@dispatch/shared/domain';
-import { OnboardingFormComponent, OnboardingFormValues } from '../../components/onboarding-form/onboarding-form.component';
-import { BaseInputComponent } from '../../components/base-input/base-input.component';
-import { ToastService } from '../../core/toast/toast.service';
 
 @Component({
   selector: 'app-driver-onboarding',
@@ -16,7 +16,7 @@ import { ToastService } from '../../core/toast/toast.service';
     CommonModule,
     PageComponent,
     OnboardingFormComponent,
-    BaseInputComponent,
+    FileUploadComponent,
   ],
   templateUrl: './driver.onboarding.component.html',
 })

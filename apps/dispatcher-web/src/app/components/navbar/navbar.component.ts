@@ -1,10 +1,10 @@
 import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, RouterLinkActive } from '@angular/router';
-import { AuthService } from '../../core/auth/auth.service';
-import { NavItem } from '../../models/navbar.model';
-import { ButtonComponent } from '../button/button.component';
-import { UserDropdownIconComponent } from '../user-dropdown-icon/user-dropdown-icon.component';
+import { AuthService } from '@core/auth/auth.service';
+import { NavItem } from '@models/navbar.model';
+import { ButtonComponent } from '@components/button/button.component';
+import { UserDropdownIconComponent } from '@components/user-dropdown-icon/user-dropdown-icon.component';
 
 @Component({
   selector: 'app-navbar',

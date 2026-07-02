@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from app.core.deps import CurrentUserAllowInactive, TenantAdmin, get_db, _get_current_user_allow_inactive
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter,Depends, File, HTTPException, UploadFile, status
+import uuid
+from pathlib import Path
 from sqlalchemy import desc, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +30,47 @@ from app.workers.tasks import (
 )
 
 router = APIRouter()
+
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+CHUNK_SIZE = 1024 * 1024  # 1 MB
+
+ALLOWED_CONTENT_TYPES = {
+    # Documents
+    "application/pdf": ".pdf",
+    # Common images
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    # iPhone / modern mobile uploads
+    "image/heic": ".heic",
+    "image/heif": ".heif",
+    # Scanned document images
+    "image/tiff": ".tiff",
+}
+
+ALLOWED_EXTENSIONS = {
+    ".pdf",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".webp",
+    ".heic",
+    ".heif",
+    ".tif",
+    ".tiff",
+}
+
+EXTENSION_CONTENT_TYPE_MAP = {
+    ".pdf": {"application/pdf"},
+    ".jpg": {"image/jpeg"},
+    ".jpeg": {"image/jpeg"},
+    ".png": {"image/png"},
+    ".webp": {"image/webp"},
+    ".heic": {"image/heic", "image/heif"},
+    ".heif": {"image/heif", "image/heic"},
+    ".tif": {"image/tiff"},
+    ".tiff": {"image/tiff"},
+}
 
 
 def _to_response(application: OnboardingApplication) -> OnboardingApplicationResponse:
@@ -407,10 +450,76 @@ async def upload_application_document(
         if applicant is None or applicant.tenant_id != current_user.tenant_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
-    safe_name = os.path.basename(file.filename or "document")
-    upload_dir = os.path.join(settings.uploads_dir, application_id)
-    os.makedirs(upload_dir, exist_ok=True)
-    filepath = os.path.join(upload_dir, safe_name)
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File name is required.",
+        )
 
-    with open(filepath, "wb") as out_file:
-        out_file.write(await file.read())
+    original_filename = Path(file.filename).name
+    original_extension = Path(original_filename).suffix.lower()
+
+    if original_extension not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only PDF, JPG, PNG, WebP, HEIC, HEIF, and TIFF files are allowed.",
+        )
+
+    content_type = (file.content_type or "").lower().strip()
+
+    if content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file type.",
+        )
+
+    allowed_types_for_extension = EXTENSION_CONTENT_TYPE_MAP.get(original_extension)
+
+    if content_type not in allowed_types_for_extension:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File extension does not match file type.",
+        )
+
+    final_extension = ALLOWED_CONTENT_TYPES[content_type]
+    safe_filename = f"{uuid.uuid4().hex}{final_extension}"
+
+    upload_dir = Path(settings.uploads_dir) / str(application_id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    final_filepath = upload_dir / safe_filename
+    temp_filepath = upload_dir / f"{safe_filename}.part"
+
+    total_size = 0
+
+    try:
+        with open(temp_filepath, "wb") as out_file:
+            while chunk := await file.read(CHUNK_SIZE):
+                total_size += len(chunk)
+
+                if total_size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail="File too large. Maximum allowed size is 10 MB.",
+                    )
+
+                out_file.write(chunk)
+
+        os.replace(temp_filepath, final_filepath)
+
+    except HTTPException:
+        if temp_filepath.exists():
+            temp_filepath.unlink()
+        raise
+
+    except Exception:
+        if temp_filepath.exists():
+            temp_filepath.unlink()
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to upload file.",
+        )
+
+    finally:
+        await file.close()
