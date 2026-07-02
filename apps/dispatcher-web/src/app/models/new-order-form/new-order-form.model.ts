@@ -25,6 +25,7 @@ export interface NewOrderFormValue {
     pickup: {
         name: string;
         phone: PhoneValue;
+        email:string,
         address: string;
         pickupDate: string;
         pickupTime: string;

@@ -37,6 +37,7 @@ class Order(Base):
 
     pickup_name = Column(String)
     pickup_phone = Column(String)
+    pickup_email=Column(String)
     pickup_address = Column(String)
     pickup_date = Column(String)
     pickup_time = Column(String)
@@ -63,7 +64,7 @@ class Order(Base):
     payment_details = Column(JSON)
     proof_of_delivery = Column(JSON, nullable=True)
 
-    status = Column(Enum(OrderStatus), default=OrderStatus.current)
+    status = Column(Enum(OrderStatus, name="orderstatus_enum"), default=OrderStatus.current)
     activity_status = Column(
         Enum(ActivityStatus, name="activitystatus_enum"),
         default=ActivityStatus.driver_not_assigned,

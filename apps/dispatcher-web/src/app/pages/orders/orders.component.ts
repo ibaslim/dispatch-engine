@@ -33,6 +33,7 @@ type BackendOrder = {
   order_number: string;
   pickup_name: string;
   pickup_phone: string;
+  pickup_email: string;
   pickup_address: string;
   pickup_date: string;
   pickup_time: string;
@@ -149,6 +150,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   // ─── Print order modal ─────────────────────────────────────────────────────
   isPrintOpen = false;
   selectedOrderForPrint: OrderEntity | null = null;
+  isSendingOrderEmail = false;
 
   // ─── Search & feedback ─────────────────────────────────────────────────────
   searchQuery = '';
@@ -1025,6 +1027,28 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
   closePrintOrder(): void {
     this.isPrintOpen = false;
     this.selectedOrderForPrint = null;
+    this.isSendingOrderEmail = false;
+  }
+
+  async sendSelectedOrderByEmail(): Promise<void> {
+    const order = this.selectedOrderForPrint;
+    if (!order || this.isSendingOrderEmail) return;
+
+    const pickupEmail = order.full.pickup.email.trim();
+    if (!pickupEmail) {
+      this.setFeedback('This order does not have a sender email address.', 'error');
+      return;
+    }
+
+    this.isSendingOrderEmail = true;
+    try {
+      await firstValueFrom(this.ordersService.sendSenderInvoice(order.id));
+      this.setFeedback(`Invoice emailed to ${pickupEmail}.`, 'success');
+    } catch (error: any) {
+      this.setFeedback(error?.error?.detail || 'Unable to send invoice email.', 'error');
+    } finally {
+      this.isSendingOrderEmail = false;
+    }
   }
 
   // ─── Misc public ───────────────────────────────────────────────────────────
@@ -1163,6 +1187,7 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
         pickup: {
           name: order.pickup_name,
           phone: pickupPhone,
+          email:order.pickup_email,
           address: order.pickup_address,
           pickupDate: order.pickup_date,
           pickupTime: order.pickup_time
@@ -1348,6 +1373,7 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
         <h3>Pickup Information</h3>
         <p><strong>${this.escapeHtml(order.full.pickup.name)}</strong></p>
         <p>${this.escapeHtml(order.full.pickup.phone.countryCode)} ${this.escapeHtml(order.full.pickup.phone.number)}</p>
+        <p>${this.escapeHtml(order.full.pickup.email)}</p>
         <p>${this.escapeHtml(order.full.pickup.address)}</p>
         <p>Time: ${this.escapeHtml(order.full.pickup.pickupDate)} ${this.escapeHtml(order.full.pickup.pickupTime)}</p>
       </div>
@@ -1389,6 +1415,7 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
     return {
       pickup_name: value.pickup.name.trim(),
       pickup_phone: `${value.pickup.phone.countryCode}${value.pickup.phone.number}`,
+      pickup_email:value.pickup.email.trim(),
       pickup_address: value.pickup.address.trim(),
       pickup_date: value.pickup.pickupDate,
       pickup_time: value.pickup.pickupTime,
@@ -1460,6 +1487,7 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
     const value = this.newOrderValue;
     if (!value.pickup.name.trim()) return true;
     if (!value.pickup.address.trim()) return true;
+    if (!value.pickup.email.trim()) return true;
     if (!value.pickup.pickupDate || !value.pickup.pickupTime) return true;
     if (!this.isValidPhone(value.pickup.phone.number)) return true;
     if (!value.delivery.name.trim()) return true;
@@ -1589,7 +1617,7 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
   private createDefaultNewOrder(): NewOrderFormValue {
     return {
       orderNumber: '',
-      pickup: { name: '', phone: { countryCode: '+1', number: '' }, address: '', pickupDate: this.todayYYYYMMDD(), pickupTime: '' },
+      pickup: { name: '', phone: { countryCode: '+1', number: '' },email:'', address: '', pickupDate: this.todayYYYYMMDD(), pickupTime: '' },
       delivery: { name: '', phone: { countryCode: '+1', number: '' }, email: '', address: '', deliveryDate: this.todayYYYYMMDD(), deliveryTime: '' },
       details: {
         items: [{ itemName: '', itemPrice: '', itemQty: '' }],
@@ -1613,6 +1641,7 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
       pickup: {
         name: 'North Fork Kitchen',
         phone: { countryCode: '+1', number: '4161234567' },
+        email:'sender@dispatch.com',
         address: '110 King St, Toronto',
         pickupDate: this.formatDateForInput(pickupAt),
         pickupTime: this.formatTimeForInput(pickupAt)
@@ -1649,3 +1678,4 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
     return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
   }
 }
+

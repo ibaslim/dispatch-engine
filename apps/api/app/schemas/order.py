@@ -34,6 +34,7 @@ class OrderCreate(BaseModel):
 
     pickup_name: str
     pickup_phone: str
+    pickup_email:str
     pickup_address: str
     pickup_date: str
     pickup_time: str
@@ -74,6 +75,7 @@ class OrderUpdate(BaseModel):
 
     pickup_name: Optional[str] = None
     pickup_phone: Optional[str] = None
+    pickup_email: Optional[str] = None
     pickup_address: Optional[str] = None
     pickup_date: Optional[str] = None
     pickup_time: Optional[str] = None

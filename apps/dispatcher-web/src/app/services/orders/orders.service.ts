@@ -44,6 +44,11 @@ export class OrdersService {
     return this.http.delete(`${this.baseUrl}/${id}`);
   }
 
+  /** Email the order invoice slip to the pickup/sender contact. */
+  sendSenderInvoice(id: string): Observable<any> {
+    return this.http.post(`${this.baseUrl}/${id}/notify/sender`, {});
+  }
+
   /** Publish a saved order to all online drivers (platform admin only). */
   publishOrder(id: string): Observable<any> {
     return this.http.post(`${this.baseUrl}/${id}/publish`, {});
@@ -59,3 +64,4 @@ export class OrdersService {
     return this.http.get<any[]>(`${this.baseUrl}/published`);
   }
 }
+

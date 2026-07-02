@@ -30,6 +30,7 @@ export class NavbarComponent implements OnInit, OnDestroy {
     { label: 'Reviews', route: '/reviews' },
     { label: 'Reports', route: '/reports' },
     { label: 'Configurations', route: '/configurations' },
+    { label: 'Tenant Management', route: '/tenants' },
   ];
 
   get navItems(): NavItem[] {
