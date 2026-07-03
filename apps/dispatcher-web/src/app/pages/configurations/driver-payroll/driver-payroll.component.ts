@@ -3,15 +3,15 @@ import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 
-import { PopupComponent } from '../../../components/popup/popup.component';
-import { SearchBarComponent } from '../../../components/search-bar/search-bar.component';
+import { PopupComponent } from '@components/popup/popup.component';
+import { SearchBarComponent } from '@components/search-bar/search-bar.component';
 import {
   DriverPayrollCity,
   DriverPayrollRates,
   DriverPayrollState,
   DriversService,
   PayrollDriver,
-} from '../../../services/drivers/drivers.service';
+} from '@services/drivers/drivers.service';
 
 interface DriverPayrollView {
   driver: PayrollDriver;

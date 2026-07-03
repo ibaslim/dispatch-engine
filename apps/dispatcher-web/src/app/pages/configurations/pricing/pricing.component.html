@@ -8,15 +8,15 @@
         </p>
       </div>
 
-      <div class="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
-        <label class="block min-w-56">
+      <div class="flex flex-col items-stretch w-full gap-3 xs:flex-row lg:w-auto">
+        <label class="block min-w-32">
           <span class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
             Pricing scope
           </span>
           <select
             [(ngModel)]="scope"
             (ngModelChange)="onScopeChange()"
-            class="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm outline-none focus:border-[#FFD150] focus:ring-2 focus:ring-[#FFD150]/30 dark:border-[#454845] dark:bg-[#1E201E]"
+            class="h-10 max-w-xs w-full rounded-lg border border-gray-300 bg-white px-3 text-sm outline-none focus:border-[#FFD150] focus:ring-2 focus:ring-[#FFD150]/30 dark:border-[#454845] dark:bg-[#1E201E]"
           >
             <option value="general">General</option>
             <option value="partners">Partners</option>
@@ -24,7 +24,8 @@
         </label>
 
         <app-search-bar
-          class="w-full self-end sm:w-auto"
+          class="w-full max-w-92  self-end xs:w-auto"
+          containerClass="max-w-92 w-full xs:w-auto"
           [value]="searchQuery"
           (valueChange)="onSearchChange($event)"
           placeholder="Search partner, province or city"
