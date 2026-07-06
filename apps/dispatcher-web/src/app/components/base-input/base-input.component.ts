@@ -7,7 +7,8 @@ import { ErrorMessageComponent } from '../error-message/error-message.component'
   selector: 'app-base-input',
   standalone: true,
   imports: [CommonModule, FormsModule, ErrorMessageComponent],
-  templateUrl: './base-input.component.html'
+  templateUrl: './base-input.component.html',
+    styles: [`:host { display: block; }`]
 })
 export class BaseInputComponent {
   @Input() label = '';

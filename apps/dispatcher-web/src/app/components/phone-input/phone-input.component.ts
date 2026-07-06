@@ -1,16 +1,17 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { PhoneValue } from '../../models/phone-input/phone-input.model';
+import { PhoneValue } from '@models/phone-input/phone-input.model';
 import { ErrorMessageComponent } from '../error-message/error-message.component';
 import { DropdownSelectorComponent } from '../dropdown-selector/dropdown-selector.component';
-import { PHONE_COUNTRIES, PhoneCountry } from '../../models/phone-countries/phone-countries.model';
+import { PHONE_COUNTRIES, PhoneCountry } from '@models/phone-countries/phone-countries.model';
 
 @Component({
   selector: 'app-phone-input',
   standalone: true,
   imports: [CommonModule, FormsModule, ErrorMessageComponent, DropdownSelectorComponent],
-  templateUrl: './phone-input.component.html'
+  templateUrl: './phone-input.component.html',
+  styles: [`:host { display: block; }`]
 })
 export class PhoneInputComponent implements OnChanges {
   @Input() label = 'Phone No.';

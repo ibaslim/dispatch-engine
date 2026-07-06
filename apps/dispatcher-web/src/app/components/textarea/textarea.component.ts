@@ -7,7 +7,8 @@ import { ErrorMessageComponent } from '../error-message/error-message.component'
   selector: 'app-textarea',
   standalone: true,
   imports: [CommonModule, FormsModule, ErrorMessageComponent],
-  templateUrl: './textarea.component.html'
+  templateUrl: './textarea.component.html',
+  styles: [`:host { display: block; }`]
 })
 export class TextareaComponent {
   @Input() label = '';

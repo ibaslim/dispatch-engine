@@ -1,5 +1,6 @@
-<section class="space-y-6">
-    <h3 class="text-md font-semibold text-gray-900 dark:text-gray-100">Deliver to:</h3>
+<section>
+<h3 class="text-md font-semibold text-gray-900 dark:text-gray-100 mb-2 ">Deliver to:</h3>
+    <div class="space-y-4">
 
     <app-base-input label="Name" placeholder="Enter customer name" [required]="true" pattern="^[A-Za-z\s.'-]+$"
         [value]="value.name" (valueChange)="patch({ name: $event })" [errorMessages]="{
@@ -31,5 +32,6 @@
             (valueChange)="patch({ deliveryTime: $event })" name="deliveryTime" [externalError]="deliveryTimeError"
             [showExternalError]="showDeliveryTimeError" [showSubmitValidation]="showSubmitValidation">
         </app-time-picker>
+    </div>
     </div>
 </section>

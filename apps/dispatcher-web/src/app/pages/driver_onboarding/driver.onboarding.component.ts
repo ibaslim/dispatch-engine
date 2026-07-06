@@ -26,7 +26,7 @@ export class DriverOnboardingComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
 
-  private readonly maxUploadBytes = 1024 * 1024;
+  private readonly maxUploadBytes = 10 * 1024 * 1024;
 
   form: OnboardingFormValues = {
     fullName: '',
