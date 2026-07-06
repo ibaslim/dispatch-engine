@@ -23,6 +23,7 @@ export interface OnboardingFormValues {
   policeVerificationFile?: File | null;
   drivingHistoryFile?: File | null;
   photoIdFile?: File | null;
+  profilePictureFile?: File | null;
 }
 
 @Component({

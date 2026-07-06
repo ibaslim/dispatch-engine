@@ -39,6 +39,7 @@ export class DriverOnboardingComponent implements OnInit {
     policeVerificationFile: null,
     drivingHistoryFile: null,
     photoIdFile: null,
+    profilePictureFile: null,
   };
 
   showSubmitValidation = false;
@@ -49,6 +50,8 @@ export class DriverOnboardingComponent implements OnInit {
   policeVerificationFileError = '';
   drivingHistoryFileError = '';
   photoIdFileError = '';
+  profilePictureError = '';
+  profilePicturePreview: string | null = null;
 
   async ngOnInit(): Promise<void> {
     if (!this.auth.currentUser()) {
@@ -84,10 +87,14 @@ export class DriverOnboardingComponent implements OnInit {
           policeVerificationFileName: this.form.policeVerificationFile?.name ?? null,
           drivingHistoryFileName: this.form.drivingHistoryFile?.name ?? null,
           photoIdFileName: this.form.photoIdFile?.name ?? null,
+          profilePictureFileName: this.form.profilePictureFile?.name ?? null,
         },
       });
 
       const uploads: Promise<void>[] = [];
+      if (this.form.profilePictureFile) {
+        uploads.push(this.onboarding.uploadDocument(application.id, this.form.profilePictureFile));
+      }
       if (this.form.passportFile) {
         uploads.push(this.onboarding.uploadDocument(application.id, this.form.passportFile));
       }
@@ -138,6 +145,17 @@ export class DriverOnboardingComponent implements OnInit {
     this.form.photoIdFile = this.getFileFromEvent(event, 'Photo ID', 'photoId');
   }
 
+  onProfilePictureChange(event: Event): void {
+    this.profilePictureError = '';
+    const file = this.getFileFromEvent(event, 'Profile picture', 'profilePicture');
+    this.form.profilePictureFile = file;
+
+    if (this.profilePicturePreview) {
+      URL.revokeObjectURL(this.profilePicturePreview);
+    }
+    this.profilePicturePreview = file ? URL.createObjectURL(file) : null;
+  }
+
   private isEmailValid(): boolean {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.form.email.trim());
   }
@@ -148,6 +166,7 @@ export class DriverOnboardingComponent implements OnInit {
       this.isEmailValid() &&
       !!this.form.phone.number &&
       !!this.form.address.trim() &&
+      !!this.form.profilePictureFile &&
       !!this.form.passportFile &&
       !!this.form.licenseFile &&
       !!this.form.policeVerificationFile &&
@@ -156,7 +175,7 @@ export class DriverOnboardingComponent implements OnInit {
     );
   }
 
-  private getFileFromEvent(event: Event, label: string, target: 'passport' | 'license' | 'policeVerification' | 'drivingHistory' | 'photoId'): File | null {
+  private getFileFromEvent(event: Event, label: string, target: 'passport' | 'license' | 'policeVerification' | 'drivingHistory' | 'photoId' | 'profilePicture'): File | null {
     const input = event.target as HTMLInputElement | null;
     const file = input?.files?.[0] ?? null;
     if (file && file.size > this.maxUploadBytes) {
@@ -172,6 +191,8 @@ export class DriverOnboardingComponent implements OnInit {
         this.policeVerificationFileError = message;
       } else if (target === 'drivingHistory') {
         this.drivingHistoryFileError = message;
+      } else if (target === 'profilePicture') {
+        this.profilePictureError = message;
       } else {
         this.photoIdFileError = message;
       }

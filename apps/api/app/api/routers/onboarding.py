@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 from app.core.deps import CurrentUserAllowInactive, TenantAdmin, get_db, _get_current_user_allow_inactive
 from fastapi import APIRouter,Depends, File, HTTPException, UploadFile, status
-import uuid
 from pathlib import Path
 from sqlalchemy import desc, select
 from sqlalchemy.orm import selectinload
@@ -481,8 +480,7 @@ async def upload_application_document(
             detail="File extension does not match file type.",
         )
 
-    final_extension = ALLOWED_CONTENT_TYPES[content_type]
-    safe_filename = f"{uuid.uuid4().hex}{final_extension}"
+    safe_filename = original_filename
 
     upload_dir = Path(settings.uploads_dir) / str(application_id)
     upload_dir.mkdir(parents=True, exist_ok=True)
