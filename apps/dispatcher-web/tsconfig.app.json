@@ -13,6 +13,21 @@
       ],
       "@dispatch/shared/api-client": [
         "libs/shared/api-client/src/index.ts"
+      ],
+      "@core/*": [
+        "apps/dispatcher-web/src/app/core/*"
+      ],
+      "@components/*": [
+        "apps/dispatcher-web/src/app/components/*"
+      ],
+      "@pages/*": [
+        "apps/dispatcher-web/src/app/pages/*"
+      ],
+      "@models/*": [
+        "apps/dispatcher-web/src/app/models/*"
+      ],
+      "@services/*": [
+       "apps/dispatcher-web/src/app/services/*"
       ]
     },
     "moduleResolution": "bundler"

@@ -3,8 +3,8 @@ import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 
-import { PopupComponent } from '../../../components/popup/popup.component';
-import { SearchBarComponent } from '../../../components/search-bar/search-bar.component';
+import { PopupComponent } from '@components/popup/popup.component';
+import { SearchBarComponent } from '@components/search-bar/search-bar.component';
 import {
   CanadianCityPricing,
   CanadianStatePricing,
@@ -12,7 +12,7 @@ import {
   PartnerRates,
   PricingPartner,
   PricingRates,
-} from '../../../services/locations/locations.service';
+} from '@services/locations/locations.service';
 
 type PricingScope = 'general' | 'partners';
 

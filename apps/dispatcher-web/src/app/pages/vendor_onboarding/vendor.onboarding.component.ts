@@ -7,6 +7,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { TenantRole } from '@dispatch/shared/domain';
 import { OnboardingFormComponent, OnboardingFormValues } from '../../components/onboarding-form/onboarding-form.component';
 import { BaseInputComponent } from '../../components/base-input/base-input.component';
+import { FileUploadComponent } from '../../components/file-upload/file-upload.component';
 import { ToastService } from '../../core/toast/toast.service';
 
 @Component({
@@ -17,6 +18,7 @@ import { ToastService } from '../../core/toast/toast.service';
     PageComponent,
     OnboardingFormComponent,
     BaseInputComponent,
+    FileUploadComponent,
   ],
   templateUrl: './vendor.onboarding.component.html',
 })

@@ -1,13 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { PageComponent } from '../../components/page/page.component';
-import { OnboardingService } from '../../core/onboarding/onboarding.service';
-import { AuthService } from '../../core/auth/auth.service';
+import { PageComponent } from '@components/page/page.component';
+import { OnboardingService } from '@core/onboarding/onboarding.service';
+import { AuthService } from '@core/auth/auth.service';
 import { TenantRole } from '@dispatch/shared/domain';
-import { OnboardingFormComponent, OnboardingFormValues } from '../../components/onboarding-form/onboarding-form.component';
-import { BaseInputComponent } from '../../components/base-input/base-input.component';
-import { ToastService } from '../../core/toast/toast.service';
+import { OnboardingFormComponent, OnboardingFormValues } from '@components/onboarding-form/onboarding-form.component';
+import { BaseInputComponent } from '@components/base-input/base-input.component';
+import { FileUploadComponent } from '@components/file-upload/file-upload.component';
+import { ToastService } from '@core/toast/toast.service';
 
 @Component({
   selector: 'app-individual-onboarding',
@@ -17,6 +18,7 @@ import { ToastService } from '../../core/toast/toast.service';
     PageComponent,
     OnboardingFormComponent,
     BaseInputComponent,
+    FileUploadComponent,
   ],
   templateUrl: './individual.onboarding.component.html',
 })
