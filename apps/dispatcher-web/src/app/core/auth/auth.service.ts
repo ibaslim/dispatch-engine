@@ -111,7 +111,25 @@ export class AuthService {
     this._currentUser.set(null);
   }
 
-  async refreshAccessToken(): Promise<void> {
+  /**
+   * In-flight refresh promise. Concurrent 401s share a single refresh call so
+   * the rotating (single-use) refresh token is only spent once; otherwise the
+   * losers of the race would fail with 401 and force a logout.
+   */
+  private refreshInFlight: Promise<void> | null = null;
+
+  refreshAccessToken(): Promise<void> {
+    if (this.refreshInFlight) {
+      return this.refreshInFlight;
+    }
+
+    this.refreshInFlight = this.performRefresh().finally(() => {
+      this.refreshInFlight = null;
+    });
+    return this.refreshInFlight;
+  }
+
+  private async performRefresh(): Promise<void> {
     const refreshToken = this.getRefreshToken();
     if (!refreshToken) {
       throw new Error('No refresh token available.');
