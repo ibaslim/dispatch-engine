@@ -21,6 +21,13 @@ export class DispatchApiClient {
   private readonly baseUrl: string;
   private readonly storage: TokenStorage;
 
+  /**
+   * In-flight refresh promise. Concurrent 401s share a single refresh call so
+   * the rotating (single-use) refresh token is only spent once; otherwise the
+   * losers of the race would fail and clear the tokens, forcing a logout.
+   */
+  private refreshInFlight: Promise<LoginResponse> | null = null;
+
   constructor(config: ApiClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
     this.storage = config.tokenStorage ?? new LocalTokenStorage();
@@ -35,6 +42,17 @@ export class DispatchApiClient {
   }
 
   async refresh(): Promise<LoginResponse> {
+    if (this.refreshInFlight) {
+      return this.refreshInFlight;
+    }
+
+    this.refreshInFlight = this.performRefresh().finally(() => {
+      this.refreshInFlight = null;
+    });
+    return this.refreshInFlight;
+  }
+
+  private async performRefresh(): Promise<LoginResponse> {
     const refresh_token = await this.storage.getRefreshToken();
     if (!refresh_token) throw new Error('No refresh token available');
     const req: RefreshRequest = { refresh_token };
