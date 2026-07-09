@@ -15,6 +15,30 @@
       Document Uploads
     </div>
 
+      <app-file-upload
+        label="Profile Picture"
+        hint="JPG or PNG · Max 10MB"
+        icon="ph-user"
+        [required]="true"
+        [fileName]="form.profilePictureFile?.name || null"
+        [error]="profilePictureError"
+        [showSubmitValidation]="showSubmitValidation"
+        missingMessage="Profile picture is required."
+        (fileChange)="onProfilePictureChange($event)">
+      </app-file-upload>
+
+      <app-file-upload
+        label="Photo ID"
+        hint="PR Card or any official ID with photo · IMG or PDF · Max 10MB"
+        icon="ph-identification-card"
+        [required]="true"
+        [fileName]="form.photoIdFile?.name || null"
+        [error]="photoIdFileError"
+        [showSubmitValidation]="showSubmitValidation"
+        missingMessage="Photo ID is required."
+        (fileChange)="onPhotoIdChange($event)">
+      </app-file-upload>
+
     <app-file-upload
       label="Passport Scan"
       hint="JPG, PNG or PDF · Max 10MB"
@@ -25,18 +49,6 @@
       [showSubmitValidation]="showSubmitValidation"
       missingMessage="Passport scan is required."
       (fileChange)="onPassportChange($event)">
-    </app-file-upload>
-
-    <app-file-upload
-      label="Driving License Scan"
-      hint="JPG, PNG or PDF · Max 10MB"
-      icon="ph-identification-card"
-      [required]="true"
-      [fileName]="form.licenseFile?.name || null"
-      [error]="licenseFileError"
-      [showSubmitValidation]="showSubmitValidation"
-      missingMessage="Driving license scan is required."
-      (fileChange)="onLicenseChange($event)">
     </app-file-upload>
 
     <app-file-upload
@@ -52,6 +64,18 @@
     </app-file-upload>
 
     <app-file-upload
+      label="Driving License Scan"
+      hint="JPG, PNG or PDF · Max 10MB"
+      icon="ph-identification-card"
+      [required]="true"
+      [fileName]="form.licenseFile?.name || null"
+      [error]="licenseFileError"
+      [showSubmitValidation]="showSubmitValidation"
+      missingMessage="Driving license scan is required."
+      (fileChange)="onLicenseChange($event)">
+    </app-file-upload>
+
+    <app-file-upload
       label="Driving History Report"
       hint="JPG, PNG or PDF · Max 10MB"
       icon="ph-file-text"
@@ -62,21 +86,6 @@
       missingMessage="Driving history report is required."
       (fileChange)="onDrivingHistoryChange($event)">
     </app-file-upload>
-
-    <div class="md:col-span-2">
-      <app-file-upload
-        label="Photo ID"
-        hint="PR Card or any official ID with photo · IMG or PDF · Max 10MB"
-        icon="ph-identification-card"
-        layout="row"
-        [required]="true"
-        [fileName]="form.photoIdFile?.name || null"
-        [error]="photoIdFileError"
-        [showSubmitValidation]="showSubmitValidation"
-        missingMessage="Photo ID is required."
-        (fileChange)="onPhotoIdChange($event)">
-      </app-file-upload>
-    </div>
 
     <div class="md:col-span-2 h-px bg-gray-200 dark:bg-[#2a2d2a] my-1"></div>
   </app-onboarding-form>
