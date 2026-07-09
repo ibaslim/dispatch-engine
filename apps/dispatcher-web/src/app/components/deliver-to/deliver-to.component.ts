@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { NewOrderFormValue } from '../../models/new-order-form/new-order-form.model';
+import { NewOrderFormValue } from '@models/new-order-form/new-order-form.model';
 import { CommonModule } from '@angular/common';
 import { BaseInputComponent } from '../base-input/base-input.component';
 import { AddressInputComponent } from '../address-input/address-input.component';
@@ -11,7 +11,8 @@ import { DatePickerComponent } from '../date-picker/date-picker.component';
   selector: 'app-deliver-to',
   standalone: true,
   imports: [CommonModule, BaseInputComponent, AddressInputComponent, PhoneInputComponent, TimePickerComponent, DatePickerComponent],
-  templateUrl: './deliver-to.component.html'
+  templateUrl: './deliver-to.component.html',
+  styles: [`:host { display: block; }`]
 })
 export class DeliverToComponent {
   @Input() value!: NewOrderFormValue['delivery'];

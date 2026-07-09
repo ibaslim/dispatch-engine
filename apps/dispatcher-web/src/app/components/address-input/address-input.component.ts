@@ -9,6 +9,7 @@ import { ErrorMessageComponent } from '../error-message/error-message.component'
   standalone: true,
   imports: [CommonModule, FormsModule, ButtonComponent, ErrorMessageComponent],
   templateUrl: './address-input.component.html',
+  styles: [`:host { display: block; }`]
 })
 export class AddressInputComponent implements OnChanges {
   @Input() label = 'Address';

@@ -17,7 +17,7 @@
 
     <app-file-upload
       label="Passport Scan"
-      hint="JPG, PNG or PDF · Max 1MB"
+      hint="JPG, PNG or PDF · Max 10MB"
       icon="ph-book-open"
       [required]="true"
       [fileName]="form.passportFile?.name || null"
@@ -29,7 +29,7 @@
 
     <app-file-upload
       label="Driving License Scan"
-      hint="JPG, PNG or PDF · Max 1MB"
+      hint="JPG, PNG or PDF · Max 10MB"
       icon="ph-identification-card"
       [required]="true"
       [fileName]="form.licenseFile?.name || null"
@@ -41,7 +41,7 @@
 
     <app-file-upload
       label="Police Verification Certificate"
-      hint="JPG, PNG or PDF · Max 1MB"
+      hint="JPG, PNG or PDF · Max 10MB"
       icon="ph-shield-check"
       [required]="true"
       [fileName]="form.policeVerificationFile?.name || null"
@@ -53,7 +53,7 @@
 
     <app-file-upload
       label="Driving History Report"
-      hint="JPG, PNG or PDF · Max 1MB"
+      hint="JPG, PNG or PDF · Max 10MB"
       icon="ph-file-text"
       [required]="true"
       [fileName]="form.drivingHistoryFile?.name || null"
@@ -66,7 +66,7 @@
     <div class="md:col-span-2">
       <app-file-upload
         label="Photo ID"
-        hint="PR Card or any official ID with photo · IMG or PDF · Max 1MB"
+        hint="PR Card or any official ID with photo · IMG or PDF · Max 10MB"
         icon="ph-identification-card"
         layout="row"
         [required]="true"

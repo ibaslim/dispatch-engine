@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { SelectOption } from '../../models/dropdown-selector/dropdown-selector.model';
+import { SelectOption } from '@models/dropdown-selector/dropdown-selector.model';
 
 @Component({
   selector: 'app-dropdown-selector',
