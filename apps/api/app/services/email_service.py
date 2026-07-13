@@ -190,6 +190,55 @@ def build_tenant_unsuspended_email(tenant_name: str) -> str:
     </html>
     """
 
+def build_order_delivered_email(order: Any, pod_included: bool) -> str:
+    """Email sent to the sender when an order has been marked delivered."""
+    order_number = _html(_field(order, "order_number"))
+    pickup_name = _html(_field(order, "pickup_name")) or "there"
+    delivery_name = _html(_field(order, "delivery_name")) or "—"
+    delivery_address = _html(_field(order, "delivery_address"))
+    total = _html(_money(_field(order, "total")))
+    recipient_name = _html(_field(order, "pod_recipient_name"))
+
+    if pod_included:
+        proof_note = "Your proof of delivery is attached to this email."
+    else:
+        proof_note = "This order did not require proof of delivery. Order details are attached for your records."
+
+    recipient_line = (
+        f'<p>Received and signed for by <strong>{recipient_name}</strong>.</p>'
+        if recipient_name
+        else ""
+    )
+
+    return f"""
+    <html>
+    <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #111827;">
+        <p style="color: #94a3b8; font-size: 12px; font-weight: bold; letter-spacing: 1px; margin: 0 0 4px;">
+            DISPATCH DELIVERY
+        </p>
+        <h2 style="color: #10b981; margin: 0 0 4px;">Order #{order_number} Delivered</h2>
+
+        <p>Hi {pickup_name},</p>
+        <p>Your order has been successfully delivered to <strong>{delivery_name}</strong> at {delivery_address}.</p>
+        {recipient_line}
+        <p>{proof_note}</p>
+
+        <p style="margin: 20px 0 0;">
+            Total &nbsp;
+            <strong style="color: #D97706; font-size: 18px;">{total}</strong>
+        </p>
+
+        <p style="margin-top: 24px;">Thank you for shipping with us.<br/>Dispatch Delivery</p>
+
+        <br/>
+        <p style="color: #6b7280; font-size: 14px;">
+            This is an automated message. Please do not reply directly to this email.
+        </p>
+    </body>
+    </html>
+    """
+
+
 ##Invoice Styling
 INK = colors.HexColor("#111827")
 SLATE = colors.HexColor("#475569")

@@ -1,3 +1,5 @@
+import base64
+import mimetypes
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -16,7 +18,7 @@ from app.core.deps import CurrentUser
 from app.models.order import Order, OrderStatus, ActivityStatus
 from app.models.tenant import Tenant, TenantRole
 from app.schemas.order import OrderCreate, OrderResponse, OrderUpdate, ActivityStatusUpdate
-from app.workers.tasks import send_order_sender_invoice_email
+from app.workers.tasks import send_order_sender_invoice_email, send_order_delivered_email
 from uuid import UUID
 
 router = APIRouter(tags=["Orders"])
@@ -306,10 +308,78 @@ async def update_activity_status(
                 detail="Only the assigned driver can update this order's activity status.",
             )
 
+    previous_activity_status = order.activity_status
     order.activity_status = payload.activity_status
+
+    is_new_delivery = (
+        payload.activity_status == ActivityStatus.delivered
+        and previous_activity_status != ActivityStatus.delivered
+    )
+    if is_new_delivery:
+        order.status = OrderStatus.completed
+
     await db.commit()
 
-    return {"success": True, "activity_status": order.activity_status}
+    if is_new_delivery:
+        _notify_sender_order_delivered(order)
+
+    return {"success": True, "activity_status": order.activity_status, "status": order.status}
+
+
+def _notify_sender_order_delivered(order: Order) -> None:
+    pickup_email = (order.pickup_email or "").strip()
+    if not pickup_email:
+        return
+
+    order_data = {
+        "order_number": order.order_number,
+        "status": order.status.value if order.status else "",
+        "order_placed_time": order.order_placed_time,
+        "pickup_name": order.pickup_name,
+        "pickup_phone": order.pickup_phone,
+        "pickup_email": order.pickup_email,
+        "pickup_address": order.pickup_address,
+        "pickup_date": order.pickup_date,
+        "pickup_time": order.pickup_time,
+        "delivery_name": order.delivery_name,
+        "delivery_phone": order.delivery_phone,
+        "delivery_email": order.delivery_email,
+        "delivery_address": order.delivery_address,
+        "delivery_date": order.delivery_date,
+        "delivery_time": order.delivery_time,
+        "items": order.items or [],
+        "subtotal": order.subtotal,
+        "tax_rate": order.tax_rate,
+        "tax_amount": order.tax_amount,
+        "delivery_fees": order.delivery_fees,
+        "delivery_tips": order.delivery_tips,
+        "discount": order.discount,
+        "total": order.total,
+        "payment_method": order.payment_method,
+        "payment_details": order.payment_details or {},
+    }
+
+    proof = order.proof_of_delivery or {}
+    pod_required = bool(proof.get("signature") or proof.get("picture"))
+    pod_attachments: list[dict] = []
+    submission = proof.get("submission") or {}
+    order_data["pod_recipient_name"] = submission.get("recipient_name") or ""
+
+    if pod_required:
+        for pod_path in (submission.get("signature_path"), submission.get("photo_path")):
+            if pod_path and Path(pod_path).is_file():
+                pod_attachments.append({
+                    "filename": Path(pod_path).name,
+                    "content_b64": base64.b64encode(Path(pod_path).read_bytes()).decode("ascii"),
+                    "content_type": mimetypes.guess_type(pod_path)[0] or "application/octet-stream",
+                })
+
+    send_order_delivered_email.delay(
+        email=pickup_email,
+        order_number=order.order_number,
+        order_data=order_data,
+        pod_attachments=pod_attachments,
+    )
 
 
 # -------------------------

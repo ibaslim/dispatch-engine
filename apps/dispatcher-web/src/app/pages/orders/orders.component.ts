@@ -3,7 +3,7 @@ import { Component, ElementRef, OnDestroy, OnInit, ViewChild, signal } from '@an
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { Subscription, firstValueFrom } from 'rxjs';
+import {Subscription, firstValueFrom, timeout} from 'rxjs';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import QRCode from 'qrcode';
@@ -849,7 +849,14 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.qrScanError = null;
     this.qrScanMatched = true;
     this.stopQrScan();
-  }
+    setTimeout(()=>{
+    if (!this.qrScanContext || !this.qrScanMatched) return;
+    const { id, next } = this.qrScanContext;
+    this.closeQrScanModal();
+    this.applyActivityStatus(id, next);
+
+    },1000)
+  };
 
   continueQrScan(): void {
     if (!this.qrScanContext || !this.qrScanMatched) return;
