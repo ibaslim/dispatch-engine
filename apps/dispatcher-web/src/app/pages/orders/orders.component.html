@@ -113,7 +113,9 @@
         (actionClick)="toggleMenu($event)"
         (assignClick)="openAssignDriver($event)"
         (menuSelect)="handleMenuAction($event.item, $event.row)"
-        (readyForPickupChange)="updateReadyForPickupFromRow($event.id, $event.value)">
+        (readyForPickupChange)="updateReadyForPickupFromRow($event.id, $event.value)"
+        (activityStatusAction)="onActivityStatusAction($event)"
+        (directionsClick)="openDirections($event)">
     </app-table>
 
 
@@ -223,6 +225,135 @@
             <app-button variant="primary" label="Assign Driver" (onClick)="assignSelectedDriver()"
                 [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-6 py-2 rounded-md text-sm'">
             </app-button>
+        </div>
+    </app-popup>
+
+
+    <!-- ───────────────────────────────────────────
+         DIRECTIONS MODAL
+    ─────────────────────────────────────────── -->
+    <app-popup [open]="isDirectionsOpen" title="Get Directions" widthClass="max-w-md" (close)="closeDirections()">
+        <div class="space-y-3">
+            <button type="button"
+                class="w-full flex items-center gap-3 rounded-lg border border-gray-200 dark:border-[#5a5d5a] px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-[#232623] transition"
+                (click)="navigateToDirections('pickup')">
+                <i class="ph ph-map-pin text-xl text-gray-700 dark:text-gray-200"></i>
+                <div>
+                    <p class="font-medium text-gray-900 dark:text-gray-100">Navigate to Pickup</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">{{ selectedRowForDirections?.pickupAddress }}</p>
+                </div>
+            </button>
+
+            <button type="button"
+                class="w-full flex items-center gap-3 rounded-lg border border-gray-200 dark:border-[#5a5d5a] px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-[#232623] transition"
+                (click)="navigateToDirections('delivery')">
+                <i class="ph ph-flag text-xl text-gray-700 dark:text-gray-200"></i>
+                <div>
+                    <p class="font-medium text-gray-900 dark:text-gray-100">Navigate to Drop Location</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">{{ selectedRowForDirections?.deliveryAddress }}</p>
+                </div>
+            </button>
+        </div>
+    </app-popup>
+
+
+    <!-- ───────────────────────────────────────────
+         QR SCAN MODAL
+    ─────────────────────────────────────────── -->
+    <app-popup [open]="isQrScanOpen" title="Scan QR Code" widthClass="max-w-md" (close)="closeQrScanModal()">
+        <div class="flex flex-col items-center gap-4 py-4">
+            <div class="relative w-full aspect-square max-w-xs rounded-lg overflow-hidden bg-black">
+                <video #qrVideo class="w-full h-full object-cover" muted playsinline autoplay></video>
+                <div class="pointer-events-none absolute inset-6 rounded-lg border-2 border-[#3ddc97]"></div>
+            </div>
+
+            <p *ngIf="qrScanMatched" class="text-sm text-[#2fbf82] font-medium text-center">
+                QR code matched. Click Continue to proceed.
+            </p>
+            <p *ngIf="!qrScanMatched && qrScanError" class="text-sm text-red-600 dark:text-red-400 text-center">
+                {{ qrScanError }}
+            </p>
+            <p *ngIf="!qrScanMatched && !qrScanError" class="text-sm text-gray-500 dark:text-gray-400 text-center">
+                Point the camera at the order's QR code to confirm this step{{ qrScanContext?.orderNo ? ' (' + qrScanContext?.orderNo + ')' : '' }}.
+            </p>
+        </div>
+
+        <div modal-footer class="flex items-center justify-end gap-3">
+            <app-button variant="ghost-outline" label="Cancel" (onClick)="closeQrScanModal()"></app-button>
+            <app-button variant="ghost-success" label="Continue" [disabled]="!qrScanMatched"
+                (onClick)="continueQrScan()"></app-button>
+        </div>
+    </app-popup>
+
+
+    <!-- ───────────────────────────────────────────
+         PROOF OF DELIVERY MODAL
+    ─────────────────────────────────────────── -->
+    <app-popup [open]="isPodOpen" title="Proof of Delivery" widthClass="max-w-md" (close)="closePodModal()">
+        <div class="flex flex-col gap-4 py-2">
+
+            <!-- Photo (mandatory) -->
+            <div class="rounded-xl border border-gray-200 dark:border-[#3a3d3a] p-4 space-y-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="font-semibold text-sm text-gray-900 dark:text-gray-100">Delivery Photo</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Required</p>
+                    </div>
+                    <i *ngIf="podPhotoDone" class="ph ph-check-circle text-xl text-[#2fbf82]"></i>
+                </div>
+
+                <div *ngIf="!podPhotoDone" class="relative w-full aspect-video rounded-lg overflow-hidden bg-black">
+                    <video #podVideo class="w-full h-full object-cover" muted playsinline autoplay></video>
+                </div>
+                <img *ngIf="podPhotoDone && podPhotoPreviewUrl" [src]="podPhotoPreviewUrl"
+                    class="w-full aspect-video object-cover rounded-lg" alt="Delivery photo" />
+
+                <div class="flex justify-end gap-2">
+                    <app-button *ngIf="podPhotoDone" variant="ghost-outline" label="Retake"
+                        (onClick)="retakePodPhoto()"></app-button>
+                    <app-button *ngIf="!podPhotoDone" variant="ghost-success" label="Take Photo"
+                        [loading]="podPhotoUploading" [disabled]="podPhotoUploading"
+                        (onClick)="capturePodPhoto()"></app-button>
+                </div>
+            </div>
+
+            <!-- Signature (conditional on order's proof-of-delivery requirement) -->
+            <div *ngIf="podSignatureRequired" class="rounded-xl border border-gray-200 dark:border-[#3a3d3a] p-4 space-y-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="font-semibold text-sm text-gray-900 dark:text-gray-100">Recipient Signature</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Required for this order</p>
+                    </div>
+                    <i *ngIf="podSignatureDone" class="ph ph-check-circle text-xl text-[#2fbf82]"></i>
+                </div>
+
+                <ng-container *ngIf="!podSignatureDone">
+                    <canvas #podSignatureCanvas width="320" height="140"
+                        class="w-full rounded-lg border border-gray-300 dark:border-[#5a5d5a] touch-none bg-white"
+                        (pointerdown)="onSignaturePointerDown($event)" (pointermove)="onSignaturePointerMove($event)"
+                        (pointerup)="onSignaturePointerUp()" (pointerleave)="onSignaturePointerUp()"></canvas>
+
+                    <input type="text" [(ngModel)]="podRecipientName" placeholder="Recipient's name"
+                        class="w-full rounded-lg border border-gray-300 dark:border-[#5a5d5a] dark:bg-[#1d201d] px-3 py-2 text-sm" />
+
+                    <div class="flex justify-end gap-2">
+                        <app-button variant="ghost-outline" label="Clear" (onClick)="clearPodSignature()"></app-button>
+                        <app-button variant="ghost-success" label="Save Signature"
+                            [loading]="podSignatureUploading" [disabled]="podSignatureUploading"
+                            (onClick)="savePodSignature()"></app-button>
+                    </div>
+                </ng-container>
+
+                <p *ngIf="podSignatureDone" class="text-sm text-[#2fbf82]">Signed by {{ podRecipientName }}.</p>
+            </div>
+
+            <p *ngIf="podError" class="text-sm text-red-600 dark:text-red-400 text-center">{{ podError }}</p>
+        </div>
+
+        <div modal-footer class="flex items-center justify-end gap-3">
+            <app-button variant="ghost-outline" label="Cancel" (onClick)="closePodModal()"></app-button>
+            <app-button variant="ghost-success" label="Mark Delivered" [disabled]="!podCanMarkDelivered"
+                (onClick)="markDelivered()"></app-button>
         </div>
     </app-popup>
 

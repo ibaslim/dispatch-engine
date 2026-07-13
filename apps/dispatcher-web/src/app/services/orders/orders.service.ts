@@ -24,6 +24,23 @@ export class OrdersService {
     return this.http.patch(`${this.baseUrl}/${id}/ready`, { ready });
   }
 
+  updateActivityStatus(id: string, activityStatus: string): Observable<any> {
+    return this.http.patch(`${this.baseUrl}/${id}/activity-status`, { activity_status: activityStatus });
+  }
+
+  uploadDeliveryPhoto(orderId: string, photo: Blob): Observable<any> {
+    const formData = new FormData();
+    formData.append('file', photo, 'photo.jpg');
+    return this.http.post(`${this.baseUrl}/${orderId}/proof-of-delivery/photo`, formData);
+  }
+
+  uploadDeliverySignature(orderId: string, signature: Blob, recipientName: string): Observable<any> {
+    const formData = new FormData();
+    formData.append('file', signature, 'signature.png');
+    formData.append('recipient_name', recipientName);
+    return this.http.post(`${this.baseUrl}/${orderId}/proof-of-delivery/signature`, formData);
+  }
+
   updateOrder(id: string, data: any): Observable<any> {
     return this.http.patch(`${this.baseUrl}/${id}`, data);
   }

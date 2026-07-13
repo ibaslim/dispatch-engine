@@ -1,24 +1,35 @@
+import os
 from datetime import datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.db.session import get_db
 from app.core.deps import CurrentUser
 from app.models.order import Order, OrderStatus, ActivityStatus
 from app.models.tenant import Tenant, TenantRole
-from app.schemas.order import OrderCreate, OrderResponse, OrderUpdate
+from app.schemas.order import OrderCreate, OrderResponse, OrderUpdate, ActivityStatusUpdate
 from app.workers.tasks import send_order_sender_invoice_email
 from uuid import UUID
 
 router = APIRouter(tags=["Orders"])
 APP_TIMEZONE = ZoneInfo("Asia/Karachi")
 PUBLISH_WINDOW_MINUTES = 15
+
+POD_MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+POD_CHUNK_SIZE = 1024 * 1024  # 1 MB
+POD_ALLOWED_CONTENT_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
 
 
 def parse_order_datetime(date_value: str, time_value: str) -> datetime:
@@ -269,6 +280,167 @@ async def update_status(
             )
 
     order.status = payload.status
+    await db.commit()
+
+    return {"success": True}
+
+
+@router.patch("/{order_id}/activity-status")
+async def update_activity_status(
+    order_id: str,
+    payload: ActivityStatusUpdate,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if not current_user.is_platform_admin:
+        # Only the assigned driver can update the activity status
+        if not current_user.tenant_id or order.driver_id != current_user.tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the assigned driver can update this order's activity status.",
+            )
+
+    order.activity_status = payload.activity_status
+    await db.commit()
+
+    return {"success": True, "activity_status": order.activity_status}
+
+
+# -------------------------
+# PROOF OF DELIVERY UPLOADS
+# -------------------------
+def _authorize_pod_upload(order: Order, current_user: CurrentUser) -> None:
+    if current_user.is_platform_admin:
+        return
+    if not current_user.tenant_id or order.driver_id != current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the assigned driver can submit proof of delivery.",
+        )
+
+
+def _safe_pod_filename_stem(value: str) -> str:
+    stem = "".join(c for c in value if c.isalnum() or c in ("-", "_"))
+    return stem or "delivery"
+
+
+async def _save_pod_image(order_id: str, upload: UploadFile, filename_stem: str) -> str:
+    content_type = (upload.content_type or "").lower().strip()
+    extension = POD_ALLOWED_CONTENT_TYPES.get(content_type)
+    if not extension:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only JPG, PNG, or WebP images are allowed.",
+        )
+
+    upload_dir = Path(settings.uploads_dir) / "proof-of-delivery" / str(order_id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_stem = _safe_pod_filename_stem(filename_stem)
+    final_filepath = upload_dir / f"{safe_stem}{extension}"
+    temp_filepath = upload_dir / f"{safe_stem}{extension}.part"
+
+    total_size = 0
+
+    try:
+        with open(temp_filepath, "wb") as out_file:
+            while chunk := await upload.read(POD_CHUNK_SIZE):
+                total_size += len(chunk)
+
+                if total_size > POD_MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail="File too large. Maximum allowed size is 10 MB.",
+                    )
+
+                out_file.write(chunk)
+
+        os.replace(temp_filepath, final_filepath)
+
+    except HTTPException:
+        if temp_filepath.exists():
+            temp_filepath.unlink()
+        raise
+
+    except Exception:
+        if temp_filepath.exists():
+            temp_filepath.unlink()
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to upload file.",
+        )
+
+    finally:
+        await upload.close()
+
+    return str(final_filepath)
+
+
+@router.post("/{order_id}/proof-of-delivery/photo")
+async def upload_proof_of_delivery_photo(
+    order_id: str,
+    current_user: CurrentUser,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    _authorize_pod_upload(order, current_user)
+
+    filepath = await _save_pod_image(order_id, file, order.order_number or order_id)
+
+    proof = dict(order.proof_of_delivery or {})
+    submission = dict(proof.get("submission") or {})
+    submission["photo_path"] = filepath
+    submission["photo_uploaded_at"] = datetime.utcnow().isoformat()
+    proof["submission"] = submission
+    order.proof_of_delivery = proof
+
+    await db.commit()
+
+    return {"success": True}
+
+
+@router.post("/{order_id}/proof-of-delivery/signature")
+async def upload_proof_of_delivery_signature(
+    order_id: str,
+    current_user: CurrentUser,
+    file: UploadFile = File(...),
+    recipient_name: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    _authorize_pod_upload(order, current_user)
+
+    if not recipient_name.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Recipient name is required.")
+
+    filepath = await _save_pod_image(order_id, file, f"{order.order_number or order_id}-signature")
+
+    proof = dict(order.proof_of_delivery or {})
+    submission = dict(proof.get("submission") or {})
+    submission["signature_path"] = filepath
+    submission["recipient_name"] = recipient_name.strip()
+    submission["signature_uploaded_at"] = datetime.utcnow().isoformat()
+    proof["submission"] = submission
+    order.proof_of_delivery = proof
+
     await db.commit()
 
     return {"success": True}
