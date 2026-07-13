@@ -11,4 +11,5 @@ export interface OrderView {
     driver: string;
     orderStatus: string;
     trackingStatus: string;
+    activityStatus: string;
 }

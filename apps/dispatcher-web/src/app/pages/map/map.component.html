@@ -3,8 +3,8 @@
     contentClass="w-full h-[calc(100vh-4rem)]">
 
     <div class="relative w-full h-[calc(100vh-4rem)]">
-        <!-- TOP TOOLBAR ONLY -->
-        <div class="absolute top-4 left-1/2 -translate-x-1/2 z-10
+        <!-- TOP TOOLBAR (hidden during turn-by-turn navigation) -->
+        <div *ngIf="!isNavigating" class="absolute top-4 left-1/2 -translate-x-1/2 z-10
              flex items-center gap-2
              bg-white/95 dark:bg-[#121212]/90
              border border-gray-200 dark:border-[#2a2a2a]
@@ -41,9 +41,72 @@
                 [extraClasses]="'bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-emerald-400 flex items-center gap-2'">
                 <i data-icon class="ph ph-plus text-base"></i>
             </app-button>
+
+            <div *ngIf="destinationLabel"
+                class="flex items-center gap-2 border border-gray-200 dark:border-[#2a2a2a] text-gray-700 dark:text-gray-200 px-3 py-2 rounded-lg text-sm">
+                <i class="ph ph-navigation-arrow text-base"></i>
+                <span>Directions to {{ destinationLabel }}</span>
+            </div>
+
+            <app-button *ngIf="isRouteReady" variant="ghost" ariaLabel="Start Navigation" label="Start Navigation"
+                (onClick)="startNavigation()"
+                [extraClasses]="'bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-emerald-400 flex items-center gap-2'">
+                <i data-icon class="ph ph-navigation-arrow text-base"></i>
+            </app-button>
+
+            <div *ngIf="directionsError"
+                class="flex items-center gap-2 border border-red-300 dark:border-red-900 text-red-600 dark:text-red-400 px-3 py-2 rounded-lg text-sm">
+                <i class="ph ph-warning text-base"></i>
+                <span>{{ directionsError }}</span>
+            </div>
         </div>
 
+        <!-- TURN-BY-TURN BANNER (shown during navigation) -->
+        <div *ngIf="isNavigating" class="absolute top-4 left-4 right-4 z-10
+             flex items-center justify-between gap-4
+             bg-white/95 dark:bg-[#121212]/95
+             border border-gray-200 dark:border-[#2a2a2a]
+             rounded-xl px-5 py-4 backdrop-blur shadow-lg">
+
+            <div class="flex items-center gap-3 min-w-0">
+                <i class="ph ph-navigation-arrow text-3xl text-emerald-500 flex-shrink-0"></i>
+                <div class="min-w-0">
+                    <div class="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">{{ currentInstruction }}</div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                        <span *ngIf="distanceToManeuverText">{{ distanceToManeuverText }}</span>
+                        <span *ngIf="remainingDistanceText"> &middot; {{ remainingDistanceText }} remaining</span>
+                        <span *ngIf="totalDurationText"> &middot; {{ totalDurationText }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <app-button variant="ghost" ariaLabel="Recalculate route" label="Recalculate"
+                    (onClick)="recalculateRoute()" [disabled]="isRecalculating"
+                    [extraClasses]="'border border-gray-300 dark:border-[#3a3d3a] text-gray-700 dark:text-gray-200 px-3 py-2 rounded-lg text-sm hover:bg-gray-100 dark:hover:bg-[#1a1a1a] flex items-center gap-2'">
+                    <i data-icon class="ph text-base text-gray-700 dark:text-gray-200" [ngClass]="isRecalculating ? 'ph-spinner animate-spin' : 'ph-arrows-clockwise'"></i>
+                </app-button>
+                <app-button variant="ghost" [ariaLabel]="isMuted ? 'Unmute voice' : 'Mute voice'"
+                    [label]="isMuted ? 'Unmute' : 'Mute'" (onClick)="toggleMute()"
+                    [extraClasses]="'border border-gray-300 dark:border-[#3a3d3a] text-gray-700 dark:text-gray-200 px-3 py-2 rounded-lg text-sm hover:bg-gray-100 dark:hover:bg-[#1a1a1a] flex items-center gap-2'">
+                    <i data-icon class="ph text-base text-gray-700 dark:text-gray-200" [ngClass]="isMuted ? 'ph-speaker-slash' : 'ph-speaker-high'"></i>
+                </app-button>
+                <app-button variant="ghost" ariaLabel="Exit navigation" label="Exit" (onClick)="stopNavigation()"
+                    [extraClasses]="'bg-red-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-400'">
+                </app-button>
+            </div>
+        </div>
+
+        <!-- RECENTER (shown after the driver pans the map away during navigation) -->
+        <app-button *ngIf="isNavigating && !isFollowingDriver" variant="ghost" ariaLabel="Recenter map" label="Recenter"
+            (onClick)="recenter()"
+            [extraClasses]="'absolute bottom-8 left-1/2 -translate-x-1/2 z-10 bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-emerald-400 shadow-lg flex items-center gap-2'">
+            <i data-icon class="ph ph-crosshair-simple text-base"></i>
+        </app-button>
+
         <!-- MAP CONTAINER -->
-        <div id="map" class="w-full h-full"></div>
+        <div class="w-full h-full overflow-hidden">
+            <div id="map" class="w-full h-full"></div>
+        </div>
     </div>
 </app-page>

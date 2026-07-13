@@ -28,6 +28,8 @@
     "@react-native-community/cli": "~18.0.0",
     "@react-native-community/cli-platform-android": "~18.0.0",
     "@react-native-community/cli-platform-ios": "~18.0.0",
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
     "html2canvas": "^1.4.1",
     "jsbarcode": "^3.12.3",
     "jspdf": "^4.2.1",

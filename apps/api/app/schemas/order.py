@@ -108,6 +108,12 @@ class OrderUpdate(BaseModel):
     status: Optional[OrderStatus] = None
     ready_for_pickup: Optional[bool] = None
 
+    # -------------------------
+    # UPDATE ACTIVITY_STATUS
+    # -------------------------
+class ActivityStatusUpdate(BaseModel):
+    activity_status: ActivityStatus
+
 
 # -------------------------
 # RESPONSE

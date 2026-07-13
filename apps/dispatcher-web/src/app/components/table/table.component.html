@@ -70,6 +70,31 @@
                         </div>
                     </ng-container>
 
+                    <!-- ACTIVITY STATUS -->
+                    <ng-container *ngSwitchCase="'activityStatus'">
+                        <ng-container *ngIf="row.activityStatusAction; else activityStatusText">
+                            <app-button variant="ghost-success" [label]="row.activityStatusAction"
+                                (onClick)="onActivityStatusClick(row, $event)"></app-button>
+                        </ng-container>
+                        <ng-template #activityStatusText>
+                            <span>{{ row.activityStatusLabel || row.activityStatus }}</span>
+                        </ng-template>
+                    </ng-container>
+
+                    <!-- DIRECTIONS -->
+                    <ng-container *ngSwitchCase="'directions'">
+                        <div class="flex items-center justify-center w-full" *ngIf="row.showDirections; else noDirections">
+                            <app-button variant="icon" ariaLabel="Directions"
+                                class="rounded-md hover:bg-gray-100 dark:hover:bg-[#2a2d2a] transition"
+                                (onClick)="onDirectionsIconClick(row, $event)">
+                                <i class="ph ph-navigation-arrow text-xl text-gray-900 dark:text-gray-200"></i>
+                            </app-button>
+                        </div>
+                        <ng-template #noDirections>
+                            <span>-</span>
+                        </ng-template>
+                    </ng-container>
+
                     <!-- STATUS -->
                     <ng-container *ngSwitchCase="'status'">
                         <span

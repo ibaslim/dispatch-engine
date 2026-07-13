@@ -8,6 +8,8 @@ export type OrderTab =
     | 'incomplete'
     | 'history';
 
+export type OrderActivityStatus ='driver_not_assigned'| 'pickup_initiated'|'picked_up'|'delivery_initiated'|'delivery_in_progress'|'delivered'
+
 export interface OrderEntity {
     id: string;
     tab: OrderTab;

@@ -1,7 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { Router } from '@angular/router';
+import {Subscription, firstValueFrom, timeout} from 'rxjs';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import QRCode from 'qrcode';
@@ -16,9 +18,10 @@ import { ToggleButtonComponent } from '@components/toggle-button/toggle-button.c
 import { TableColumn } from '@models/table.model';
 import { NewOrderFormValue, PaymentMethodType } from '@models/new-order-form/new-order-form.model';
 import { TenantDriverEntity } from '@models/drivers/tenant-driver.model';
-import { OrderEntity, OrderTab } from '@models/orders/order-entity.model';
+import {OrderActivityStatus, OrderEntity, OrderTab} from '@models/orders/order-entity.model';
 import { OrderView } from '@models/orders/order-tabs.model';
 import { OrdersService } from '@services/orders/orders.service';
+import { QrScannerService } from '@services/qr-scanner/qr-scanner.service';
 import { AuthService } from '@core/auth/auth.service';
 
 type BackendOrderItem = {
@@ -60,6 +63,7 @@ type BackendOrder = {
   published_at?: string | null;
   ready_for_pickup: boolean;
   order_placed_time?: string | null;
+  activity_status:OrderActivityStatus
   driver?: {
     id: string;
     name: string;
@@ -80,11 +84,33 @@ type AssignableDriver = {
 
 const PUBLISH_WINDOW_MS = 15 * 60 * 1000;
 
+// Action type controls what happens on click: 'direct' updates the status immediately,
+// other types route through a handler in activityActionHandlers (e.g. a modal flow)
+// before the status update is applied. Add new entries here to add new checkpoint behaviors.
+type ActivityActionType = 'direct' | 'qr-scan' | 'proof-of-delivery';
+
+interface ActivityFlowEntry {
+  label: string;
+  next: OrderActivityStatus | null;
+  actionLabel: string | null;
+  actionType: ActivityActionType;
+}
+
+const ACTIVITY_STATUS_FLOW: Record<OrderActivityStatus, ActivityFlowEntry> = {
+  driver_not_assigned: { label: 'Driver Not Assigned', next: null, actionLabel: null, actionType: 'direct' },
+  pickup_initiated: { label: 'Pickup Initiated', next: 'picked_up', actionLabel: 'Mark Picked Up', actionType: 'qr-scan' },
+  picked_up: { label: 'Picked Up', next: 'delivery_initiated', actionLabel: 'Start Delivery', actionType: 'direct' },
+  delivery_initiated: { label: 'Delivery Initiated', next: 'delivery_in_progress', actionLabel: 'In Transit', actionType: 'direct' },
+  delivery_in_progress: { label: 'Delivery In Progress', next: 'delivered', actionLabel: 'Mark Delivered', actionType: 'proof-of-delivery' },
+  delivered: { label: 'Delivered', next: null, actionLabel: null, actionType: 'direct' },
+};
+
 @Component({
   selector: 'app-orders',
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     PageComponent,
     TableComponent,
     SearchBarComponent,
@@ -128,6 +154,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   // ─── Table menu ────────────────────────────────────────────────────────────
   activeMenuRow: { id: string } | null = null;
+
+  // ─── Directions modal ──────────────────────────────────────────────────────
+  isDirectionsOpen = false;
+  selectedRowForDirections: any = null;
 
   // ─── Details modal ─────────────────────────────────────────────────────────
   isDetailsOpen = false;
@@ -188,7 +218,9 @@ export class OrdersComponent implements OnInit, OnDestroy {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly http: HttpClient,
-    private readonly auth: AuthService
+    private readonly auth: AuthService,
+    private readonly router: Router,
+    private readonly qrScanner: QrScannerService
   ) { }
 
   get isReadOnlyTenant(): boolean {
@@ -222,6 +254,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
       clearInterval(this.countdownHandle);
     }
     this.ws?.close();
+    this.stopQrScan();
+    this.stopPodCamera();
   }
 
   // ─── Tab ───────────────────────────────────────────────────────────────────
@@ -269,22 +303,25 @@ export class OrdersComponent implements OnInit, OnDestroy {
     { key: 'driver', label: 'Driver', sortable: true },
     { key: 'orderStatus', label: 'Order Status', sortable: true },
     { key: 'trackingStatus', label: 'Tracking Status', sortable: true },
+    {key : 'activityStatus', label: 'Activity Status', sortable: false },
+    { key: 'directions', label: 'Directions', sortable: false },
     { key: 'actions', label: '', sortable: false }
   ];
 
   get columns(): TableColumn[] {
     const showPickupAndDriver = this.activeTab === 'Current' || this.activeTab === 'Scheduled';
 
+    const base = this.auth.isDriver()
+      ? this.unifiedColumns
+      : this.unifiedColumns.filter((c) => c.key !== 'directions');
+
     if (showPickupAndDriver) {
       return this.isReadOnlyTenant
-        ? this.unifiedColumns.filter((c) => c.key !== 'readyForPickup')
-        : this.unifiedColumns;
+        ? base.filter((c) => c.key !== 'readyForPickup')
+        : base;
     }
 
-    const filtered = this.unifiedColumns.filter((c) => c.key !== 'readyForPickup' && c.key !== 'driver');
-    return this.isReadOnlyTenant
-      ? filtered
-      : filtered;
+    return base.filter((c) => c.key !== 'readyForPickup' && c.key !== 'driver');
   }
 
   // ─── Driver Broadcast ──────────────────────────────────────────────────────
@@ -449,6 +486,22 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
     if (this.isReadOnlyTenant && (!row['driver'] || row['driver'] === '')) {
       row['driver'] = '?';
+    }
+
+    const activityStatus = order.view.current.activityStatus as OrderActivityStatus;
+    const flow = ACTIVITY_STATUS_FLOW[activityStatus];
+    row['activityStatusLabel'] = flow?.label ?? activityStatus;
+
+    if (this.auth.isDriver() && this.activeTab === 'Current' && flow?.next) {
+      row['activityStatusAction'] = flow.actionLabel;
+      row['activityStatusNext'] = flow.next;
+      row['activityStatusActionType'] = flow.actionType;
+    }
+
+    if (this.auth.isDriver()) {
+      row['showDirections'] = true;
+      row['pickupAddress'] = order.full.pickup.address;
+      row['deliveryAddress'] = order.full.delivery.address;
     }
 
     return row;
@@ -680,6 +733,339 @@ export class OrdersComponent implements OnInit, OnDestroy {
         this.loadOrders();
       }
     });
+  }
+
+  openDirections(row: any): void {
+    this.selectedRowForDirections = row;
+    this.isDirectionsOpen = true;
+  }
+
+  closeDirections(): void {
+    this.isDirectionsOpen = false;
+    this.selectedRowForDirections = null;
+  }
+
+  navigateToDirections(target: 'pickup' | 'delivery'): void {
+    const row = this.selectedRowForDirections;
+    if (!row) return;
+
+    const address = target === 'pickup' ? row.pickupAddress : row.deliveryAddress;
+    this.closeDirections();
+    if (!address) return;
+
+    this.router.navigate(['/map'], {
+      queryParams: {
+        destination: address,
+        label: target === 'pickup' ? 'Pickup' : 'Receiver'
+      }
+    });
+  }
+
+  // Registry of handlers keyed by ActivityFlowEntry.actionType. To add a new checkpoint
+  // behavior (photo capture, signature, OTP, etc.), add a case to ActivityActionType and
+  // a handler here — the click plumbing in the table component doesn't need to change.
+  private activityActionHandlers: Record<ActivityActionType, (event: { id: string; next: string }) => void> = {
+    direct: (event) => this.applyActivityStatus(event.id, event.next),
+    'qr-scan': (event) => this.openQrScanModal(event.id, event.next as OrderActivityStatus),
+    'proof-of-delivery': (event) => this.openPodModal(event.id, event.next as OrderActivityStatus),
+  };
+
+  onActivityStatusAction(event: { id: string; next: string; type?: string }): void {
+    const handler = this.activityActionHandlers[(event.type as ActivityActionType) ?? 'direct']
+      ?? this.activityActionHandlers.direct;
+    handler(event);
+  }
+
+  private applyActivityStatus(id: string, next: string): void {
+    this.ordersService.updateActivityStatus(id, next).subscribe({
+      next: () => {
+        this.setFeedback('Activity status updated.', 'success');
+        this.loadOrders();
+      },
+      error: () => this.setFeedback('Unable to update activity status.', 'error')
+    });
+  }
+
+  // ─── QR SCAN MODAL ───
+  isQrScanOpen = false;
+  qrScanError: string | null = null;
+  qrScanMatched = false;
+  qrScanContext: { id: string; next: OrderActivityStatus; orderNo: string | null } | null = null;
+  private qrScanSub?: Subscription;
+  private qrVideoElement?: HTMLVideoElement;
+
+  @ViewChild('qrVideo')
+  set qrVideoRef(ref: ElementRef<HTMLVideoElement> | undefined) {
+    this.qrVideoElement = ref?.nativeElement;
+    if (this.qrVideoElement && this.isQrScanOpen) {
+      this.startQrScan(this.qrVideoElement);
+    }
+  }
+
+  private openQrScanModal(id: string, next: OrderActivityStatus): void {
+    const orderNo = this.orders.find((o) => o.id === id)?.view.current.orderNo ?? null;
+    this.qrScanContext = { id, next, orderNo };
+    this.qrScanError = null;
+    this.qrScanMatched = false;
+    this.isQrScanOpen = true;
+    if (this.qrVideoElement) {
+      this.startQrScan(this.qrVideoElement);
+    }
+  }
+
+  closeQrScanModal(): void {
+    this.stopQrScan();
+    this.isQrScanOpen = false;
+    this.qrScanContext = null;
+    this.qrScanError = null;
+    this.qrScanMatched = false;
+  }
+
+  private startQrScan(video: HTMLVideoElement): void {
+    this.stopQrScan();
+    this.qrScanSub = this.qrScanner.start(video).subscribe({
+      next: (text) => this.onQrDecoded(text),
+      error: () => { this.qrScanError = 'Camera unavailable. Check camera permissions and try again.'; }
+    });
+  }
+
+  private stopQrScan(): void {
+    this.qrScanSub?.unsubscribe();
+    this.qrScanSub = undefined;
+    this.qrScanner.stop();
+  }
+
+  private onQrDecoded(text: string): void {
+    if (!this.qrScanContext || this.qrScanMatched) return;
+
+    const scanned = text.trim();
+    if (this.qrScanContext.orderNo && scanned !== this.qrScanContext.orderNo) {
+      this.qrScanError = `Scanned code doesn't match this order (expected ${this.qrScanContext.orderNo}).`;
+      return;
+    }
+
+    // Match found: stop the camera and let the user confirm via Continue rather
+    // than applying the status change automatically.
+    this.qrScanError = null;
+    this.qrScanMatched = true;
+    this.stopQrScan();
+    setTimeout(()=>{
+    if (!this.qrScanContext || !this.qrScanMatched) return;
+    const { id, next } = this.qrScanContext;
+    this.closeQrScanModal();
+    this.applyActivityStatus(id, next);
+
+    },1000)
+  };
+
+  continueQrScan(): void {
+    if (!this.qrScanContext || !this.qrScanMatched) return;
+    const { id, next } = this.qrScanContext;
+    this.closeQrScanModal();
+    this.applyActivityStatus(id, next);
+  }
+
+  // ─── PROOF OF DELIVERY MODAL ───
+  isPodOpen = false;
+  podError: string | null = null;
+  podContext: { id: string; next: OrderActivityStatus; orderNo: string | null; signatureRequired: boolean } | null = null;
+
+  podPhotoDone = false;
+  podPhotoUploading = false;
+  podPhotoPreviewUrl: string | null = null;
+  private podStream?: MediaStream;
+  private podVideoElement?: HTMLVideoElement;
+
+  podSignatureDone = false;
+  podSignatureUploading = false;
+  podSignatureHasDrawing = false;
+  podRecipientName = '';
+  private podSignatureCanvasElement?: HTMLCanvasElement;
+  private podSignatureCtx?: CanvasRenderingContext2D;
+  private podSignatureDrawing = false;
+
+  @ViewChild('podVideo')
+  set podVideoRef(ref: ElementRef<HTMLVideoElement> | undefined) {
+    this.podVideoElement = ref?.nativeElement;
+    if (this.podVideoElement && this.isPodOpen && !this.podPhotoDone) {
+      this.startPodCamera(this.podVideoElement);
+    }
+  }
+
+  @ViewChild('podSignatureCanvas')
+  set podSignatureCanvasRef(ref: ElementRef<HTMLCanvasElement> | undefined) {
+    this.podSignatureCanvasElement = ref?.nativeElement;
+    if (this.podSignatureCanvasElement) {
+      this.podSignatureCtx = this.podSignatureCanvasElement.getContext('2d') ?? undefined;
+      this.clearPodSignature();
+    }
+  }
+
+  get podSignatureRequired(): boolean {
+    return !!this.podContext?.signatureRequired;
+  }
+
+  get podCanMarkDelivered(): boolean {
+    return this.podPhotoDone && (!this.podSignatureRequired || this.podSignatureDone);
+  }
+
+  private openPodModal(id: string, next: OrderActivityStatus): void {
+    const order = this.orders.find((o) => o.id === id);
+    const signatureRequired = !!order?.full.details.proofOfDelivery?.signature;
+
+    this.podContext = { id, next, orderNo: order?.view.current.orderNo ?? null, signatureRequired };
+    this.podError = null;
+    this.podPhotoDone = false;
+    this.podPhotoUploading = false;
+    this.podPhotoPreviewUrl = null;
+    this.podSignatureDone = false;
+    this.podSignatureUploading = false;
+    this.podSignatureHasDrawing = false;
+    this.podRecipientName = '';
+    this.isPodOpen = true;
+
+    if (this.podVideoElement) {
+      this.startPodCamera(this.podVideoElement);
+    }
+  }
+
+  closePodModal(): void {
+    this.stopPodCamera();
+    this.isPodOpen = false;
+    this.podContext = null;
+    this.podError = null;
+    if (this.podPhotoPreviewUrl) {
+      URL.revokeObjectURL(this.podPhotoPreviewUrl);
+      this.podPhotoPreviewUrl = null;
+    }
+  }
+
+  private async startPodCamera(video: HTMLVideoElement): Promise<void> {
+    this.stopPodCamera();
+    try {
+      this.podStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      video.srcObject = this.podStream;
+      await video.play();
+    } catch {
+      this.podError = 'Camera unavailable. Check camera permissions and try again.';
+    }
+  }
+
+  private stopPodCamera(): void {
+    this.podStream?.getTracks().forEach((track) => track.stop());
+    this.podStream = undefined;
+  }
+
+  capturePodPhoto(): void {
+    if (!this.podVideoElement || !this.podContext) return;
+    const video = this.podVideoElement;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob((blob) => {
+      if (!blob || !this.podContext) return;
+      this.podPhotoUploading = true;
+      this.ordersService.uploadDeliveryPhoto(this.podContext.id, blob).subscribe({
+        next: () => {
+          this.podPhotoUploading = false;
+          this.podPhotoDone = true;
+          this.podError = null;
+          this.podPhotoPreviewUrl = URL.createObjectURL(blob);
+          this.stopPodCamera();
+        },
+        error: () => {
+          this.podPhotoUploading = false;
+          this.podError = 'Unable to upload photo. Please try again.';
+        }
+      });
+    }, 'image/jpeg', 0.9);
+  }
+
+  retakePodPhoto(): void {
+    this.podPhotoDone = false;
+    if (this.podPhotoPreviewUrl) {
+      URL.revokeObjectURL(this.podPhotoPreviewUrl);
+      this.podPhotoPreviewUrl = null;
+    }
+    if (this.podVideoElement) {
+      this.startPodCamera(this.podVideoElement);
+    }
+  }
+
+  onSignaturePointerDown(event: PointerEvent): void {
+    if (!this.podSignatureCtx || !this.podSignatureCanvasElement) return;
+    this.podSignatureDrawing = true;
+    const { x, y } = this.podSignaturePoint(event);
+    this.podSignatureCtx.beginPath();
+    this.podSignatureCtx.moveTo(x, y);
+  }
+
+  onSignaturePointerMove(event: PointerEvent): void {
+    if (!this.podSignatureDrawing || !this.podSignatureCtx) return;
+    const { x, y } = this.podSignaturePoint(event);
+    this.podSignatureCtx.strokeStyle = '#111827';
+    this.podSignatureCtx.lineWidth = 2;
+    this.podSignatureCtx.lineCap = 'round';
+    this.podSignatureCtx.lineTo(x, y);
+    this.podSignatureCtx.stroke();
+    this.podSignatureHasDrawing = true;
+  }
+
+  onSignaturePointerUp(): void {
+    this.podSignatureDrawing = false;
+  }
+
+  private podSignaturePoint(event: PointerEvent): { x: number; y: number } {
+    const rect = this.podSignatureCanvasElement!.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }
+
+  clearPodSignature(): void {
+    if (!this.podSignatureCtx || !this.podSignatureCanvasElement) return;
+    this.podSignatureCtx.fillStyle = '#ffffff';
+    this.podSignatureCtx.fillRect(0, 0, this.podSignatureCanvasElement.width, this.podSignatureCanvasElement.height);
+    this.podSignatureHasDrawing = false;
+  }
+
+  savePodSignature(): void {
+    if (!this.podSignatureCanvasElement || !this.podContext) return;
+
+    if (!this.podSignatureHasDrawing) {
+      this.podError = "Please draw the recipient's signature.";
+      return;
+    }
+    if (!this.podRecipientName.trim()) {
+      this.podError = "Please enter the recipient's name.";
+      return;
+    }
+
+    this.podSignatureCanvasElement.toBlob((blob) => {
+      if (!blob || !this.podContext) return;
+      this.podSignatureUploading = true;
+      this.ordersService.uploadDeliverySignature(this.podContext.id, blob, this.podRecipientName.trim()).subscribe({
+        next: () => {
+          this.podSignatureUploading = false;
+          this.podSignatureDone = true;
+          this.podError = null;
+        },
+        error: () => {
+          this.podSignatureUploading = false;
+          this.podError = 'Unable to upload signature. Please try again.';
+        }
+      });
+    }, 'image/png');
+  }
+
+  markDelivered(): void {
+    if (!this.podContext || !this.podCanMarkDelivered) return;
+    const { id, next } = this.podContext;
+    this.closePodModal();
+    this.applyActivityStatus(id, next);
   }
 
   getReadyForPickupStatus(orderId: string): boolean {
@@ -1175,7 +1561,8 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
       readyForPickup: order.ready_for_pickup ?? false,
       driver: order.driver?.contact_name || order.driver?.name || '',
       orderStatus: isExpiredUnassigned ? 'Unassigned' : this.formatStatusLabel(order.status),
-      trackingStatus: 'Inactive'
+      trackingStatus: 'Inactive',
+      activityStatus:order.activity_status
     };
 
     return {
