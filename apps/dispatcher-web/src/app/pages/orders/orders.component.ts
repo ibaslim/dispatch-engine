@@ -16,13 +16,14 @@ import { PopupComponent } from '@components/popup/popup.component';
 import { NewOrderFormComponent } from '@components/new-order-form/new-order-form.component';
 import { ToggleButtonComponent } from '@components/toggle-button/toggle-button.component';
 import { TableColumn } from '@models/table.model';
-import { NewOrderFormValue, PaymentMethodType } from '@models/new-order-form/new-order-form.model';
+import { NewOrderFormValue, PaymentMethodType, OrderIncidentReport } from '@models/new-order-form/new-order-form.model';
 import { TenantDriverEntity } from '@models/drivers/tenant-driver.model';
 import {OrderActivityStatus, OrderEntity, OrderTab} from '@models/orders/order-entity.model';
 import { OrderView } from '@models/orders/order-tabs.model';
 import { OrdersService } from '@services/orders/orders.service';
 import { QrScannerService } from '@services/qr-scanner/qr-scanner.service';
 import { AuthService } from '@core/auth/auth.service';
+import { ToastService } from '@core/toast/toast.service';
 
 type BackendOrderItem = {
   itemName: string;
@@ -58,6 +59,7 @@ type BackendOrder = {
   payment_method: PaymentMethodType;
   payment_details?: Record<string, unknown> | null;
   proof_of_delivery?: Record<string, unknown> | null;
+  incident_report?: OrderIncidentReport | null;
   status: OrderTab;
   published?: boolean;
   published_at?: string | null;
@@ -105,6 +107,38 @@ const ACTIVITY_STATUS_FLOW: Record<OrderActivityStatus, ActivityFlowEntry> = {
   delivered: { label: 'Delivered', next: null, actionLabel: null, actionType: 'direct' },
 };
 
+// Which checkpoint an incident report belongs to, based on the order's current activity status.
+const INCIDENT_STAGE_BY_ACTIVITY_STATUS: Partial<Record<OrderActivityStatus, 'pickup' | 'delivery'>> = {
+  pickup_initiated: 'pickup',
+  picked_up: 'delivery',
+  delivery_initiated: 'delivery',
+  delivery_in_progress: 'delivery',
+};
+
+// Reasons that always require a description, regardless of stage.
+const INCIDENT_REASONS_REQUIRING_DESCRIPTION = new Set(['other', 'parcel_issue']);
+
+const INCIDENT_REASONS_BY_STAGE: Record<'pickup' | 'delivery', { value: string; label: string }[]> = {
+  pickup: [
+    { value: 'no_answer', label: 'No answer' },
+    { value: 'wrong_address', label: 'Wrong address' },
+    { value: 'business_closed', label: 'Business closed' },
+    { value: 'parcel_issue', label: 'Parcel issue' },
+    { value: 'other', label: 'Other' },
+  ],
+  delivery: [
+    { value: 'no_answer', label: 'No answer' },
+    { value: 'wrong_address', label: 'Wrong address' },
+    { value: 'refused', label: 'Refused' },
+    { value: 'other', label: 'Other' },
+  ],
+};
+
+// Flat reason -> label lookup for display (stage-agnostic; a reason like 'other' is shared).
+const INCIDENT_REASON_LABELS: Record<string, string> = Object.fromEntries(
+  [...INCIDENT_REASONS_BY_STAGE.pickup, ...INCIDENT_REASONS_BY_STAGE.delivery].map((r) => [r.value, r.label])
+);
+
 @Component({
   selector: 'app-orders',
   standalone: true,
@@ -126,10 +160,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
   // ─── Tabs ──────────────────────────────────────────────────────────────────
   get tabs(): string[] {
     if (this.auth.isDriver()) {
-      return ['New Orders', 'Current', 'Scheduled', 'Completed', 'Incomplete', 'History'];
+      return ['New Orders', 'Current', 'Scheduled', 'Completed', 'Incomplete', 'History','Disputed'];
     }
 
-    return ['Current', 'Scheduled', 'Completed', 'Incomplete', 'History', 'Unassigned'];
+    return ['Current', 'Scheduled', 'Completed', 'Incomplete', 'History', 'Unassigned','Disputed'];
   }
   activeTab = 'Current';
 
@@ -159,6 +193,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
   isDirectionsOpen = false;
   selectedRowForDirections: any = null;
 
+  // ─── Report incident modal ─────────────────────────────────────────────────
+  isReportOpen = false;
+  reportContext: { id: string; stage: 'pickup' | 'delivery'; orderNo: string | null } | null = null;
+  reportReason = '';
+  reportDescription = '';
+  reportSubmitting = false;
+
   // ─── Details modal ─────────────────────────────────────────────────────────
   isDetailsOpen = false;
   selectedOrderForDetails: OrderEntity | null = null;
@@ -171,7 +212,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
   selectedDriverId = '';
   availableAssignableDrivers: AssignableDriver[] = [];
   isLoadingAssignableDrivers = false;
-  assignDriverLoadError = '';
 
   // ─── Label modal ───────────────────────────────────────────────────────────
   isLabelOpen = false;
@@ -220,7 +260,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
     private readonly http: HttpClient,
     private readonly auth: AuthService,
     private readonly router: Router,
-    private readonly qrScanner: QrScannerService
+    private readonly qrScanner: QrScannerService,
+    private readonly toast: ToastService
   ) { }
 
   get isReadOnlyTenant(): boolean {
@@ -305,15 +346,20 @@ export class OrdersComponent implements OnInit, OnDestroy {
     { key: 'trackingStatus', label: 'Tracking Status', sortable: true },
     {key : 'activityStatus', label: 'Activity Status', sortable: false },
     { key: 'directions', label: 'Directions', sortable: false },
+    { key: 'incidentReport', label: 'Reported Issue', sortable: false },
     { key: 'actions', label: '', sortable: false }
   ];
 
   get columns(): TableColumn[] {
     const showPickupAndDriver = this.activeTab === 'Current' || this.activeTab === 'Scheduled';
 
-    const base = this.auth.isDriver()
+    let base = this.auth.isDriver()
       ? this.unifiedColumns
       : this.unifiedColumns.filter((c) => c.key !== 'directions');
+
+    if (this.activeTab !== 'Disputed') {
+      base = base.filter((c) => c.key !== 'incidentReport');
+    }
 
     if (showPickupAndDriver) {
       return this.isReadOnlyTenant
@@ -454,6 +500,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
   .filter((order) =>
     this.activeTab === 'Unassigned'
       ? this.isExpiredUnassignedOrder(order)
+      : this.activeTab === 'Disputed'
+      ? this.hasIncidentReport(order)
       : order.tab === tabKey && !this.isExpiredUnassignedOrder(order)
   )
   .filter((order) => {
@@ -498,10 +546,27 @@ export class OrdersComponent implements OnInit, OnDestroy {
       row['activityStatusActionType'] = flow.actionType;
     }
 
+    const incidentStage = INCIDENT_STAGE_BY_ACTIVITY_STATUS[activityStatus];
+    if (this.auth.isDriver() && this.activeTab === 'Current' && incidentStage) {
+      row['canReportIncident'] = true;
+      row['incidentStage'] = incidentStage;
+      row['incidentAlreadyReported'] = this.hasIncidentReport(order);
+    }
+
     if (this.auth.isDriver()) {
       row['showDirections'] = true;
       row['pickupAddress'] = order.full.pickup.address;
       row['deliveryAddress'] = order.full.delivery.address;
+    }
+
+    if (this.activeTab === 'Disputed') {
+      const report = order.full.details.incidentReport;
+      if (report) {
+        const reasonLabel = this.incidentReasonLabel(report.reason);
+        const summary = report.description ? `${reasonLabel} — ${report.description}` : reasonLabel;
+        row['incidentReportSummary'] = this.truncateWords(summary, 7);
+        row['incidentReportStage'] = report.stage === 'pickup' ? 'Pickup' : 'Delivery';
+      }
     }
 
     return row;
@@ -509,15 +574,15 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   get emptyTitle(): string {
-    return this.activeTab === 'Unassigned'
-      ? 'No unassigned orders'
-      : 'No data available';
+    if (this.activeTab === 'Unassigned') return 'No unassigned orders';
+    if (this.activeTab === 'Disputed') return 'No disputed orders';
+    return 'No data available';
   }
 
   get emptySubtitle(): string {
-    return this.activeTab === 'Unassigned'
-      ? 'Expired published orders that no driver accepted will appear here.'
-      : '';
+    if (this.activeTab === 'Unassigned') return 'Expired published orders that no driver accepted will appear here.';
+    if (this.activeTab === 'Disputed') return 'Orders with a driver-reported issue (e.g. sender/recipient absent) will appear here.';
+    return '';
   }
 
   // ─── Context menu ──────────────────────────────────────────────────────────
@@ -761,6 +826,68 @@ export class OrdersComponent implements OnInit, OnDestroy {
     });
   }
 
+  get reportReasonOptions(): { value: string; label: string }[] {
+    const stage = this.reportContext?.stage;
+    return stage ? INCIDENT_REASONS_BY_STAGE[stage] : [];
+  }
+
+  get reportDescriptionRequired(): boolean {
+    return INCIDENT_REASONS_REQUIRING_DESCRIPTION.has(this.reportReason);
+  }
+
+  openReportModal(row: any): void {
+    const stage = row.incidentStage as 'pickup' | 'delivery' | undefined;
+    if (!stage) return;
+
+    const order = this.orders.find((o) => o.id === row.id);
+    if (order && this.hasIncidentReport(order)) {
+      this.toast.warning('Issue already reported.');
+      return;
+    }
+
+    this.reportContext = { id: row.id, stage, orderNo: row.orderNo ?? null };
+    this.reportReason = '';
+    this.reportDescription = '';
+    this.isReportOpen = true;
+  }
+
+  closeReportModal(): void {
+    this.isReportOpen = false;
+    this.reportContext = null;
+    this.reportReason = '';
+    this.reportDescription = '';
+    this.reportSubmitting = false;
+  }
+
+  submitReport(): void {
+    if (!this.reportContext || !this.reportReason || this.reportSubmitting) return;
+
+    const description = this.reportDescription.trim();
+    if (this.reportDescriptionRequired && !description) {
+      this.toast.error('Please describe what happened.');
+      return;
+    }
+
+    this.reportSubmitting = true;
+
+    this.ordersService.reportIncident(
+      this.reportContext.id,
+      this.reportContext.stage,
+      this.reportReason,
+      description || null
+    ).subscribe({
+      next: () => {
+        this.reportSubmitting = false;
+        this.setFeedback('Issue reported.', 'success');
+        this.closeReportModal();
+      },
+      error: () => {
+        this.reportSubmitting = false;
+        this.toast.error('Failed to submit report. Please try again.');
+      }
+    });
+  }
+
   // Registry of handlers keyed by ActivityFlowEntry.actionType. To add a new checkpoint
   // behavior (photo capture, signature, OTP, etc.), add a case to ActivityActionType and
   // a handler here — the click plumbing in the table component doesn't need to change.
@@ -788,11 +915,11 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   // ─── QR SCAN MODAL ───
   isQrScanOpen = false;
-  qrScanError: string | null = null;
   qrScanMatched = false;
   qrScanContext: { id: string; next: OrderActivityStatus; orderNo: string | null } | null = null;
   private qrScanSub?: Subscription;
   private qrVideoElement?: HTMLVideoElement;
+  private qrMismatchToastShown = false;
 
   @ViewChild('qrVideo')
   set qrVideoRef(ref: ElementRef<HTMLVideoElement> | undefined) {
@@ -805,8 +932,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
   private openQrScanModal(id: string, next: OrderActivityStatus): void {
     const orderNo = this.orders.find((o) => o.id === id)?.view.current.orderNo ?? null;
     this.qrScanContext = { id, next, orderNo };
-    this.qrScanError = null;
     this.qrScanMatched = false;
+    this.qrMismatchToastShown = false;
     this.isQrScanOpen = true;
     if (this.qrVideoElement) {
       this.startQrScan(this.qrVideoElement);
@@ -817,7 +944,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.stopQrScan();
     this.isQrScanOpen = false;
     this.qrScanContext = null;
-    this.qrScanError = null;
     this.qrScanMatched = false;
   }
 
@@ -825,7 +951,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.stopQrScan();
     this.qrScanSub = this.qrScanner.start(video).subscribe({
       next: (text) => this.onQrDecoded(text),
-      error: () => { this.qrScanError = 'Camera unavailable. Check camera permissions and try again.'; }
+      error: () => this.toast.error('Camera unavailable. Check camera permissions and try again.')
     });
   }
 
@@ -840,13 +966,15 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
     const scanned = text.trim();
     if (this.qrScanContext.orderNo && scanned !== this.qrScanContext.orderNo) {
-      this.qrScanError = `Scanned code doesn't match this order (expected ${this.qrScanContext.orderNo}).`;
+      if (!this.qrMismatchToastShown) {
+        this.qrMismatchToastShown = true;
+        this.toast.error(`Scanned code doesn't match this order (expected ${this.qrScanContext.orderNo}).`);
+      }
       return;
     }
 
     // Match found: stop the camera and let the user confirm via Continue rather
     // than applying the status change automatically.
-    this.qrScanError = null;
     this.qrScanMatched = true;
     this.stopQrScan();
     setTimeout(()=>{
@@ -867,7 +995,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   // ─── PROOF OF DELIVERY MODAL ───
   isPodOpen = false;
-  podError: string | null = null;
   podContext: { id: string; next: OrderActivityStatus; orderNo: string | null; signatureRequired: boolean } | null = null;
 
   podPhotoDone = false;
@@ -914,7 +1041,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const signatureRequired = !!order?.full.details.proofOfDelivery?.signature;
 
     this.podContext = { id, next, orderNo: order?.view.current.orderNo ?? null, signatureRequired };
-    this.podError = null;
     this.podPhotoDone = false;
     this.podPhotoUploading = false;
     this.podPhotoPreviewUrl = null;
@@ -933,7 +1059,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.stopPodCamera();
     this.isPodOpen = false;
     this.podContext = null;
-    this.podError = null;
     if (this.podPhotoPreviewUrl) {
       URL.revokeObjectURL(this.podPhotoPreviewUrl);
       this.podPhotoPreviewUrl = null;
@@ -947,13 +1072,16 @@ export class OrdersComponent implements OnInit, OnDestroy {
       video.srcObject = this.podStream;
       await video.play();
     } catch {
-      this.podError = 'Camera unavailable. Check camera permissions and try again.';
+      this.toast.error('Camera unavailable. Check camera permissions and try again.');
     }
   }
 
   private stopPodCamera(): void {
     this.podStream?.getTracks().forEach((track) => track.stop());
     this.podStream = undefined;
+    if (this.podVideoElement) {
+      this.podVideoElement.srcObject = null;
+    }
   }
 
   capturePodPhoto(): void {
@@ -974,13 +1102,12 @@ export class OrdersComponent implements OnInit, OnDestroy {
         next: () => {
           this.podPhotoUploading = false;
           this.podPhotoDone = true;
-          this.podError = null;
           this.podPhotoPreviewUrl = URL.createObjectURL(blob);
           this.stopPodCamera();
         },
         error: () => {
           this.podPhotoUploading = false;
-          this.podError = 'Unable to upload photo. Please try again.';
+          this.toast.error('Unable to upload photo. Please try again.');
         }
       });
     }, 'image/jpeg', 0.9);
@@ -1036,11 +1163,11 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (!this.podSignatureCanvasElement || !this.podContext) return;
 
     if (!this.podSignatureHasDrawing) {
-      this.podError = "Please draw the recipient's signature.";
+      this.toast.error("Please draw the recipient's signature.");
       return;
     }
     if (!this.podRecipientName.trim()) {
-      this.podError = "Please enter the recipient's name.";
+      this.toast.error("Please enter the recipient's name.");
       return;
     }
 
@@ -1051,11 +1178,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
         next: () => {
           this.podSignatureUploading = false;
           this.podSignatureDone = true;
-          this.podError = null;
         },
         error: () => {
           this.podSignatureUploading = false;
-          this.podError = 'Unable to upload signature. Please try again.';
+          this.toast.error('Unable to upload signature. Please try again.');
         }
       });
     }, 'image/png');
@@ -1602,7 +1728,8 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
           total: order.total,
           instructions: order.instructions || '',
           payment,
-          proofOfDelivery: this.normalizeProofOfDelivery(order.proof_of_delivery)
+          proofOfDelivery: this.normalizeProofOfDelivery(order.proof_of_delivery),
+          incidentReport: order.incident_report ?? null
         }
       },
       tab: order.status,
@@ -1618,7 +1745,6 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
 
   private async loadAssignableDrivers(selectedOrderId?: string): Promise<void> {
     this.isLoadingAssignableDrivers = true;
-    this.assignDriverLoadError = '';
 
     try {
       const drivers = await firstValueFrom(this.http.get<TenantDriverEntity[]>('/api/v1/drivers/available'));
@@ -1643,7 +1769,6 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
       }
     } catch {
       this.availableAssignableDrivers = [];
-      this.assignDriverLoadError = 'Unable to load drivers.';
       this.setFeedback('Unable to load drivers from tenants.', 'error');
     } finally {
       this.isLoadingAssignableDrivers = false;
@@ -1712,6 +1837,20 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
 
   private findOrderByOrderNo(orderNo: string): OrderEntity | undefined {
     return this.orders.find((o) => o.view.current.orderNo === orderNo);
+  }
+
+  private hasIncidentReport(order: OrderEntity): boolean {
+    return order.full.details.incidentReport !== null;
+  }
+
+  incidentReasonLabel(reason: string): string {
+    return INCIDENT_REASON_LABELS[reason] ?? reason;
+  }
+
+  private truncateWords(text: string, wordLimit: number): string {
+    const words = text.trim().split(/\s+/);
+    if (words.length <= wordLimit) return text;
+    return `${words.slice(0, wordLimit).join(' ')}...`;
   }
 
   private getTabKey(tab: string): OrderTab {
@@ -1835,7 +1974,7 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
     };
   }
 
-  private formatStatusLabel(status: OrderTab): string {
+  protected formatStatusLabel(status: OrderTab): string {
     return status.charAt(0).toUpperCase() + status.slice(1);
   }
 
@@ -1917,7 +2056,7 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
     return deliveryDT.getTime() <= pickupDT.getTime();
   }
 
-  private toNumber(value: unknown): number {
+  protected toNumber(value: unknown): number {
     const parsed = typeof value === 'number' ? value : parseFloat(String(value ?? '').trim());
     return Number.isFinite(parsed) ? parsed : 0;
   }
@@ -1964,6 +2103,7 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
       completed: 'Completed',
       incomplete: 'Incomplete',
       history: 'History',
+      disputed: 'Disputed',
     };
     return labels[tab];
   }
@@ -1973,7 +2113,7 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   }
 
-  private money(amount: number): string {
+  protected money(amount: number): string {
     return `C$ ${this.toNumber(amount).toFixed(2)}`;
   }
 
@@ -1989,6 +2129,7 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
   private setFeedback(message: string, tone: 'success' | 'error' | 'info'): void {
     this.feedbackMessage = message;
     this.feedbackTone = tone;
+    this.toast.show(tone === 'info' ? 'warning' : tone, message);
   }
 
   private isLocalhost(): boolean {
@@ -2011,7 +2152,8 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
         taxRate: 0, deliveryFees: 0, deliveryTips: 0, discount: 0,
         subtotal: 0, taxAmount: 0, total: 0,
         instructions: '', payment: { method: 'cash_on_delivery' },
-        proofOfDelivery: { signature: false, picture: false }
+        proofOfDelivery: { signature: false, picture: false },
+        incidentReport: null
       }
     };
   }
@@ -2052,7 +2194,8 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
         total: 37.14,
         instructions: 'Call on arrival.',
         payment: { method: 'cash_on_delivery' },
-        proofOfDelivery: { signature: false, picture: false }
+        proofOfDelivery: { signature: false, picture: false },
+        incidentReport: null
       }
     };
   }

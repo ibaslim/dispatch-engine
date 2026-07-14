@@ -17,9 +17,18 @@ from app.db.session import get_db
 from app.core.deps import CurrentUser
 from app.models.order import Order, OrderStatus, ActivityStatus
 from app.models.tenant import Tenant, TenantRole
-from app.schemas.order import OrderCreate, OrderResponse, OrderUpdate, ActivityStatusUpdate
+from app.schemas.order import (
+    OrderCreate,
+    OrderResponse,
+    OrderUpdate,
+    ActivityStatusUpdate,
+    IncidentReportCreate,
+    IncidentReason,
+    IncidentStage,
+    INCIDENT_REASONS_REQUIRING_DESCRIPTION,
+)
 from app.workers.tasks import send_order_sender_invoice_email, send_order_delivered_email
-from uuid import UUID
+from uuid import UUID, uuid4
 
 router = APIRouter(tags=["Orders"])
 APP_TIMEZONE = ZoneInfo("Asia/Karachi")
@@ -381,6 +390,64 @@ def _notify_sender_order_delivered(order: Order) -> None:
         pod_attachments=pod_attachments,
     )
 
+
+# -------------------------
+# INCIDENT REPORTS (sender/recipient absent, etc.)
+# -------------------------
+PICKUP_INCIDENT_REASONS = {IncidentReason.no_answer, IncidentReason.wrong_address, IncidentReason.business_closed, IncidentReason.parcel_issue, IncidentReason.other}
+DELIVERY_INCIDENT_REASONS = {IncidentReason.no_answer, IncidentReason.wrong_address, IncidentReason.refused, IncidentReason.other}
+
+@router.post("/{order_id}/report")
+async def report_incident(
+    order_id: str,
+    payload: IncidentReportCreate,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if not current_user.tenant_id or order.driver_id != current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the assigned driver can report the issue.",
+        )
+
+    if order.incident_report:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This order already has a reported issue.",
+        )
+
+    allowed_reasons = PICKUP_INCIDENT_REASONS if payload.stage == IncidentStage.pickup else DELIVERY_INCIDENT_REASONS
+    if payload.reason not in allowed_reasons:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"'{payload.reason.value}' is not a valid reason for stage '{payload.stage.value}'.",
+        )
+
+    description = (payload.description or "").strip()
+    if payload.reason in INCIDENT_REASONS_REQUIRING_DESCRIPTION and not description:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"A description is required when reason is '{payload.reason.value}'.",
+        )
+
+    order.incident_report = {
+        "id": str(uuid4()),
+        "stage": payload.stage.value,
+        "reason": payload.reason.value,
+        "description": description or None,
+        "reported_by": str(current_user.tenant_id) if current_user.tenant_id else None,
+        "reported_at": datetime.utcnow().isoformat(),
+    }
+
+    await db.commit()
+
+    return {"success": True, "incident_report": order.incident_report}
 
 # -------------------------
 # PROOF OF DELIVERY UPLOADS

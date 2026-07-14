@@ -80,5 +80,10 @@ export class OrdersService {
   getPublishedOrders(): Observable<any[]> {
     return this.http.get<any[]>(`${this.baseUrl}/published`);
   }
+
+  /** Driver reports an exception at pickup/delivery (e.g. sender/recipient absent). */
+  reportIncident(id: string, stage: 'pickup' | 'delivery', reason: string, description: string | null): Observable<any> {
+    return this.http.post(`${this.baseUrl}/${id}/report`, { stage, reason, description });
+  }
 }
 

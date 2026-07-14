@@ -72,13 +72,24 @@
 
                     <!-- ACTIVITY STATUS -->
                     <ng-container *ngSwitchCase="'activityStatus'">
-                        <ng-container *ngIf="row.activityStatusAction; else activityStatusText">
-                            <app-button variant="ghost-success" [label]="row.activityStatusAction"
-                                (onClick)="onActivityStatusClick(row, $event)"></app-button>
-                        </ng-container>
-                        <ng-template #activityStatusText>
-                            <span>{{ row.activityStatusLabel || row.activityStatus }}</span>
-                        </ng-template>
+                        <div class="flex items-center justify-center gap-1.5 w-full">
+                            <ng-container *ngIf="row.activityStatusAction; else activityStatusText">
+                                <app-button variant="ghost-success" [label]="row.activityStatusAction"
+                                    (onClick)="onActivityStatusClick(row, $event)"></app-button>
+                            </ng-container>
+                            <ng-template #activityStatusText>
+                                <span>{{ row.activityStatusLabel || row.activityStatus }}</span>
+                            </ng-template>
+
+                            <app-button *ngIf="row.canReportIncident" variant="icon"
+                                [title]="row.incidentAlreadyReported ? 'Issue already reported' : 'Report an issue'"
+                                [ariaLabel]="row.incidentAlreadyReported ? 'Issue already reported' : 'Report an issue'"
+                                class="rounded-md hover:bg-amber-50 dark:hover:bg-amber-900/20 transition"
+                                (onClick)="onReportIncidentClick(row, $event)">
+                                <i class="ph ph-warning-circle text-lg"
+                                    [ngClass]="row.incidentAlreadyReported ? 'text-red-500' : 'text-amber-500'"></i>
+                            </app-button>
+                        </div>
                     </ng-container>
 
                     <!-- DIRECTIONS -->
@@ -91,6 +102,17 @@
                             </app-button>
                         </div>
                         <ng-template #noDirections>
+                            <span>-</span>
+                        </ng-template>
+                    </ng-container>
+
+                    <!-- REPORTED ISSUE -->
+                    <ng-container *ngSwitchCase="'incidentReport'">
+                        <div class="flex flex-col items-start w-full text-left" *ngIf="row.incidentReportSummary; else noIncident">
+                            <span class="text-[10px] uppercase tracking-wide text-amber-600 dark:text-amber-400 font-semibold">{{ row.incidentReportStage }}</span>
+                            <span class="text-xs text-gray-700 dark:text-gray-300">{{ row.incidentReportSummary }}</span>
+                        </div>
+                        <ng-template #noIncident>
                             <span>-</span>
                         </ng-template>
                     </ng-container>

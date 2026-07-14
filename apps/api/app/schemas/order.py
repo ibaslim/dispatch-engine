@@ -1,9 +1,33 @@
+import enum
 from datetime import datetime
 
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from app.models.order import OrderStatus, ActivityStatus
 from uuid import UUID
+
+
+class IncidentStage(str, enum.Enum):
+    pickup = "pickup"
+    delivery = "delivery"
+
+
+class IncidentReason(str, enum.Enum):
+    no_answer = "no_answer"
+    wrong_address = "wrong_address"
+    business_closed = "business_closed"
+    parcel_issue = "parcel_issue"
+    refused = "refused"
+    other = "other"
+
+
+# Reasons that always require a description, regardless of stage.
+INCIDENT_REASONS_REQUIRING_DESCRIPTION = {IncidentReason.other, IncidentReason.parcel_issue}
+
+class IncidentReportCreate(BaseModel):
+    stage: IncidentStage
+    reason: IncidentReason
+    description: Optional[str] = None
 
 
 class DriverInfo(BaseModel):
@@ -127,6 +151,7 @@ class OrderResponse(OrderCreate):
     published_at: Optional[datetime] = None
     order_placed_time: Optional[str] = None
     proof_of_delivery: Optional[Dict[str, Any]] = None
+    incident_report: Optional[Dict[str, Any]] = None
     driver: Optional[DriverInfo] = None
     created_at: Optional[datetime] = None
 

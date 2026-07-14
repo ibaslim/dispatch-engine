@@ -14,6 +14,15 @@ export interface ProofOfDeliveryValue {
     signature: boolean;
     picture: boolean;
 }
+
+export interface OrderIncidentReport {
+    id: string;
+    stage: 'pickup' | 'delivery';
+    reason: string;
+    description: string | null;
+    reported_by: string | null;
+    reported_at: string;
+}
 export interface PaymentDetails {
     method: PaymentMethodType;
     creditCard?: CreditCardDetails;
@@ -60,5 +69,6 @@ export interface NewOrderFormValue {
         payment: PaymentDetails;
 
         proofOfDelivery: ProofOfDeliveryValue;
+        incidentReport: OrderIncidentReport | null;
     };
 }

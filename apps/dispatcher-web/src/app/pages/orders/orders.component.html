@@ -9,7 +9,6 @@
             class="w-full xs:w-auto" containerClass="w-full xs:w-56"></app-search-bar>
 
         <app-button *ngIf="!isReadOnlyTenant" variant="primary" label="+ New order" (onClick)="openNewOrder()"
-            [disabled]="isSeedingDemoOrders"
             [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-3 py-2 rounded-md text-sm whitespace-nowrap flex-shrink-0 w-full xs:w-auto'">
         </app-button>
     </div>
@@ -115,7 +114,8 @@
         (menuSelect)="handleMenuAction($event.item, $event.row)"
         (readyForPickupChange)="updateReadyForPickupFromRow($event.id, $event.value)"
         (activityStatusAction)="onActivityStatusAction($event)"
-        (directionsClick)="openDirections($event)">
+        (directionsClick)="openDirections($event)"
+        (reportIncidentClick)="openReportModal($event)">
     </app-table>
 
 
@@ -134,7 +134,7 @@
 
         <div modal-footer class="flex flex-col items-stretch xs:flex-row flex-wrap xs:items-center justify-end gap-3">
             <app-button *ngIf="showLocalDemoButton" variant="ghost-success" label="Fill Demo Data"
-                [disabled]="isSavingOrder || isSeedingDemoOrders"
+                [disabled]="isSavingOrder"
                         [extraClasses]="'w-full xs:w-auto'"
                 (onClick)="fillNewOrderWithDummyData()">
             </app-button>
@@ -144,12 +144,12 @@
             </app-button>
 
             <app-button variant="ghost" label="Save Order" (onClick)="saveNewOrder()"
-                [loading]="isSavingOrder" [disabled]="isPublishingOrder || isSeedingDemoOrders"
+                [loading]="isSavingOrder" [disabled]="isPublishingOrder"
                 [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm w-full xs:w-auto'">
             </app-button>
 
             <app-button variant="primary" label="Publish Order" (onClick)="publishNewOrder()"
-                [loading]="isPublishingOrder" [disabled]="isSavingOrder || isSeedingDemoOrders"
+                [loading]="isPublishingOrder" [disabled]="isSavingOrder"
                 [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-6 py-2 rounded-md text-sm  gap-2 w-full xs:w-auto'">
             </app-button>
         </div>
@@ -179,10 +179,6 @@
 
                 <p *ngIf="isLoadingAssignableDrivers" class="text-sm text-gray-500 dark:text-gray-400">
                     Loading drivers from tenants...
-                </p>
-
-                <p *ngIf="assignDriverLoadError" class="text-sm text-red-600 dark:text-red-400">
-                    {{ assignDriverLoadError }}
                 </p>
 
                 <div class="space-y-3 max-h-[320px] overflow-y-auto pr-1">
@@ -268,20 +264,54 @@
             </div>
 
             <p *ngIf="qrScanMatched" class="text-sm text-[#2fbf82] font-medium text-center">
-                QR code matched. Click Continue to proceed.
+                QR code matched. Proceeding.
             </p>
-            <p *ngIf="!qrScanMatched && qrScanError" class="text-sm text-red-600 dark:text-red-400 text-center">
-                {{ qrScanError }}
-            </p>
-            <p *ngIf="!qrScanMatched && !qrScanError" class="text-sm text-gray-500 dark:text-gray-400 text-center">
+            <p *ngIf="!qrScanMatched" class="text-sm text-gray-500 dark:text-gray-400 text-center">
                 Point the camera at the order's QR code to confirm this step{{ qrScanContext?.orderNo ? ' (' + qrScanContext?.orderNo + ')' : '' }}.
             </p>
         </div>
 
+<!--        <div modal-footer class="flex items-center justify-end gap-3">-->
+<!--            <app-button variant="ghost-outline" label="Cancel" (onClick)="closeQrScanModal()"></app-button>-->
+<!--            <app-button variant="ghost-success" label="Continue" [disabled]="!qrScanMatched"-->
+<!--                (onClick)="continueQrScan()"></app-button>-->
+<!--        </div>-->
+    </app-popup>
+
+
+    <!-- ───────────────────────────────────────────
+         REPORT ISSUE MODAL
+    ─────────────────────────────────────────── -->
+    <app-popup [open]="isReportOpen" title="Report an Issue" widthClass="max-w-md" (close)="closeReportModal()">
+        <div class="flex flex-col gap-4 py-2">
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                Let us know what happened at {{ reportContext?.stage === 'pickup' ? 'pickup' : 'delivery' }}{{ reportContext?.orderNo ? ' for order ' + reportContext?.orderNo : '' }}.
+            </p>
+
+            <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-medium text-gray-600 dark:text-gray-300">Reason</label>
+                <select [(ngModel)]="reportReason"
+                    class="w-full rounded-md border border-gray-300 dark:border-[#3a3d3a] bg-white dark:bg-[#1E201E] text-sm px-3 py-2 text-gray-900 dark:text-gray-100">
+                    <option value="" disabled>Select a reason</option>
+                    <option *ngFor="let option of reportReasonOptions" [value]="option.value">{{ option.label }}</option>
+                </select>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-medium text-gray-600 dark:text-gray-300">
+                    Description {{ reportDescriptionRequired ? '(required)' : '(optional)' }}
+                </label>
+                <textarea [(ngModel)]="reportDescription" rows="3"
+                    class="w-full rounded-md border border-gray-300 dark:border-[#3a3d3a] bg-white dark:bg-[#1E201E] text-sm px-3 py-2 text-gray-900 dark:text-gray-100"
+                    placeholder="Add any extra detail..."></textarea>
+            </div>
+
+        </div>
+
         <div modal-footer class="flex items-center justify-end gap-3">
-            <app-button variant="ghost-outline" label="Cancel" (onClick)="closeQrScanModal()"></app-button>
-            <app-button variant="ghost-success" label="Continue" [disabled]="!qrScanMatched"
-                (onClick)="continueQrScan()"></app-button>
+            <app-button variant="ghost-outline" label="Cancel" (onClick)="closeReportModal()"></app-button>
+            <app-button variant="ghost-success" label="Submit" [disabled]="!reportReason || reportSubmitting"
+                (onClick)="submitReport()"></app-button>
         </div>
     </app-popup>
 
@@ -346,8 +376,6 @@
 
                 <p *ngIf="podSignatureDone" class="text-sm text-[#2fbf82]">Signed by {{ podRecipientName }}.</p>
             </div>
-
-            <p *ngIf="podError" class="text-sm text-red-600 dark:text-red-400 text-center">{{ podError }}</p>
         </div>
 
         <div modal-footer class="flex items-center justify-end gap-3">
@@ -499,6 +527,21 @@
         </p>
     </div>
 </div>
+
+                <div *ngIf="order.full.details.incidentReport as report"
+                    class="rounded-lg border-2 border-red-500 dark:border-red-500 p-4 bg-red-50 dark:bg-red-900/10">
+                    <h3 class="text-sm font-semibold mb-3 text-red-700 dark:text-red-400 flex items-center gap-1.5">
+                        <i class="ph ph-warning-circle text-base"></i>
+                        Reported Issue
+                    </h3>
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">
+                            {{ report.stage === 'pickup' ? 'Pickup' : 'Delivery' }} — {{ incidentReasonLabel(report.reason) }}
+                        </span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ report.reported_at | date:'medium' }}</span>
+                    </div>
+                    <p *ngIf="report.description" class="mt-1 text-sm text-gray-700 dark:text-gray-300">{{ report.description }}</p>
+                </div>
 
             </div>
         </ng-container>

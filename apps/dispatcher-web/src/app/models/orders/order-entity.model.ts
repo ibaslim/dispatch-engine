@@ -6,7 +6,8 @@ export type OrderTab =
     | 'scheduled'
     | 'completed'
     | 'incomplete'
-    | 'history';
+    | 'history'
+    |'disputed';
 
 export type OrderActivityStatus ='driver_not_assigned'| 'pickup_initiated'|'picked_up'|'delivery_initiated'|'delivery_in_progress'|'delivered'
 

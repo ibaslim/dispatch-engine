@@ -34,6 +34,7 @@ export class TableComponent {
   @Output() readyForPickupChange = new EventEmitter<{ id: string; value: boolean }>();
   @Output() activityStatusAction = new EventEmitter<{ id: string; next: string; type: string }>();
   @Output() directionsClick = new EventEmitter<any>();
+  @Output() reportIncidentClick = new EventEmitter<any>();
 
   onActionClick(row: any, event?: MouseEvent): void {
     event?.stopPropagation(); // prevent bubbling
@@ -58,6 +59,11 @@ export class TableComponent {
   onDirectionsIconClick(row: any, event?: MouseEvent): void {
     event?.stopPropagation(); // prevent bubbling
     this.directionsClick.emit(row);
+  }
+
+  onReportIncidentClick(row: any, event?: MouseEvent): void {
+    event?.stopPropagation(); // prevent bubbling
+    this.reportIncidentClick.emit(row);
   }
 
   getInitials(name: string): string {
