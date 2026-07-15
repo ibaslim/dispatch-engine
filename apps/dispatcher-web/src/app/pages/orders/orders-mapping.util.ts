@@ -1,4 +1,4 @@
-import { NewOrderFormValue, PaymentMethodType, OrderIncidentReport } from '@models/new-order-form/new-order-form.model';
+import { NewOrderFormValue, PaymentMethodType, OrderIncidentReport, ProofOfDeliverySubmission } from '@models/new-order-form/new-order-form.model';
 import { OrderActivityStatus, OrderEntity, OrderTab } from '@models/orders/order-entity.model';
 import { OrderView } from '@models/orders/order-tabs.model';
 import { driverEarningsLabel, formatDateTime, formatStatusLabel, formatTime, money } from './orders-formatting.util';
@@ -128,6 +128,27 @@ export function normalizeProofOfDelivery(value: unknown): NewOrderFormValue['det
   };
 }
 
+/** Extracts the driver-captured POD submission (if any) from the raw proof_of_delivery JSON.
+ * Server file paths are deliberately not exposed — images are fetched via the API by kind. */
+export function normalizePodSubmission(value: unknown): ProofOfDeliverySubmission | null {
+  if (!value || typeof value !== 'object') return null;
+  const submission = (value as Record<string, unknown>)['submission'];
+  if (!submission || typeof submission !== 'object') return null;
+
+  const record = submission as Record<string, unknown>;
+  const hasSignature = Boolean(record['signature_path']);
+  const hasPhoto = Boolean(record['photo_path']);
+  if (!hasSignature && !hasPhoto) return null;
+
+  return {
+    recipientName: String(record['recipient_name'] ?? ''),
+    hasSignature,
+    hasPhoto,
+    signatureUploadedAt: record['signature_uploaded_at'] ? String(record['signature_uploaded_at']) : null,
+    photoUploadedAt: record['photo_uploaded_at'] ? String(record['photo_uploaded_at']) : null
+  };
+}
+
 export function isExpiredUnassignedBackendOrder(order: BackendOrder): boolean {
   if (!order.published || order.driver?.id) return false;
   if (!order.published_at) return false;
@@ -198,6 +219,7 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
         instructions: order.instructions || '',
         payment,
         proofOfDelivery: normalizeProofOfDelivery(order.proof_of_delivery),
+        podSubmission: normalizePodSubmission(order.proof_of_delivery),
         incidentReport: order.incident_report ?? null
       }
     },

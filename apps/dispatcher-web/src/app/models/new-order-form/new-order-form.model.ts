@@ -15,6 +15,15 @@ export interface ProofOfDeliveryValue {
     picture: boolean;
 }
 
+/** What the driver actually captured at delivery time (read-only, set by backend). */
+export interface ProofOfDeliverySubmission {
+    recipientName: string;
+    hasSignature: boolean;
+    hasPhoto: boolean;
+    signatureUploadedAt: string | null;
+    photoUploadedAt: string | null;
+}
+
 export interface OrderIncidentReport {
     id: string;
     stage: 'pickup' | 'delivery';
@@ -69,6 +78,7 @@ export interface NewOrderFormValue {
         payment: PaymentDetails;
 
         proofOfDelivery: ProofOfDeliveryValue;
+        podSubmission?: ProofOfDeliverySubmission | null;
         incidentReport: OrderIncidentReport | null;
     };
 }

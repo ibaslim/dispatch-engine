@@ -124,18 +124,50 @@
             </div>
 
             <div class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
-    <h3 class="text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">Proof of Delivery</h3>
-    <div class="grid grid-cols-2 gap-2">
-        <p>Signature</p>
-        <p class="font-medium">
-            {{ order.full.details.proofOfDelivery?.signature ? '✓ Required' : '✗ Not required' }}
-        </p>
-        <p>Picture</p>
-        <p class="font-medium">
-            {{ order.full.details.proofOfDelivery?.picture ? '✓ Required' : '✗ Not required' }}
-        </p>
-    </div>
-</div>
+                <h3 class="text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">Proof of Delivery</h3>
+                <div class="grid grid-cols-2 gap-2">
+                    <p>Signature</p>
+                    <p class="font-medium">
+                        {{ order.full.details.proofOfDelivery?.signature ? '✓ Required' : '✗ Not required' }}
+                    </p>
+                    <p>Picture</p>
+                    <p class="font-medium">
+                        {{ order.full.details.proofOfDelivery?.picture ? '✓ Required' : '✗ Not required' }}
+                    </p>
+                </div>
+
+                <!-- Captured proof (shown once the driver has submitted signature/photo) -->
+                <div *ngIf="order.full.details.podSubmission as pod"
+                    class="mt-4 border-t border-gray-200 dark:border-[#5a5d5a] pt-3 space-y-3">
+                    <p *ngIf="pod.recipientName">
+                        Received by <span class="font-medium text-gray-900 dark:text-gray-100">{{ pod.recipientName }}</span>
+                    </p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div *ngIf="pod.hasSignature">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                Signature<span *ngIf="pod.signatureUploadedAt"> · {{ pod.signatureUploadedAt | date:'medium' }}</span>
+                            </p>
+                            <img *ngIf="podSignatureUrl" [src]="podSignatureUrl" alt="Recipient signature"
+                                class="w-full max-h-56 object-contain rounded-md border border-gray-200 dark:border-[#5a5d5a] bg-white" />
+                            <p *ngIf="!podSignatureUrl && !podLoadError" class="text-xs text-gray-400">Loading signature…</p>
+                        </div>
+
+                        <div *ngIf="pod.hasPhoto">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                Delivery Photo<span *ngIf="pod.photoUploadedAt"> · {{ pod.photoUploadedAt | date:'medium' }}</span>
+                            </p>
+                            <img *ngIf="podPhotoUrl" [src]="podPhotoUrl" alt="Delivery photo"
+                                class="w-full max-h-56 object-contain rounded-md border border-gray-200 dark:border-[#5a5d5a] bg-white" />
+                            <p *ngIf="!podPhotoUrl && !podLoadError" class="text-xs text-gray-400">Loading photo…</p>
+                        </div>
+                    </div>
+
+                    <p *ngIf="podLoadError" class="text-xs text-red-600 dark:text-red-400">
+                        Failed to load proof of delivery image(s).
+                    </p>
+                </div>
+            </div>
 
             <div *ngIf="order.full.details.incidentReport as report"
                 class="rounded-lg border-2 border-red-500 dark:border-red-500 p-4 bg-red-50 dark:bg-red-900/10">

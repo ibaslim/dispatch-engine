@@ -41,6 +41,11 @@ export class OrdersService {
     return this.http.post(`${this.baseUrl}/${orderId}/proof-of-delivery/signature`, formData);
   }
 
+  /** Downloads a captured proof-of-delivery image (driver signature or delivery photo). */
+  getProofOfDeliveryImage(orderId: string, kind: 'photo' | 'signature'): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/${orderId}/proof-of-delivery/${kind}`, { responseType: 'blob' });
+  }
+
   updateOrder(id: string, data: any): Observable<any> {
     return this.http.patch(`${this.baseUrl}/${id}`, data);
   }

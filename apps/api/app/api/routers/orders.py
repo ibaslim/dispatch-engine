@@ -6,6 +6,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
@@ -199,6 +200,15 @@ async def update_order(
         raise HTTPException(status_code=404, detail="Order not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+
+    # Editing an order must not wipe an already-captured POD submission
+    # (signature/photo paths written by the driver upload endpoints).
+    if "proof_of_delivery" in update_data:
+        existing_submission = (order.proof_of_delivery or {}).get("submission")
+        incoming = dict(update_data["proof_of_delivery"] or {})
+        if existing_submission and not incoming.get("submission"):
+            incoming["submission"] = existing_submission
+        update_data["proof_of_delivery"] = incoming
 
     try:
         for key, value in update_data.items():
@@ -581,6 +591,50 @@ async def upload_proof_of_delivery_signature(
     await db.commit()
 
     return {"success": True}
+
+
+async def _authorize_pod_view(order: Order, current_user: CurrentUser, db: AsyncSession) -> None:
+    """Mirrors the order visibility rules of get_orders."""
+    if current_user.is_platform_admin:
+        return
+    if current_user.tenant_id:
+        result = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
+        tenant = result.scalar_one_or_none()
+        if tenant:
+            if tenant.role == TenantRole.driver and order.driver_id == current_user.tenant_id:
+                return
+            if tenant.role == TenantRole.vendor and (
+                order.vendor_id == current_user.tenant_id or order.pickup_name == tenant.name
+            ):
+                return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+
+@router.get("/{order_id}/proof-of-delivery/{kind}")
+async def get_proof_of_delivery_image(
+    order_id: str,
+    kind: str,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> FileResponse:
+    if kind not in ("photo", "signature"):
+        raise HTTPException(status_code=404, detail="Unknown proof of delivery attachment.")
+
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    await _authorize_pod_view(order, current_user, db)
+
+    submission = (order.proof_of_delivery or {}).get("submission") or {}
+    filepath = submission.get("photo_path" if kind == "photo" else "signature_path")
+
+    if not filepath or not Path(filepath).is_file():
+        raise HTTPException(status_code=404, detail="Proof of delivery file not found.")
+
+    return FileResponse(filepath, filename=Path(filepath).name)
 
 
 # -------------------------
