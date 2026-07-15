@@ -1,0 +1,65 @@
+<app-popup [open]="open" title="Proof of Delivery" widthClass="max-w-md" (close)="onClose()">
+    <div class="flex flex-col gap-4 py-2">
+
+        <!-- Photo (mandatory) -->
+        <div class="rounded-xl border border-gray-200 dark:border-[#3a3d3a] p-4 space-y-3">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="font-semibold text-sm text-gray-900 dark:text-gray-100">Delivery Photo</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Required</p>
+                </div>
+                <i *ngIf="podPhotoDone" class="ph ph-check-circle text-xl text-[#2fbf82]"></i>
+            </div>
+
+            <div *ngIf="!podPhotoDone" class="relative w-full aspect-video rounded-lg overflow-hidden bg-black">
+                <video #podVideo class="w-full h-full object-cover" muted playsinline autoplay></video>
+            </div>
+            <img *ngIf="podPhotoDone && podPhotoPreviewUrl" [src]="podPhotoPreviewUrl"
+                class="w-full aspect-video object-cover rounded-lg" alt="Delivery photo" />
+
+            <div class="flex justify-end gap-2">
+                <app-button *ngIf="podPhotoDone" variant="ghost-outline" label="Retake"
+                    (onClick)="retakePodPhoto()"></app-button>
+                <app-button *ngIf="!podPhotoDone" variant="ghost-success" label="Take Photo"
+                    [loading]="podPhotoUploading" [disabled]="podPhotoUploading"
+                    (onClick)="capturePodPhoto()"></app-button>
+            </div>
+        </div>
+
+        <!-- Signature (conditional on order's proof-of-delivery requirement) -->
+        <div *ngIf="podSignatureRequired" class="rounded-xl border border-gray-200 dark:border-[#3a3d3a] p-4 space-y-3">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="font-semibold text-sm text-gray-900 dark:text-gray-100">Recipient Signature</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Required for this order</p>
+                </div>
+                <i *ngIf="podSignatureDone" class="ph ph-check-circle text-xl text-[#2fbf82]"></i>
+            </div>
+
+            <ng-container *ngIf="!podSignatureDone">
+                <canvas #podSignatureCanvas width="320" height="140"
+                    class="w-full rounded-lg border border-gray-300 dark:border-[#5a5d5a] touch-none bg-white"
+                    (pointerdown)="onSignaturePointerDown($event)" (pointermove)="onSignaturePointerMove($event)"
+                    (pointerup)="onSignaturePointerUp()" (pointerleave)="onSignaturePointerUp()"></canvas>
+
+                <input type="text" [(ngModel)]="podRecipientName" placeholder="Recipient's name"
+                    class="w-full rounded-lg border border-gray-300 dark:border-[#5a5d5a] dark:bg-[#1d201d] px-3 py-2 text-sm" />
+
+                <div class="flex justify-end gap-2">
+                    <app-button variant="ghost-outline" label="Clear" (onClick)="clearPodSignature()"></app-button>
+                    <app-button variant="ghost-success" label="Save Signature"
+                        [loading]="podSignatureUploading" [disabled]="podSignatureUploading"
+                        (onClick)="savePodSignature()"></app-button>
+                </div>
+            </ng-container>
+
+            <p *ngIf="podSignatureDone" class="text-sm text-[#2fbf82]">Signed by {{ podRecipientName }}.</p>
+        </div>
+    </div>
+
+    <div modal-footer class="flex items-center justify-end gap-3">
+        <app-button variant="ghost-outline" label="Cancel" (onClick)="onClose()"></app-button>
+        <app-button variant="ghost-success" label="Mark Delivered" [disabled]="!podCanMarkDelivered"
+            (onClick)="markDelivered()"></app-button>
+    </div>
+</app-popup>

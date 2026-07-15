@@ -1,0 +1,83 @@
+<app-popup [open]="open" title="Shipping Label" widthClass="max-w-lg" (close)="onClose()">
+
+    <ng-container *ngIf="order as order">
+        <div class="flex justify-center py-2">
+
+            <!-- Label card — always white + black regardless of dark mode -->
+            <div id="label-preview"
+                class="w-96 border-2 border-black bg-white text-black font-sans text-xs select-none">
+
+                <!-- TOP: letter + postage info + QR -->
+                <div class="flex border-b-2 border-black p-2 gap-2 items-start">
+
+                    <div class="text-6xl font-black leading-none w-14 text-center flex-shrink-0">D</div>
+
+                    <div class="flex-1 text-[9px] leading-relaxed">
+                        <div class="font-bold text-[10px]">DISPATCH DELIVERY</div>
+                        <div>Order: {{ order.full.orderNumber }}</div>
+                        <div>Placed: {{ order.view.current.orderPlacedTime }}</div>
+                        <div>Est. Delivery: {{ order.view.current.estDeliveryTime }}</div>
+                        <div class="mt-1 text-[8px] text-gray-400">CommercialBasePrice</div>
+                    </div>
+
+                    <div class="flex items-center gap-1 flex-shrink-0">
+                        <span class="text-[8px] text-gray-400 tracking-widest"
+                            style="writing-mode:vertical-rl; transform:rotate(180deg);">
+                            dispatch.local
+                        </span>
+                        <canvas id="qrcode" class="w-[70px] h-[70px] block"></canvas>
+                    </div>
+
+                </div>
+
+                <!-- SERVICE BANNER -->
+                <div class="text-center font-black text-sm tracking-widest py-1 border-b-2 border-black uppercase">
+                    Dispatch First-Class PKG
+                </div>
+
+                <!-- SENDER -->
+                <div class="flex justify-between items-start p-2 border-b-2 border-black gap-3">
+                    <div class="text-[9px] leading-relaxed">
+                        <div class="font-bold text-[8px] uppercase text-gray-400 mb-0.5">From</div>
+                        <div class="font-medium">{{ order.full.pickup.name }}</div>
+                        <div>{{ order.full.pickup.address }}</div>
+                    </div>
+                    <div class="text-[9px] text-gray-500 flex-shrink-0 whitespace-nowrap">
+                        Order: {{ order.full.orderNumber }}
+                    </div>
+                </div>
+
+                <!-- RECIPIENT -->
+                <div class="px-2 pt-3 pb-4 border-b-2 border-black">
+                    <div class="font-bold text-[8px] uppercase text-gray-400 mb-0.5">To</div>
+                    <div class="font-bold text-sm mb-0.5">{{ order.full.delivery.name }}</div>
+                    <div class="text-[11px] leading-relaxed">{{ order.full.delivery.address }}</div>
+                </div>
+
+                <!-- BARCODE -->
+                <div class="p-2 text-center">
+                    <div class="font-black text-[13px] tracking-widest mb-1.5">TRACKING #</div>
+                    <svg id="barcode" class="w-full h-14 block"></svg>
+                    <div class="text-[10px] tracking-[0.2em] mt-1">{{ order.full.orderNumber }}</div>
+                </div>
+
+            </div>
+        </div>
+    </ng-container>
+
+    <!-- FOOTER -->
+    <div modal-footer class="flex items-center justify-end gap-3">
+        <app-button variant="ghost" label="Cancel" (onClick)="onClose()"
+            [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm'">
+        </app-button>
+
+        <app-button variant="ghost" label="Download PDF" (onClick)="downloadLabelPdf()"
+            [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm'">
+        </app-button>
+
+        <app-button variant="primary" label="Print Label" (onClick)="printLabel()"
+            [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-4 py-2 rounded-md text-sm'">
+        </app-button>
+    </div>
+
+</app-popup>

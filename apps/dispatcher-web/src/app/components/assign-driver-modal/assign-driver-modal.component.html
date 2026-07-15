@@ -1,0 +1,63 @@
+<app-popup [open]="open" title="Assign Driver" widthClass="max-w-3xl" (close)="onClose()">
+
+    <ng-container *ngIf="order as order">
+        <div class="space-y-4">
+            <div class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
+                <p class="text-sm text-gray-500 dark:text-gray-400">Assigning driver to</p>
+                <p class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                    {{ order.full.orderNumber }} · {{ order.full.delivery.name }}
+                </p>
+                <p class="text-sm text-gray-600 dark:text-gray-300">{{ order.full.delivery.address }}</p>
+            </div>
+
+            <div class="mt-2">
+                <app-search-bar [value]="assignDriverQuery" (valueChange)="assignDriverQuery = $event">
+                </app-search-bar>
+            </div>
+
+            <p *ngIf="isLoadingAssignableDrivers" class="text-sm text-gray-500 dark:text-gray-400">
+                Loading drivers from tenants...
+            </p>
+
+            <div class="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+                <button *ngFor="let driver of filteredAssignableDrivers" type="button"
+                    class="w-full rounded-lg border px-4 py-3 text-left transition"
+                    [class]="selectedDriverId === driver.id
+                        ? 'border-[#3ddc97] bg-[#3ddc97]/10'
+                        : 'border-gray-200 dark:border-[#5a5d5a] hover:bg-gray-50 dark:hover:bg-[#232623]'"
+                    (click)="selectedDriverId = driver.id">
+                    <div class="flex items-center justify-between gap-4">
+                        <div>
+                            <p class="font-medium text-gray-900 dark:text-gray-100">{{ driver.name }}</p>
+                            <p class="text-sm text-gray-600 dark:text-gray-300">
+                                {{ driver.contactName || 'No contact name' }}
+                            </p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                {{ driver.email }} · {{ driver.phone }}
+                            </p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">{{ driver.address || 'No address provided' }}</p>
+                        </div>
+                    </div>
+                </button>
+            </div>
+
+            <p *ngIf="!isLoadingAssignableDrivers && filteredAssignableDrivers.length === 0" class="text-sm text-gray-500 dark:text-gray-400">
+                No tenant drivers match this search.
+            </p>
+        </div>
+    </ng-container>
+
+    <div modal-footer class="flex items-center justify-end gap-3">
+        <app-button *ngIf="order?.view?.current?.driver" variant="ghost-danger"
+            label="Unassign" (onClick)="unassignSelectedDriver()">
+        </app-button>
+
+        <app-button variant="ghost" label="Cancel" (onClick)="onClose()"
+            [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm'">
+        </app-button>
+
+        <app-button variant="primary" label="Assign Driver" (onClick)="assignSelectedDriver()"
+            [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-6 py-2 rounded-md text-sm'">
+        </app-button>
+    </div>
+</app-popup>
