@@ -18,6 +18,7 @@ from app.api.routers import (
     locations,
     pricing,
     driver_payroll,
+    delivery_configuration,
 )
 from app.db.seed import seed_platform_admin
 from app.db.seed_locations import seed_canadian_pricing, seed_locations
@@ -73,6 +74,11 @@ def create_app() -> FastAPI:
         driver_payroll.router,
         prefix="/api/v1/driver-payroll",
         tags=["driver-payroll"],
+    )
+    application.include_router(
+        delivery_configuration.router,
+        prefix="/api/v1/configurations",
+        tags=["delivery-configuration"],
     )
 
     return application

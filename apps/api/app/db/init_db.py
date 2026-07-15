@@ -19,6 +19,17 @@ from app.models.location import (
     State,
     StatePricing,
 )
+from app.models.delivery_configuration import (
+    AfterHoursDelivery,
+    DeliveryCategory,
+    OperationalZone,
+    OperationalZoneCity,
+    PartnerZoneCategoryPrice,
+    SpecialOccasion,
+    Surcharge,
+    ZoneBasePrice,
+    ZoneCategoryPrice,
+)
 
 
 async def init_db():
