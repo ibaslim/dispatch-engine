@@ -120,15 +120,53 @@ export const routes: Routes = [
     children: [
       {
         path: '',
-        redirectTo: 'pricing',
+        redirectTo: 'operational-regions',
         pathMatch: 'full',
       },
       {
         path: 'pricing',
+        redirectTo: 'base-prices',
+        pathMatch: 'full',
+      },
+      {
+        path: 'operational-regions',
         loadComponent: () =>
-          import('./pages/configurations/pricing/pricing.component').then(
-            (m) => m.PricingComponent
+          import('./pages/configurations/delivery-settings/delivery-settings.component').then(
+            (m) => m.DeliverySettingsComponent
           ),
+        data: { section: 'regions' },
+      },
+      {
+        path: 'delivery-categories',
+        loadComponent: () =>
+          import('./pages/configurations/delivery-settings/delivery-settings.component').then(
+            (m) => m.DeliverySettingsComponent
+          ),
+        data: { section: 'categories' },
+      },
+      {
+        path: 'after-hours',
+        loadComponent: () =>
+          import('./pages/configurations/delivery-settings/delivery-settings.component').then(
+            (m) => m.DeliverySettingsComponent
+          ),
+        data: { section: 'after-hours' },
+      },
+      {
+        path: 'base-prices',
+        loadComponent: () =>
+          import('./pages/configurations/delivery-settings/delivery-settings.component').then(
+            (m) => m.DeliverySettingsComponent
+          ),
+        data: { section: 'base-prices' },
+      },
+      {
+        path: 'surcharges',
+        loadComponent: () =>
+          import('./pages/configurations/delivery-settings/delivery-settings.component').then(
+            (m) => m.DeliverySettingsComponent
+          ),
+        data: { section: 'surcharges' },
       },
       {
         path: 'driver-payroll',

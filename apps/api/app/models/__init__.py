@@ -20,6 +20,17 @@ from app.models.location import (
     State,
     StatePricing,
 )
+from app.models.delivery_configuration import (
+    AfterHoursDelivery,
+    DeliveryCategory,
+    OperationalZone,
+    OperationalZoneCity,
+    PartnerZoneCategoryPrice,
+    SpecialOccasion,
+    Surcharge,
+    ZoneBasePrice,
+    ZoneCategoryPrice,
+)
 
 __all__ = [
     "Tenant",
@@ -45,4 +56,13 @@ __all__ = [
     "PartnerPricing",
     "PartnerStatePricing",
     "PartnerCityPricing",
+    "OperationalZone",
+    "OperationalZoneCity",
+    "DeliveryCategory",
+    "AfterHoursDelivery",
+    "ZoneBasePrice",
+    "ZoneCategoryPrice",
+    "PartnerZoneCategoryPrice",
+    "Surcharge",
+    "SpecialOccasion",
 ]
