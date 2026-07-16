@@ -3,4 +3,17 @@
 @tailwind utilities;
 
 * { box-sizing: border-box; }
-body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+body { margin: 0; font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+@keyframes banner-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.banner-rise { animation: banner-rise 0.6s ease-out both; }
+.banner-rise-delay { animation: banner-rise 0.6s ease-out 0.15s both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .banner-rise,
+  .banner-rise-delay { animation: none; }
+}
