@@ -41,6 +41,11 @@ export class OrdersService {
     return this.http.post(`${this.baseUrl}/${orderId}/proof-of-delivery/signature`, formData);
   }
 
+  /** Downloads a captured proof-of-delivery image (driver signature or delivery photo). */
+  getProofOfDeliveryImage(orderId: string, kind: 'photo' | 'signature'): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/${orderId}/proof-of-delivery/${kind}`, { responseType: 'blob' });
+  }
+
   updateOrder(id: string, data: any): Observable<any> {
     return this.http.patch(`${this.baseUrl}/${id}`, data);
   }
@@ -79,6 +84,11 @@ export class OrdersService {
   /** Get all currently live published orders (within 15-min window, no driver). */
   getPublishedOrders(): Observable<any[]> {
     return this.http.get<any[]>(`${this.baseUrl}/published`);
+  }
+
+  /** Driver reports an exception at pickup/delivery (e.g. sender/recipient absent). */
+  reportIncident(id: string, stage: 'pickup' | 'delivery', reason: string, description: string | null): Observable<any> {
+    return this.http.post(`${this.baseUrl}/${id}/report`, { stage, reason, description });
   }
 }
 

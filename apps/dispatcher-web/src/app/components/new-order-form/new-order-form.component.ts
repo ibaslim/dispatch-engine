@@ -75,7 +75,8 @@ export class NewOrderFormComponent {
           signature: false,
           picture: false
 
-        }
+        },
+        incidentReport: null
       }
     };
   }

@@ -6,6 +6,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
@@ -17,9 +18,18 @@ from app.db.session import get_db
 from app.core.deps import CurrentUser
 from app.models.order import Order, OrderStatus, ActivityStatus
 from app.models.tenant import Tenant, TenantRole
-from app.schemas.order import OrderCreate, OrderResponse, OrderUpdate, ActivityStatusUpdate
+from app.schemas.order import (
+    OrderCreate,
+    OrderResponse,
+    OrderUpdate,
+    ActivityStatusUpdate,
+    IncidentReportCreate,
+    IncidentReason,
+    IncidentStage,
+    INCIDENT_REASONS_REQUIRING_DESCRIPTION,
+)
 from app.workers.tasks import send_order_sender_invoice_email, send_order_delivered_email
-from uuid import UUID
+from uuid import UUID, uuid4
 
 router = APIRouter(tags=["Orders"])
 APP_TIMEZONE = ZoneInfo("Asia/Karachi")
@@ -190,6 +200,15 @@ async def update_order(
         raise HTTPException(status_code=404, detail="Order not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+
+    # Editing an order must not wipe an already-captured POD submission
+    # (signature/photo paths written by the driver upload endpoints).
+    if "proof_of_delivery" in update_data:
+        existing_submission = (order.proof_of_delivery or {}).get("submission")
+        incoming = dict(update_data["proof_of_delivery"] or {})
+        if existing_submission and not incoming.get("submission"):
+            incoming["submission"] = existing_submission
+        update_data["proof_of_delivery"] = incoming
 
     try:
         for key, value in update_data.items():
@@ -383,6 +402,64 @@ def _notify_sender_order_delivered(order: Order) -> None:
 
 
 # -------------------------
+# INCIDENT REPORTS (sender/recipient absent, etc.)
+# -------------------------
+PICKUP_INCIDENT_REASONS = {IncidentReason.no_answer, IncidentReason.wrong_address, IncidentReason.business_closed, IncidentReason.parcel_issue, IncidentReason.other}
+DELIVERY_INCIDENT_REASONS = {IncidentReason.no_answer, IncidentReason.wrong_address, IncidentReason.refused, IncidentReason.other}
+
+@router.post("/{order_id}/report")
+async def report_incident(
+    order_id: str,
+    payload: IncidentReportCreate,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if not current_user.tenant_id or order.driver_id != current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the assigned driver can report the issue.",
+        )
+
+    if order.incident_report:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This order already has a reported issue.",
+        )
+
+    allowed_reasons = PICKUP_INCIDENT_REASONS if payload.stage == IncidentStage.pickup else DELIVERY_INCIDENT_REASONS
+    if payload.reason not in allowed_reasons:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"'{payload.reason.value}' is not a valid reason for stage '{payload.stage.value}'.",
+        )
+
+    description = (payload.description or "").strip()
+    if payload.reason in INCIDENT_REASONS_REQUIRING_DESCRIPTION and not description:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"A description is required when reason is '{payload.reason.value}'.",
+        )
+
+    order.incident_report = {
+        "id": str(uuid4()),
+        "stage": payload.stage.value,
+        "reason": payload.reason.value,
+        "description": description or None,
+        "reported_by": str(current_user.tenant_id) if current_user.tenant_id else None,
+        "reported_at": datetime.utcnow().isoformat(),
+    }
+
+    await db.commit()
+
+    return {"success": True, "incident_report": order.incident_report}
+
+# -------------------------
 # PROOF OF DELIVERY UPLOADS
 # -------------------------
 def _authorize_pod_upload(order: Order, current_user: CurrentUser) -> None:
@@ -514,6 +591,50 @@ async def upload_proof_of_delivery_signature(
     await db.commit()
 
     return {"success": True}
+
+
+async def _authorize_pod_view(order: Order, current_user: CurrentUser, db: AsyncSession) -> None:
+    """Mirrors the order visibility rules of get_orders."""
+    if current_user.is_platform_admin:
+        return
+    if current_user.tenant_id:
+        result = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
+        tenant = result.scalar_one_or_none()
+        if tenant:
+            if tenant.role == TenantRole.driver and order.driver_id == current_user.tenant_id:
+                return
+            if tenant.role == TenantRole.vendor and (
+                order.vendor_id == current_user.tenant_id or order.pickup_name == tenant.name
+            ):
+                return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+
+@router.get("/{order_id}/proof-of-delivery/{kind}")
+async def get_proof_of_delivery_image(
+    order_id: str,
+    kind: str,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> FileResponse:
+    if kind not in ("photo", "signature"):
+        raise HTTPException(status_code=404, detail="Unknown proof of delivery attachment.")
+
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    await _authorize_pod_view(order, current_user, db)
+
+    submission = (order.proof_of_delivery or {}).get("submission") or {}
+    filepath = submission.get("photo_path" if kind == "photo" else "signature_path")
+
+    if not filepath or not Path(filepath).is_file():
+        raise HTTPException(status_code=404, detail="Proof of delivery file not found.")
+
+    return FileResponse(filepath, filename=Path(filepath).name)
 
 
 # -------------------------

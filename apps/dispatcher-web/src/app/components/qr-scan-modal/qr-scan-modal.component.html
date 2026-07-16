@@ -1,0 +1,21 @@
+<app-popup [open]="open" title="Scan QR Code" widthClass="max-w-md" (close)="onClose()">
+    <div class="flex flex-col items-center gap-4 py-4">
+        <div class="relative w-full aspect-square max-w-xs rounded-lg overflow-hidden bg-black">
+            <video #qrVideo class="w-full h-full object-cover" muted playsinline autoplay></video>
+            <div class="pointer-events-none absolute inset-6 rounded-lg border-2 border-[#3ddc97]"></div>
+        </div>
+
+        <p *ngIf="qrScanMatched" class="text-sm text-[#2fbf82] font-medium text-center">
+            QR code matched. Proceeding.
+        </p>
+        <p *ngIf="!qrScanMatched" class="text-sm text-gray-500 dark:text-gray-400 text-center">
+            Point the camera at the order's QR code to confirm this step{{ context?.orderNo ? ' (' + context?.orderNo + ')' : '' }}.
+        </p>
+    </div>
+
+<!--        <div modal-footer class="flex items-center justify-end gap-3">-->
+<!--            <app-button variant="ghost-outline" label="Cancel" (onClick)="onClose()"></app-button>-->
+<!--            <app-button variant="ghost-success" label="Continue" [disabled]="!qrScanMatched"-->
+<!--                (onClick)="continueQrScan()"></app-button>-->
+<!--        </div>-->
+</app-popup>
