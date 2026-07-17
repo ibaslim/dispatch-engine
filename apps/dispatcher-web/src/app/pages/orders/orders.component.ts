@@ -665,6 +665,12 @@ export class OrdersComponent implements OnInit, OnDestroy {
       next: () => {
         this.setFeedback('Activity status updated.', 'success');
         this.loadOrders();
+
+        if (next === 'delivery_initiated') {
+          this.ordersService.sendRecipientNotification(id).subscribe({
+            error: () => this.setFeedback('Unable to notify the recipient by email.', 'error')
+          });
+        }
       },
       error: () => this.setFeedback('Unable to update activity status.', 'error')
     });

@@ -71,6 +71,11 @@ export class OrdersService {
     return this.http.post(`${this.baseUrl}/${id}/notify/sender`, {});
   }
 
+  /** Email the recipient with full order details and a tracking link. */
+  sendRecipientNotification(id: string): Observable<any> {
+    return this.http.post(`${this.baseUrl}/${id}/notify/recipient`, {});
+  }
+
   /** Publish a saved order to all online drivers (platform admin only). */
   publishOrder(id: string): Observable<any> {
     return this.http.post(`${this.baseUrl}/${id}/publish`, {});
