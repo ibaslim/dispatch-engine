@@ -4,6 +4,7 @@ import { ActivatedRoute } from '@angular/router';
 import { PageComponent } from '../../components/page/page.component';
 import { ButtonComponent } from '../../components/button/button.component';
 import { AuthService } from '../../core/auth/auth.service';
+import { GoogleMapsService } from '../../services/google-maps/google-maps.service';
 
 declare const google: any;
 
@@ -19,7 +20,6 @@ interface RouteStep {
   endLocation: LatLng;
 }
 
-const ROUTES_API_KEY = 'AIzaSyDkzjmIaFeTx6RtnV252LT97cT1VBTdHu8';
 const ROUTES_API_URL = 'https://routes.googleapis.com/directions/v2:computeRoutes';
 const STEP_ADVANCE_THRESHOLD_M = 30;
 const NEAR_MANEUVER_ANNOUNCE_M = 150;
@@ -33,6 +33,7 @@ const CAMERA_ANIMATION_MS = 900;
 export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
+  private readonly googleMaps = inject(GoogleMapsService);
 
   private map: any;
   private routePolyline: any;
@@ -73,20 +74,25 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
     this.destinationLabel = this.route.snapshot.queryParamMap.get('label') || '';
   }
 
-  ngAfterViewInit(): void {
-    this.map = new google.maps.Map(document.getElementById('map'), {
-      center: { lat: 53.5461, lng: -113.4938 }, // Edmonton
-      zoom: 11,
-      disableDefaultUI: false,
-      zoomControl: true,
-      mapTypeControl: true,
-      streetViewControl: true,
-      fullscreenControl: true,
-      styles: this.darkStyle
-    });
+  async ngAfterViewInit(): Promise<void> {
+    try {
+      await this.googleMaps.loadMaps();
+      this.map = new google.maps.Map(document.getElementById('map'), {
+        center: { lat: 53.5461, lng: -113.4938 }, // Edmonton
+        zoom: 11,
+        disableDefaultUI: false,
+        zoomControl: true,
+        mapTypeControl: true,
+        streetViewControl: true,
+        fullscreenControl: true,
+        styles: this.darkStyle
+      });
 
-    if (this.destination) {
-      this.showDirectionsTo(this.destination);
+      if (this.destination) {
+        this.showDirectionsTo(this.destination);
+      }
+    } catch {
+      this.directionsError = 'Google Maps is not configured or could not be loaded.';
     }
   }
 
@@ -360,11 +366,12 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private async computeRoute(origin: RouteOrigin, destination: string): Promise<void> {
     try {
+      const apiKey = await this.googleMaps.getBrowserApiKey();
       const response = await fetch(ROUTES_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Goog-Api-Key': ROUTES_API_KEY,
+          'X-Goog-Api-Key': apiKey,
           'X-Goog-FieldMask': [
             'routes.duration',
             'routes.distanceMeters',
