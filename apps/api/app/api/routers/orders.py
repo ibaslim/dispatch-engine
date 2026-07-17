@@ -28,7 +28,11 @@ from app.schemas.order import (
     IncidentStage,
     INCIDENT_REASONS_REQUIRING_DESCRIPTION,
 )
-from app.workers.tasks import send_order_sender_invoice_email, send_order_delivered_email
+from app.workers.tasks import (
+    send_order_sender_invoice_email,
+    send_order_delivered_email,
+    send_order_recipient_notification_email,
+)
 from uuid import UUID, uuid4
 
 router = APIRouter(tags=["Orders"])
@@ -740,6 +744,80 @@ async def send_sender_invoice(
         "success": True,
         "email": pickup_email,
         "order_id": order_id,
+    }
+
+
+# -------------------------
+# SEND RECIPIENT NOTIFICATION
+# -------------------------
+@router.post("/{order_id}/notify/recipient", description="Notifies the recipient with order details and a tracking link")
+async def send_recipient_notification(
+    order_id: str,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Email the recipient with sender/receiver info, item breakdown, totals, and a tracking link."""
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    is_assigned_driver = bool(current_user.tenant_id) and order.driver_id == current_user.tenant_id
+    if not current_user.is_platform_admin and not is_assigned_driver:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only platform admins or the assigned driver can email order recipients.",
+        )
+
+    delivery_email = (order.delivery_email or "").strip()
+    if not delivery_email:
+        raise HTTPException(
+            status_code=400,
+            detail="Order recipient does not have a delivery email address.",
+        )
+
+    order_data = {
+        "order_number": order.order_number,
+        "status": order.status.value if order.status else "",
+        "order_placed_time": order.order_placed_time,
+        "pickup_name": order.pickup_name,
+        "pickup_phone": order.pickup_phone,
+        "pickup_email": order.pickup_email,
+        "pickup_address": order.pickup_address,
+        "pickup_date": order.pickup_date,
+        "pickup_time": order.pickup_time,
+        "delivery_name": order.delivery_name,
+        "delivery_phone": order.delivery_phone,
+        "delivery_email": order.delivery_email,
+        "delivery_address": order.delivery_address,
+        "delivery_date": order.delivery_date,
+        "delivery_time": order.delivery_time,
+        "items": order.items or [],
+        "subtotal": order.subtotal,
+        "tax_rate": order.tax_rate,
+        "tax_amount": order.tax_amount,
+        "delivery_fees": order.delivery_fees,
+        "delivery_tips": order.delivery_tips,
+        "discount": order.discount,
+        "total": order.total,
+        "payment_method": order.payment_method,
+    }
+
+    tracking_url = f"{settings.tracking_web_base_url.rstrip('/')}/t/{order.id}"
+
+    send_order_recipient_notification_email.delay(
+        email=delivery_email,
+        order_number=order.order_number,
+        order_data=order_data,
+        tracking_url=tracking_url,
+    )
+
+    return {
+        "success": True,
+        "email": delivery_email,
+        "order_id": order_id,
+        "tracking_url": tracking_url,
     }
 
 # -------------------------

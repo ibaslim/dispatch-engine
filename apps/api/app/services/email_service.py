@@ -498,6 +498,151 @@ def build_order_invoice_message(order: Any) -> str:
     """
 
 
+def build_order_recipient_email(order: Any, tracking_url: str) -> str:
+    """Email sent to the recipient with full order/sender/receiver details,
+    an itemized breakdown, and a link to track the delivery."""
+    order_number = _html(_field(order, "order_number"))
+    delivery_name = _html(_field(order, "delivery_name")) or "there"
+    delivery_phone = _html(_field(order, "delivery_phone"))
+    delivery_email = _html(_field(order, "delivery_email"))
+    delivery_address = _html(_field(order, "delivery_address"))
+    delivery_date = _html(_field(order, "delivery_date"))
+    delivery_time = _html(_field(order, "delivery_time"))
+
+    pickup_name = _html(_field(order, "pickup_name")) or "—"
+    pickup_phone = _html(_field(order, "pickup_phone"))
+    pickup_email = _html(_field(order, "pickup_email"))
+    pickup_address = _html(_field(order, "pickup_address"))
+
+    status = _html(_format_order_status(_field(order, "status")) or "Pending")
+    tracking_url_safe = _html(tracking_url)
+
+    items = _field(order, "items", []) or []
+    item_rows = "".join(
+        f"""
+        <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">{_html(_field(item, 'itemName'))}</td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; text-align: center; color: #475569;">{_html(_field(item, 'itemQty'))}</td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; text-align: right;">{_html(_money(_field(item, 'itemPrice')))}</td>
+        </tr>
+        """
+        for item in items
+    )
+
+    discount_val = _field(order, "discount")
+    try:
+        has_discount = float(discount_val or 0) > 0
+    except (TypeError, ValueError):
+        has_discount = False
+    discount_row = (
+        f"""
+        <tr>
+            <td style="padding: 4px 0; color: #6b7280;">Discount</td>
+            <td style="padding: 4px 0; text-align: right; color: #DC2626;">-{_html(_money(discount_val))}</td>
+        </tr>
+        """
+        if has_discount
+        else ""
+    )
+
+    return f"""
+    <html>
+    <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #111827;">
+        <p style="color: #94a3b8; font-size: 12px; font-weight: bold; letter-spacing: 1px; margin: 0 0 4px;">
+            DISPATCH DELIVERY
+        </p>
+        <h2 style="color: #D97706; margin: 0 0 4px;">A Delivery Is On Its Way - Order #{order_number}</h2>
+        <p style="color: #6b7280; font-size: 13px; margin: 0 0 20px;">Status: {status}</p>
+
+        <p>Hi {delivery_name},</p>
+        <p>An order has been sent to you. Here are the full details:</p>
+
+        <p style="margin: 24px 0;">
+            <a href="{tracking_url_safe}"
+               style="background: #D97706; color: white; padding: 12px 24px;
+                      text-decoration: none; border-radius: 6px; display: inline-block;">
+                Track Your Delivery
+            </a>
+        </p>
+
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr>
+                <td style="border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; padding: 14px 0;">
+                    <table style="width: 100%;">
+                        <tr>
+                            <td style="color: #94a3b8; font-size: 11px; font-weight: bold; letter-spacing: 0.5px;">FROM (SENDER)</td>
+                            <td style="color: #94a3b8; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; text-align: right;">TO (YOU)</td>
+                        </tr>
+                        <tr>
+                            <td style="color: #111827; font-weight: bold; padding-top: 4px;">{pickup_name}</td>
+                            <td style="color: #111827; font-weight: bold; padding-top: 4px; text-align: right;">{delivery_name}</td>
+                        </tr>
+                        <tr>
+                            <td style="color: #475569; font-size: 13px;">{pickup_phone}</td>
+                            <td style="color: #475569; font-size: 13px; text-align: right;">{delivery_phone}</td>
+                        </tr>
+                        <tr>
+                            <td style="color: #475569; font-size: 13px;">{pickup_email}</td>
+                            <td style="color: #475569; font-size: 13px; text-align: right;">{delivery_email}</td>
+                        </tr>
+                        <tr>
+                            <td style="color: #475569; font-size: 13px; padding-top: 4px;">{pickup_address}</td>
+                            <td style="color: #475569; font-size: 13px; text-align: right; padding-top: 4px;">{delivery_address}</td>
+                        </tr>
+                        <tr>
+                            <td></td>
+                            <td style="color: #6b7280; font-size: 12px; text-align: right; padding-top: 4px;">{delivery_date} &nbsp;·&nbsp; {delivery_time}</td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+
+        <p style="color: #94a3b8; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; margin: 20px 0 8px;">ITEMS</p>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+                <td style="color: #94a3b8; font-size: 11px; font-weight: bold; padding-bottom: 6px; border-bottom: 1px solid #111827;">ITEM</td>
+                <td style="color: #94a3b8; font-size: 11px; font-weight: bold; padding-bottom: 6px; border-bottom: 1px solid #111827; text-align: center;">QTY</td>
+                <td style="color: #94a3b8; font-size: 11px; font-weight: bold; padding-bottom: 6px; border-bottom: 1px solid #111827; text-align: right;">PRICE</td>
+            </tr>
+            {item_rows}
+        </table>
+
+        <table style="width: 100%; border-collapse: collapse; margin-top: 14px;">
+            <tr>
+                <td style="padding: 4px 0; color: #6b7280;">Subtotal</td>
+                <td style="padding: 4px 0; text-align: right;">{_html(_money(_field(order, 'subtotal')))}</td>
+            </tr>
+            <tr>
+                <td style="padding: 4px 0; color: #6b7280;">Tax ({_html(_field(order, 'tax_rate'))}%)</td>
+                <td style="padding: 4px 0; text-align: right;">{_html(_money(_field(order, 'tax_amount')))}</td>
+            </tr>
+            <tr>
+                <td style="padding: 4px 0; color: #6b7280;">Delivery fees</td>
+                <td style="padding: 4px 0; text-align: right;">{_html(_money(_field(order, 'delivery_fees')))}</td>
+            </tr>
+            <tr>
+                <td style="padding: 4px 0; color: #6b7280;">Tips</td>
+                <td style="padding: 4px 0; text-align: right;">{_html(_money(_field(order, 'delivery_tips')))}</td>
+            </tr>
+            {discount_row}
+            <tr>
+                <td style="padding: 10px 0 0; font-weight: bold; font-size: 16px; border-top: 1.5px solid #D97706;">Total</td>
+                <td style="padding: 10px 0 0; font-weight: bold; font-size: 16px; text-align: right; color: #D97706; border-top: 1.5px solid #D97706;">{_html(_money(_field(order, 'total')))}</td>
+            </tr>
+        </table>
+
+        <p style="margin-top: 24px;">Thank you for using Dispatch Delivery.<br/>Dispatch Delivery</p>
+
+        <br/>
+        <p style="color: #6b7280; font-size: 14px;">
+            This is an automated message. Please do not reply directly to this email.
+        </p>
+    </body>
+    </html>
+    """
+
+
 # ---------------------------------------------------------------------------
 # PDF body
 # ---------------------------------------------------------------------------
