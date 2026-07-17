@@ -3,11 +3,11 @@ import { Routes } from '@angular/router';
 export const routes: Routes = [
   {
     path: '',
-    redirectTo: '',
+    redirectTo: 't',
     pathMatch: 'full',
   },
   {
-    path: '',
+    path: 'posts',
     loadComponent: () =>
       import('./pages/posts/posts.component').then((m) => m.PostsComponent),
   },
