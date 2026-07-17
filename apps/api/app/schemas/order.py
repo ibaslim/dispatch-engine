@@ -48,6 +48,34 @@ class OrderItem(BaseModel):
     itemQty: int
 
 
+class PublicOrderTracking(BaseModel):
+    """Order details exposed on the public tracking page. No contact,
+    payment or internal info — only what the recipient needs to see."""
+    order_number: str
+    status: OrderStatus
+    activity_status: ActivityStatus
+    driver_name: Optional[str] = None
+
+    pickup_name: Optional[str] = None
+    pickup_address: Optional[str] = None
+    pickup_date: Optional[str] = None
+    pickup_time: Optional[str] = None
+
+    delivery_name: Optional[str] = None
+    delivery_address: Optional[str] = None
+    delivery_date: Optional[str] = None
+    delivery_time: Optional[str] = None
+
+    items_count: int = 0
+    created_at: Optional[datetime] = None
+
+    pickup_initiated_at: Optional[datetime] = None
+    picked_up_at: Optional[datetime] = None
+    delivery_initiated_at: Optional[datetime] = None
+    delivery_in_progress_at: Optional[datetime] = None
+    delivered_at: Optional[datetime] = None
+
+
 # -------------------------
 # CREATE ORDER
 # -------------------------

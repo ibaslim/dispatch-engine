@@ -39,6 +39,22 @@ router = APIRouter(tags=["Orders"])
 APP_TIMEZONE = ZoneInfo("Asia/Karachi")
 PUBLISH_WINDOW_MINUTES = 15
 
+ACTIVITY_STATUS_TIMESTAMP_FIELDS: dict[ActivityStatus, str] = {
+    ActivityStatus.pickup_initiated: "pickup_initiated_at",
+    ActivityStatus.picked_up: "picked_up_at",
+    ActivityStatus.delivery_initiated: "delivery_initiated_at",
+    ActivityStatus.delivery_in_progress: "delivery_in_progress_at",
+    ActivityStatus.delivered: "delivered_at",
+}
+
+
+def _stamp_activity_status(order: Order, new_status: ActivityStatus) -> None:
+    """Set the order's activity status and record the first time it was reached."""
+    order.activity_status = new_status
+    field = ACTIVITY_STATUS_TIMESTAMP_FIELDS.get(new_status)
+    if field and getattr(order, field) is None:
+        setattr(order, field, datetime.now(APP_TIMEZONE))
+
 POD_MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 POD_CHUNK_SIZE = 1024 * 1024  # 1 MB
 POD_ALLOWED_CONTENT_TYPES = {
@@ -332,7 +348,7 @@ async def update_activity_status(
             )
 
     previous_activity_status = order.activity_status
-    order.activity_status = payload.activity_status
+    _stamp_activity_status(order, payload.activity_status)
 
     is_new_delivery = (
         payload.activity_status == ActivityStatus.delivered
@@ -868,7 +884,7 @@ async def assign_driver(
         order.driver_id = payload.driver_id
         order.published = False
         if order.activity_status == ActivityStatus.driver_not_assigned:
-            order.activity_status = ActivityStatus.pickup_initiated
+            _stamp_activity_status(order, ActivityStatus.pickup_initiated)
 
         await db.commit()
         await db.refresh(order)
@@ -1036,7 +1052,7 @@ async def accept_order(
     order.driver_id = current_user.tenant_id
     order.published = False  # Remove from broadcast queue
     if order.activity_status == ActivityStatus.driver_not_assigned:
-        order.activity_status = ActivityStatus.pickup_initiated
+        _stamp_activity_status(order, ActivityStatus.pickup_initiated)
 
     await db.commit()
     await db.refresh(order)

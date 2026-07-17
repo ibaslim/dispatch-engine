@@ -72,6 +72,13 @@ class Order(Base):
     )
     ready_for_pickup = Column(Boolean, default=False)
 
+    # Activity status checkpoint timestamps
+    pickup_initiated_at = Column(DateTime(timezone=True), nullable=True)
+    picked_up_at = Column(DateTime(timezone=True), nullable=True)
+    delivery_initiated_at = Column(DateTime(timezone=True), nullable=True)
+    delivery_in_progress_at = Column(DateTime(timezone=True), nullable=True)
+    delivered_at = Column(DateTime(timezone=True), nullable=True)
+
     # Broadcast / publish state
     published = Column(Boolean, default=False, nullable=False)
     published_at = Column(DateTime(timezone=True), nullable=True)

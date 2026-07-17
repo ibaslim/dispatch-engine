@@ -1,0 +1,101 @@
+<div class="card !container">
+  <div class="top" *ngIf="orderId || driverName || vehicleId">
+    <div>
+      <p class="eyebrow">Dispatch Tracker</p>
+      <h1 class="title" *ngIf="orderId">Order #{{ orderId }}</h1>
+      <div class="order-id" *ngIf="driverName || vehicleId">
+        <ng-container *ngIf="driverName">Driver: {{ driverName }}</ng-container>
+        <ng-container *ngIf="driverName && vehicleId">&nbsp;&bull;&nbsp;</ng-container>
+        <ng-container *ngIf="vehicleId">Vehicle: {{ vehicleId }}</ng-container>
+      </div>
+    </div>
+    <div class="top-actions">
+<!--      <div class="status-chip">-->
+<!--        <span class="status-dot" [class.delivered]="isDelivered"></span>-->
+<!--        <span>{{ currentStageData?.label }}</span>-->
+<!--      </div>-->
+      <button type="button" class="realtime-btn" [disabled]="isDelivered" (click)="trackRealtime.emit()">
+        <span class="realtime-dot" [class.driving]="driving"></span>
+        Track realtime
+      </button>
+    </div>
+  </div>
+
+  <p class="stage-name">{{ currentStageData?.name }}</p>
+  <p class="stage-sub">{{ currentStageData?.sub }}</p>
+
+  <svg class="route" viewBox="0 0 1200 210" preserveAspectRatio="xMidYMid meet">
+    <path class="road-base" [attr.d]="pathD"></path>
+    <path class="road-fill" [attr.d]="pathD"
+          [style.stroke-dasharray]="roadFillDasharray"
+          [style.stroke-dashoffset]="roadFillDashoffset"></path>
+    <path class="road-dash" [attr.d]="pathD" [class.driving]="driving"></path>
+
+    <g>
+      <ng-container *ngFor="let stage of stages; let i = index">
+        <circle class="station-dot-outer"
+                [class.done]="isDone(i)" [class.active]="isActive(i)"
+                [attr.cx]="stationX[i]" [attr.cy]="roadY" r="9"></circle>
+        <circle class="station-dot-inner"
+                [class.done]="isDone(i)" [class.active]="isActive(i)"
+                [attr.cx]="stationX[i]" [attr.cy]="roadY" r="3.5"></circle>
+        <text class="station-label"
+              [class.done]="isDone(i)" [class.active]="isActive(i)"
+              [attr.x]="stationX[i]" [attr.y]="roadY + 34">{{ stage.label }}</text>
+      </ng-container>
+    </g>
+
+    <g class="truck-group" [class.driving]="driving" [style.transform]="truckTransform">
+      <g class="truck-scale">
+      <g class="truck-bob">
+        <!-- One-piece delivery van body: cargo back, raked windshield, short hood, curved nose -->
+        <path class="truck-paint truck-outline"
+              d="M-6 158 L-6 86 Q-6 76 4 76 L140 76 Q148 76 152 82 L180 110 Q184 114 190 114 L204 114 Q220 116 224 132 L224 148 Q224 158 214 158 Z"></path>
+        <text class="truck-decal" x="72" y="108">CENTRAL</text>
+        <text class="truck-decal" x="72" y="130">COURIER</text>
+
+        <!-- Windshield: fills the raked front, inset from the body outline -->
+        <path class="truck-glass" stroke-width="3" d="M148 85 L170 108 L148 108 Z"></path>
+        <!-- Headlamp and grille -->
+        <rect class="headlight" x="208" y="124" width="12" height="8" rx="4" stroke="#1D2433" stroke-width="3"></rect>
+        <rect x="206" y="140" width="15" height="4" rx="2" fill="#1D2433"></rect>
+        <!-- Sliding door seam -->
+        <path class="truck-outline" stroke-width="4" d="M142 80 L142 158"></path>
+
+        <path class="truck-fill truck-outline" d="M16 158 A20 20 0 0 1 56 158"></path>
+        <path class="truck-fill truck-outline" d="M183 158 A20 20 0 0 1 223 158"></path>
+
+        <g class="wheel">
+          <circle class="tire" cx="36" cy="162" r="15"></circle>
+          <circle cx="36" cy="162" r="9" fill="none" stroke="#FFFFFF" stroke-width="2.5"></circle>
+          <g stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round">
+            <line x1="36" y1="153" x2="36" y2="171"></line>
+            <line x1="27" y1="162" x2="45" y2="162"></line>
+            <line x1="29.6" y1="155.6" x2="42.4" y2="168.4"></line>
+            <line x1="29.6" y1="168.4" x2="42.4" y2="155.6"></line>
+          </g>
+          <circle cx="36" cy="162" r="3" fill="#FFFFFF"></circle>
+        </g>
+        <g class="wheel">
+          <circle class="tire" cx="203" cy="162" r="15"></circle>
+          <circle cx="203" cy="162" r="9" fill="none" stroke="#FFFFFF" stroke-width="2.5"></circle>
+          <g stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round">
+            <line x1="203" y1="153" x2="203" y2="171"></line>
+            <line x1="194" y1="162" x2="212" y2="162"></line>
+            <line x1="196.6" y1="155.6" x2="209.4" y2="168.4"></line>
+            <line x1="196.6" y1="168.4" x2="209.4" y2="155.6"></line>
+          </g>
+          <circle cx="203" cy="162" r="3" fill="#FFFFFF"></circle>
+        </g>
+
+        <!-- Front bumper, proud of the nose -->
+        <rect class="truck-fill truck-outline" stroke-width="4" x="216" y="146" width="16" height="12" rx="3"></rect>
+
+        <circle class="puff p1" cx="-12" cy="150" r="5"></circle>
+        <circle class="puff p2" cx="-12" cy="150" r="5"></circle>
+        <circle class="puff p3" cx="-12" cy="150" r="5"></circle>
+      </g>
+      </g>
+    </g>
+  </svg>
+</div>
