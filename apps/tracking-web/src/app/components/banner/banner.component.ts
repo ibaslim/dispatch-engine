@@ -13,7 +13,7 @@ import { Component } from '@angular/core';
       <!-- Keep the van visible on the right; darken the left for text -->
       <div class="absolute inset-0 bg-gradient-to-r from-courier-ink/90 via-courier-slate/60 to-transparent"></div>
 
-      <div class="relative h-full max-w-6xl mx-auto px-4 sm:px-6 flex flex-col justify-center">
+      <div class="relative h-full container mx-auto px-4 sm:px-6 flex flex-col justify-center">
         <p class="banner-rise text-courier-lime text-xs sm:text-sm font-extrabold tracking-[0.25em] uppercase mb-3">
           Central Courier Services
         </p>

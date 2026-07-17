@@ -12,7 +12,7 @@ import { RouterLink } from '@angular/router';
         <div class="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-courier-ink/60"></div>
       </div>
 
-      <div class="max-w-6xl mx-auto px-4 sm:px-6 py-14">
+      <div class="container mx-auto px-4 sm:px-6 py-14">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
           <!-- Logo + contact -->
           <div>

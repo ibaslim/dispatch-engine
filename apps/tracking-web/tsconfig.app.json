@@ -13,6 +13,18 @@
       ],
       "@dispatch/shared/api-client": [
         "libs/shared/api-client/src/index.ts"
+      ],
+      "@components/*": [
+        "apps/tracking-web/src/app/components/*"
+      ],
+      "@pages/*": [
+        "apps/tracking-web/src/app/pages/*"
+      ],
+      "@services/*": [
+        "apps/tracking-web/src/app/services/*"
+      ],
+      "@models/*": [
+        "apps/tracking-web/src/app/models/*"
       ]
     },
     "moduleResolution": "bundler"
