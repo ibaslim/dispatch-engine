@@ -3,13 +3,20 @@ import { Routes } from '@angular/router';
 export const routes: Routes = [
   {
     path: '',
-    redirectTo: 'posts',
+    redirectTo: '',
     pathMatch: 'full',
   },
   {
-    path: 'posts',
+    path: '',
     loadComponent: () =>
       import('./pages/posts/posts.component').then((m) => m.PostsComponent),
+  },
+  {
+    path: 't',
+    loadComponent: () =>
+      import('./pages/tracking/tracking.component').then(
+        (m) => m.TrackingComponent
+      ),
   },
   {
     path: 't/:token',
