@@ -23,11 +23,20 @@ export interface GooglePlaceAutocompleteElement extends HTMLElement {
   noInputIcon: boolean;
 }
 
+export interface SelectedGooglePlace {
+  placeId: string;
+  formattedAddress: string;
+  latitude: number;
+  longitude: number;
+}
+
 interface PlacePredictionSelectEvent extends Event {
   placePrediction: {
     toPlace: () => {
+      id?: string;
       formattedAddress?: string;
       displayName?: string;
+      location?: { lat: () => number; lng: () => number };
       fetchFields: (options: { fields: string[] }) => Promise<void>;
     };
   };

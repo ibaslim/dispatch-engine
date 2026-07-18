@@ -24,6 +24,11 @@ export interface DeliveryCategory {
   description: string;
 }
 
+export interface DeliveryPolicy {
+  allow_intercity: boolean;
+  default_tax_percentage: number;
+}
+
 export interface AfterHoursDelivery {
   id: string;
   start_time: string;
@@ -63,11 +68,19 @@ export interface SpecialOccasion {
   name: string;
   occasion_date: string;
   repeats_annually: boolean;
+  extra_percentage: number;
 }
 
 @Injectable({ providedIn: 'root' })
 export class DeliveryConfigurationService {
   private readonly http = inject(HttpClient);
+
+  getDeliveryPolicy(): Observable<DeliveryPolicy> {
+    return this.http.get<DeliveryPolicy>(`${BASE}/delivery-policy`);
+  }
+  saveDeliveryPolicy(policy: DeliveryPolicy): Observable<DeliveryPolicy> {
+    return this.http.put<DeliveryPolicy>(`${BASE}/delivery-policy`, policy);
+  }
 
   getZones(): Observable<OperationalZone[]> {
     return this.http.get<OperationalZone[]>(`${BASE}/operational-zones`);

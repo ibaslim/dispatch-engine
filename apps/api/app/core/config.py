@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     tracking_web_base_url: str = "http://localhost:4300"
     api_base_url: str = "http://localhost:8000"
     google_maps_api_key: str = ""
+    # Use a server-restricted key for Places/Routes calls when available.
+    # Local development can fall back to the browser key above.
+    google_maps_server_api_key: str = ""
 
     # CORS
     cors_origins: List[str] = [

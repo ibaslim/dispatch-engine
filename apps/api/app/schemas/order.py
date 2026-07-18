@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from app.models.order import OrderStatus, ActivityStatus
 from uuid import UUID
@@ -98,6 +98,22 @@ class OrderCreate(BaseModel):
     delivery_date: str
     delivery_time: str
 
+    delivery_category_id: Optional[UUID] = None
+    pickup_place_id: Optional[str] = None
+    pickup_latitude: Optional[float] = None
+    pickup_longitude: Optional[float] = None
+    pickup_city_id: Optional[UUID] = None
+    pickup_zone_id: Optional[UUID] = None
+    delivery_place_id: Optional[str] = None
+    delivery_latitude: Optional[float] = None
+    delivery_longitude: Optional[float] = None
+    delivery_city_id: Optional[UUID] = None
+    delivery_zone_id: Optional[UUID] = None
+    route_distance_meters: Optional[int] = None
+    route_duration_seconds: Optional[int] = None
+    surcharge_ids: List[UUID] = Field(default_factory=list)
+    applied_charges: List[Dict[str, Any]] = Field(default_factory=list)
+
     items: List[OrderItem]
 
     subtotal: float
@@ -138,6 +154,22 @@ class OrderUpdate(BaseModel):
     delivery_address: Optional[str] = None
     delivery_date: Optional[str] = None
     delivery_time: Optional[str] = None
+
+    delivery_category_id: Optional[UUID] = None
+    pickup_place_id: Optional[str] = None
+    pickup_latitude: Optional[float] = None
+    pickup_longitude: Optional[float] = None
+    pickup_city_id: Optional[UUID] = None
+    pickup_zone_id: Optional[UUID] = None
+    delivery_place_id: Optional[str] = None
+    delivery_latitude: Optional[float] = None
+    delivery_longitude: Optional[float] = None
+    delivery_city_id: Optional[UUID] = None
+    delivery_zone_id: Optional[UUID] = None
+    route_distance_meters: Optional[int] = None
+    route_duration_seconds: Optional[int] = None
+    surcharge_ids: Optional[List[UUID]] = None
+    applied_charges: Optional[List[Dict[str, Any]]] = None
 
     items: Optional[List[OrderItem]] = None
 

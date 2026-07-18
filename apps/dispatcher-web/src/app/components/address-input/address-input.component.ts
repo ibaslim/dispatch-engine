@@ -18,6 +18,7 @@ import { ErrorMessageComponent } from '../error-message/error-message.component'
 import {
   GoogleMapsService,
   GooglePlaceAutocompleteElement,
+  SelectedGooglePlace,
 } from '../../services/google-maps/google-maps.service';
 
 @Component({
@@ -123,6 +124,7 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
   @Input() errorMessages: Partial<Record<'required' | 'pattern', string>> = {};
 
   @Output() valueChange = new EventEmitter<string>();
+  @Output() placeChange = new EventEmitter<SelectedGooglePlace | null>();
   @Output() pinClick = new EventEmitter<void>();
 
   @ViewChild('model', { static: true }) model?: NgModel;
@@ -131,7 +133,10 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
   autocompleteReady = false;
   private autocomplete?: GooglePlaceAutocompleteElement;
   private readonly onAutocompleteInput = () => this.onInput(this.autocomplete?.value ?? '');
-  private readonly onAutocompleteError = () => this.disableAutocomplete();
+  // Keep the custom element mounted when an individual prediction request fails.
+  // Removing/recreating it here blurs the field after every keystroke and forces
+  // the user to focus it again. The Places widget can handle a later request.
+  private readonly onAutocompleteError = () => undefined;
   private readonly onPlaceSelected = (event: Event) => void this.selectPlace(event);
 
   constructor(
@@ -156,6 +161,7 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
 
   onInput(v: string): void {
     this.valueChange.emit(v);
+    this.placeChange.emit(null);
   }
 
   openInGoogleMaps(): void {
@@ -191,10 +197,20 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
     if (!this.googleMaps.isPlaceSelection(event)) return;
     try {
       const place = event.placePrediction.toPlace();
-      await place.fetchFields({ fields: ['formattedAddress', 'displayName', 'location'] });
+      await place.fetchFields({ fields: ['id', 'formattedAddress', 'displayName', 'location'] });
       const address = place.formattedAddress || place.displayName || this.autocomplete?.value || '';
       if (this.autocomplete) this.autocomplete.value = address;
-      this.onInput(address);
+      this.valueChange.emit(address);
+      if (!place.id || !place.location) {
+        this.placeChange.emit(null);
+        return;
+      }
+      this.placeChange.emit({
+        placeId: place.id,
+        formattedAddress: address,
+        latitude: place.location.lat(),
+        longitude: place.location.lng(),
+      });
     } catch {
       this.onInput(this.autocomplete?.value ?? '');
     }

@@ -28,6 +28,16 @@ class OperationalZone(Base, UUIDMixin, TimestampMixin):
     )
 
 
+class DeliveryPolicy(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "delivery_policies"
+
+    key: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, default="default")
+    allow_intercity: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    default_tax_percentage: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), nullable=False, default=Decimal("0.00")
+    )
+
+
 class OperationalZoneCity(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "operational_zone_cities"
     __table_args__ = (UniqueConstraint("city_id", name="uq_operational_zone_city"),)
@@ -159,3 +169,6 @@ class SpecialOccasion(Base, UUIDMixin, TimestampMixin):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     occasion_date: Mapped[date] = mapped_column(Date(), nullable=False)
     repeats_annually: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=False)
+    extra_percentage: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), nullable=False, default=Decimal("0.00")
+    )

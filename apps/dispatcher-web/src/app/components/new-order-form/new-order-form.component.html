@@ -2,28 +2,51 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12">
         <div class="space-y-7">
 
-            <app-pickup-from [value]="value.pickup" (valueChange)="patch({ pickup: $event })"
+            <app-pickup-from [value]="value.pickup" (valueChange)="onPickupChange($event)"
                 (pinClick)="pinPickup.emit()" [pickupTimeError]="deliveryTimeError"
                 [showPickupTimeError]="showDeliveryTimeError" [showSubmitValidation]="showSubmitValidation">
             </app-pickup-from>
 
-            <app-deliver-to [value]="value.delivery" (valueChange)="patch({ delivery: $event })"
+            <app-deliver-to [value]="value.delivery" (valueChange)="onDeliveryChange($event)"
                 (pinClick)="pinDelivery.emit()" [deliveryTimeError]="deliveryTimeError"
                 [showDeliveryTimeError]="showDeliveryTimeError" [showSubmitValidation]="showSubmitValidation">
             </app-deliver-to>
-        </div>
 
-        <div class="lg:border-l lg:border-gray-200 lg:dark:border-[#5a5d5a] lg:pl-10 mt-6 lg:mt-0 space-y-8">
-            <app-other-order-details [value]="value.details" (valueChange)="patch({ details: $event })"
-                [showSubmitValidation]="showSubmitValidation">
-            </app-other-order-details>
-
-            <!-- New Proof of Delivery Section -->
             <app-proof-of-delivery
                 [value]="value.details.proofOfDelivery"
                 (valueChange)="onProofOfDeliveryChange($event)"
                 [showSubmitValidation]="showSubmitValidation">
             </app-proof-of-delivery>
+        </div>
+
+        <div class="lg:border-l lg:border-gray-200 lg:dark:border-[#5a5d5a] lg:pl-10 mt-6 lg:mt-0 space-y-8">
+            <app-other-order-details [value]="value.details" (valueChange)="patch({ details: $event })"
+                [routeQuote]="value.routeQuote" [showSubmitValidation]="showSubmitValidation">
+                <div order-details-leading class="space-y-3">
+                    <div>
+                        <label class="block text-sm text-gray-600 dark:text-gray-200">Delivery Category <span class="text-red-500">*</span></label>
+                        <select class="mt-1 h-10 w-full max-w-xs rounded-md border border-gray-300 bg-white px-3 text-sm dark:border-[#5a5d5a] dark:bg-[#1E201E]"
+                            [ngModel]="value.deliveryCategoryId" (ngModelChange)="onCategoryChange($event)">
+                            <option value="">Select a category</option>
+                            <option *ngFor="let category of categories" [value]="category.id">{{ category.name }}</option>
+                        </select>
+                        <p *ngIf="showSubmitValidation && !value.deliveryCategoryId" class="mt-1 text-xs text-red-600">Delivery category is required.</p>
+                    </div>
+                    <div *ngIf="surcharges.length">
+                        <p class="mb-2 text-sm text-gray-600 dark:text-gray-200">Apply surcharges</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button *ngFor="let surcharge of surcharges" type="button" (click)="toggleSurcharge(surcharge.id)"
+                                class="rounded-full border px-3 py-1.5 text-xs transition"
+                                [ngClass]="value.surchargeIds.includes(surcharge.id) ? 'border-emerald-400 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300' : 'border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-300'">
+                                {{ surcharge.name }} · +C$ {{ surcharge.extra_amount | number:'1.2-2' }}
+                            </button>
+                        </div>
+                    </div>
+                    <p *ngIf="isQuoting" class="text-xs text-gray-500"><i class="ph ph-spinner-gap animate-spin"></i> Recalculating charges...</p>
+                    <p *ngIf="quoteError" class="rounded-md bg-red-50 p-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">{{ quoteError }}</p>
+                </div>
+            </app-other-order-details>
+
         </div>
     </div>
 </div>

@@ -28,12 +28,9 @@
     <div *ngIf="errorMessage" class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
       {{ errorMessage }}
     </div>
-    <div *ngIf="successMessage" class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
-      {{ successMessage }}
-    </div>
 
     <div *ngIf="!isLoading" class="mt-6 space-y-4">
-      <section *ngFor="let view of filteredDriverViews" class="overflow-hidden rounded-xl border border-gray-200 shadow-sm dark:border-[#343734]">
+      <section *ngFor="let view of filteredDriverViews; trackBy: trackByDriverView" class="overflow-hidden rounded-xl border border-gray-200 shadow-sm dark:border-[#343734]">
         <div class="bg-[#FFD150]/10 p-4">
           <div class="flex flex-col gap-4 xl:flex-row xl:items-end">
             <button
@@ -74,7 +71,7 @@
           </div>
 
           <div *ngIf="view.loaded" class="divide-y divide-gray-100 dark:divide-[#303330]">
-            <section *ngFor="let state of visibleStates(view)">
+            <section *ngFor="let state of visibleStates(view); trackBy: trackByState">
               <div class="bg-gray-50 p-4 pl-8 dark:bg-[#252825]">
                 <div class="flex flex-col gap-4 xl:flex-row xl:items-end">
                   <button
@@ -107,7 +104,7 @@
               </div>
 
               <div *ngIf="isStateExpanded(view, state)" class="divide-y divide-gray-100 dark:divide-[#303330]">
-                <div *ngFor="let city of visibleCities(state)" class="p-4 pl-12">
+                <div *ngFor="let city of visibleCities(state); trackBy: trackByCity" class="p-4 pl-12">
                   <div class="flex flex-col gap-4 xl:flex-row xl:items-end">
                     <div class="min-w-44">
                       <p class="font-medium">{{ city.city_name }}</p>

@@ -49,6 +49,28 @@ class Order(Base):
     delivery_date = Column(String)
     delivery_time = Column(String)
 
+    delivery_category_id = Column(
+        UUID(as_uuid=True), ForeignKey("delivery_categories.id", ondelete="SET NULL"), nullable=True
+    )
+    pickup_place_id = Column(String, nullable=True)
+    pickup_latitude = Column(Float, nullable=True)
+    pickup_longitude = Column(Float, nullable=True)
+    pickup_city_id = Column(UUID(as_uuid=True), ForeignKey("cities.id", ondelete="SET NULL"), nullable=True)
+    pickup_zone_id = Column(
+        UUID(as_uuid=True), ForeignKey("operational_zones.id", ondelete="SET NULL"), nullable=True
+    )
+    delivery_place_id = Column(String, nullable=True)
+    delivery_latitude = Column(Float, nullable=True)
+    delivery_longitude = Column(Float, nullable=True)
+    delivery_city_id = Column(UUID(as_uuid=True), ForeignKey("cities.id", ondelete="SET NULL"), nullable=True)
+    delivery_zone_id = Column(
+        UUID(as_uuid=True), ForeignKey("operational_zones.id", ondelete="SET NULL"), nullable=True
+    )
+    route_distance_meters = Column(Integer, nullable=True)
+    route_duration_seconds = Column(Integer, nullable=True)
+    surcharge_ids = Column(JSON, nullable=False, default=list)
+    applied_charges = Column(JSON, nullable=False, default=list)
+
     items = Column(JSON)
 
     subtotal = Column(Float, default=0)

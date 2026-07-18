@@ -1,4 +1,10 @@
-import { NewOrderFormValue, PaymentMethodType, OrderIncidentReport, ProofOfDeliverySubmission } from '@models/new-order-form/new-order-form.model';
+import {
+  AppliedCharge,
+  NewOrderFormValue,
+  OrderIncidentReport,
+  PaymentMethodType,
+  ProofOfDeliverySubmission,
+} from '@models/new-order-form/new-order-form.model';
 import { OrderActivityStatus, OrderEntity, OrderTab } from '@models/orders/order-entity.model';
 import { OrderView } from '@models/orders/order-tabs.model';
 import { driverEarningsLabel, formatDateTime, formatStatusLabel, formatTime, money } from './orders-formatting.util';
@@ -27,6 +33,17 @@ export type BackendOrder = {
   delivery_address: string;
   delivery_date: string;
   delivery_time: string;
+  delivery_category_id?: string | null;
+  pickup_place_id?: string | null;
+  pickup_latitude?: number | null;
+  pickup_longitude?: number | null;
+  delivery_place_id?: string | null;
+  delivery_latitude?: number | null;
+  delivery_longitude?: number | null;
+  route_distance_meters?: number | null;
+  route_duration_seconds?: number | null;
+  surcharge_ids?: string[] | null;
+  applied_charges?: AppliedCharge[] | null;
   items: BackendOrderItem[];
   subtotal: number;
   tax_rate: number;
@@ -81,6 +98,21 @@ export function splitPhoneNumber(phone: string): { countryCode: string; number: 
     };
   }
   return { countryCode: '+1', number: digits };
+}
+
+function mapSelectedPlace(
+  placeId: string | null | undefined,
+  formattedAddress: string,
+  latitude: number | null | undefined,
+  longitude: number | null | undefined
+): NewOrderFormValue['pickup']['location'] {
+  if (!placeId) return null;
+  return {
+    placeId,
+    formattedAddress,
+    latitude: latitude || 0,
+    longitude: longitude || 0,
+  };
 }
 
 export function formatTenantPhone(countryCode: string | null | undefined, number: string | null | undefined): string {
@@ -187,11 +219,38 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
     isExpiredUnassigned,
     full: {
       orderNumber: order.order_number,
+      deliveryCategoryId: order.delivery_category_id || '',
+      surchargeIds: order.surcharge_ids || [],
+      routeQuote: order.route_distance_meters != null ? {
+        eligible: true,
+        pickup_city: '',
+        pickup_zone_id: '',
+        pickup_zone_name: '',
+        delivery_city: '',
+        delivery_zone_id: '',
+        delivery_zone_name: '',
+        distance_meters: order.route_distance_meters,
+        distance_km: Math.round(order.route_distance_meters / 10) / 100,
+        duration_seconds: order.route_duration_seconds || 0,
+        radius_km: 0,
+        extra_distance_km: 0,
+        base_price: order.delivery_fees,
+        additional_per_km: 0,
+        distance_charge: 0,
+        applied_charges: order.applied_charges || [],
+        delivery_fee: order.delivery_fees,
+      } : null,
       pickup: {
         name: order.pickup_name,
         phone: pickupPhone,
         email: order.pickup_email,
         address: order.pickup_address,
+        location: mapSelectedPlace(
+          order.pickup_place_id,
+          order.pickup_address,
+          order.pickup_latitude,
+          order.pickup_longitude
+        ),
         pickupDate: order.pickup_date,
         pickupTime: order.pickup_time
       },
@@ -200,6 +259,12 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
         phone: deliveryPhone,
         email: order.delivery_email,
         address: order.delivery_address,
+        location: mapSelectedPlace(
+          order.delivery_place_id,
+          order.delivery_address,
+          order.delivery_latitude,
+          order.delivery_longitude
+        ),
         deliveryDate: order.delivery_date,
         deliveryTime: order.delivery_time
       },
@@ -236,6 +301,11 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
 
 export function toOrderPayload(value: NewOrderFormValue): Record<string, unknown> {
   return {
+    delivery_category_id: value.deliveryCategoryId || null,
+    surcharge_ids: value.surchargeIds,
+    pickup_place_id: value.pickup.location?.placeId || null,
+    pickup_latitude: value.pickup.location?.latitude ?? null,
+    pickup_longitude: value.pickup.location?.longitude ?? null,
     pickup_name: value.pickup.name.trim(),
     pickup_phone: `${value.pickup.phone.countryCode}${value.pickup.phone.number}`,
     pickup_email: value.pickup.email.trim(),
@@ -246,6 +316,9 @@ export function toOrderPayload(value: NewOrderFormValue): Record<string, unknown
     delivery_phone: `${value.delivery.phone.countryCode}${value.delivery.phone.number}`,
     delivery_email: value.delivery.email.trim(),
     delivery_address: value.delivery.address.trim(),
+    delivery_place_id: value.delivery.location?.placeId || null,
+    delivery_latitude: value.delivery.location?.latitude ?? null,
+    delivery_longitude: value.delivery.location?.longitude ?? null,
     delivery_date: value.delivery.deliveryDate,
     delivery_time: value.delivery.deliveryTime,
     items: value.details.items
@@ -279,8 +352,11 @@ function todayYYYYMMDD(): string {
 export function createDefaultNewOrder(): NewOrderFormValue {
   return {
     orderNumber: '',
-    pickup: { name: '', phone: { countryCode: '+1', number: '' }, email: '', address: '', pickupDate: todayYYYYMMDD(), pickupTime: '' },
-    delivery: { name: '', phone: { countryCode: '+1', number: '' }, email: '', address: '', deliveryDate: todayYYYYMMDD(), deliveryTime: '' },
+    deliveryCategoryId: '',
+    surchargeIds: [],
+    routeQuote: null,
+    pickup: { name: '', phone: { countryCode: '+1', number: '' }, email: '', address: '', location: null, pickupDate: todayYYYYMMDD(), pickupTime: '' },
+    delivery: { name: '', phone: { countryCode: '+1', number: '' }, email: '', address: '', location: null, deliveryDate: todayYYYYMMDD(), deliveryTime: '' },
     details: {
       items: [{ itemName: '', itemPrice: '', itemQty: '' }],
       taxRate: 0, deliveryFees: 0, deliveryTips: 0, discount: 0,
@@ -308,11 +384,15 @@ export function buildDemoDraftValue(): NewOrderFormValue {
 
   return {
     orderNumber: `DEMO-${Date.now()}`,
+    deliveryCategoryId: '',
+    surchargeIds: [],
+    routeQuote: null,
     pickup: {
       name: 'North Fork Kitchen',
       phone: { countryCode: '+1', number: '4161234567' },
       email: 'sender@dispatch.com',
       address: '110 King St, Toronto',
+      location: null,
       pickupDate: formatDateForInput(pickupAt),
       pickupTime: formatTimeForInput(pickupAt)
     },
@@ -321,6 +401,7 @@ export function buildDemoDraftValue(): NewOrderFormValue {
       phone: { countryCode: '+1', number: '4169876543' },
       email: `demo+${Date.now()}@dispatch.local`,
       address: '480 Queen Ave, Toronto',
+      location: null,
       deliveryDate: formatDateForInput(deliveryAt),
       deliveryTime: formatTimeForInput(deliveryAt)
     },

@@ -13,6 +13,7 @@ from app.core.deps import PlatformAdmin, get_db
 from app.models.delivery_configuration import (
     AfterHoursDelivery,
     DeliveryCategory,
+    DeliveryPolicy,
     OperationalZone,
     OperationalZoneCity,
     PartnerZoneCategoryPrice,
@@ -28,11 +29,17 @@ Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max
 Description = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=240)]
 Money = Annotated[Decimal, Field(ge=0, max_digits=10, decimal_places=2)]
 Distance = Annotated[Decimal, Field(gt=0, max_digits=8, decimal_places=2)]
+TaxPercentage = Annotated[Decimal, Field(ge=0, le=100, max_digits=5, decimal_places=2)]
 
 
 class ZoneInput(BaseModel):
     name: Name
     city_ids: list[uuid.UUID] = Field(min_length=1)
+
+
+class DeliveryPolicyInput(BaseModel):
+    allow_intercity: bool
+    default_tax_percentage: TaxPercentage = Decimal("0.00")
 
 
 class ZoneCityOut(BaseModel):
@@ -114,6 +121,7 @@ class SpecialOccasionInput(BaseModel):
     name: Name
     occasion_date: date
     repeats_annually: bool = False
+    extra_percentage: TaxPercentage
 
 
 class SpecialOccasionOut(SpecialOccasionInput):
@@ -214,6 +222,29 @@ async def _validate_zone_cities(
             detail=f"{assigned.city.name} already belongs to another operational zone.",
         )
     return cities
+
+
+@router.get("/delivery-policy", response_model=DeliveryPolicyInput)
+async def get_delivery_policy(_: PlatformAdmin, db: AsyncSession = Depends(get_db)):
+    policy = await db.scalar(select(DeliveryPolicy).where(DeliveryPolicy.key == "default"))
+    return DeliveryPolicyInput(
+        allow_intercity=bool(policy and policy.allow_intercity),
+        default_tax_percentage=policy.default_tax_percentage if policy else Decimal("0.00"),
+    )
+
+
+@router.put("/delivery-policy", response_model=DeliveryPolicyInput)
+async def update_delivery_policy(
+    payload: DeliveryPolicyInput, _: PlatformAdmin, db: AsyncSession = Depends(get_db)
+):
+    policy = await db.scalar(select(DeliveryPolicy).where(DeliveryPolicy.key == "default"))
+    if policy is None:
+        policy = DeliveryPolicy(key="default")
+        db.add(policy)
+    policy.allow_intercity = payload.allow_intercity
+    policy.default_tax_percentage = payload.default_tax_percentage
+    await db.commit()
+    return payload
 
 
 @router.get("/operational-zones", response_model=list[ZoneOut])
@@ -552,6 +583,7 @@ async def update_special_occasion(
     item.name = payload.name
     item.occasion_date = payload.occasion_date
     item.repeats_annually = payload.repeats_annually
+    item.extra_percentage = payload.extra_percentage
     await db.commit()
     await db.refresh(item)
     return item

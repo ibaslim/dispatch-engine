@@ -6,6 +6,7 @@ import { BaseInputComponent } from '../base-input/base-input.component';
 import { PhoneInputComponent } from '../phone-input/phone-input.component';
 import { TimePickerComponent } from '../time-picker/time-picker.component';
 import { DatePickerComponent } from '../date-picker/date-picker.component';
+import { SelectedGooglePlace } from '../../services/google-maps/google-maps.service';
 
 @Component({
   selector: 'app-pickup-from',
@@ -25,5 +26,13 @@ export class PickupFromComponent {
 
   patch(p: Partial<NewOrderFormValue['pickup']>): void {
     this.valueChange.emit({ ...this.value, ...p });
+  }
+
+  onAddressInput(address: string): void {
+    this.patch({ address, location: null });
+  }
+
+  onPlaceSelected(location: SelectedGooglePlace | null): void {
+    if (location) this.patch({ address: location.formattedAddress, location });
   }
 }
