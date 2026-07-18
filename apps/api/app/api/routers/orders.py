@@ -1,13 +1,14 @@
 import base64
 import mimetypes
 import os
+from decimal import Decimal
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,12 @@ from app.db.session import get_db
 from app.core.deps import CurrentUser
 from app.models.order import Order, OrderStatus, ActivityStatus
 from app.models.tenant import Tenant, TenantRole
+from app.models.delivery_configuration import DeliveryPolicy
+from app.services.delivery_quote_service import (
+    DeliveryQuote,
+    DeliveryQuoteError,
+    build_delivery_quote,
+)
 from app.schemas.order import (
     OrderCreate,
     OrderResponse,
@@ -46,6 +53,144 @@ ACTIVITY_STATUS_TIMESTAMP_FIELDS: dict[ActivityStatus, str] = {
     ActivityStatus.delivery_in_progress: "delivery_in_progress_at",
     ActivityStatus.delivered: "delivered_at",
 }
+
+
+class DeliveryQuoteRequest(BaseModel):
+    pickup_place_id: str
+    delivery_place_id: str
+    delivery_category_id: UUID
+    vendor_id: UUID | None = None
+    delivery_date: str | None = None
+    delivery_time: str | None = None
+    surcharge_ids: list[UUID] = Field(default_factory=list)
+
+
+class AppliedChargeResponse(BaseModel):
+    id: UUID | None
+    kind: str
+    label: str
+    amount: float
+
+
+class DeliveryQuoteResponse(BaseModel):
+    eligible: bool = True
+    pickup_city: str
+    pickup_zone_id: UUID
+    pickup_zone_name: str
+    delivery_city: str
+    delivery_zone_id: UUID
+    delivery_zone_name: str
+    distance_meters: int
+    distance_km: float
+    duration_seconds: int
+    radius_km: float
+    extra_distance_km: float
+    base_price: float
+    additional_per_km: float
+    distance_charge: float
+    applied_charges: list[AppliedChargeResponse]
+    delivery_fee: float
+
+
+def _quote_response(quote: DeliveryQuote) -> DeliveryQuoteResponse:
+    return DeliveryQuoteResponse(
+        pickup_city=quote.pickup.city.name,
+        pickup_zone_id=quote.pickup.zone.id,
+        pickup_zone_name=quote.pickup.zone.name,
+        delivery_city=quote.delivery.city.name,
+        delivery_zone_id=quote.delivery.zone.id,
+        delivery_zone_name=quote.delivery.zone.name,
+        distance_meters=quote.distance_meters,
+        distance_km=round(quote.distance_meters / 1000, 2),
+        duration_seconds=quote.duration_seconds,
+        radius_km=float(quote.radius_km),
+        extra_distance_km=float(quote.extra_distance_km),
+        base_price=float(quote.base_price),
+        additional_per_km=float(quote.additional_per_km),
+        distance_charge=float(quote.distance_charge),
+        applied_charges=[
+            AppliedChargeResponse(
+                id=item.id, kind=item.kind, label=item.label, amount=float(item.amount)
+            )
+            for item in quote.applied_charges
+        ],
+        delivery_fee=float(quote.delivery_fee),
+    )
+
+
+def _apply_quote(data: dict, quote: DeliveryQuote) -> None:
+    data.update(
+        pickup_address=quote.pickup.place.formatted_address,
+        pickup_place_id=quote.pickup.place.place_id,
+        pickup_latitude=quote.pickup.place.latitude,
+        pickup_longitude=quote.pickup.place.longitude,
+        pickup_city_id=quote.pickup.city.id,
+        pickup_zone_id=quote.pickup.zone.id,
+        delivery_address=quote.delivery.place.formatted_address,
+        delivery_place_id=quote.delivery.place.place_id,
+        delivery_latitude=quote.delivery.place.latitude,
+        delivery_longitude=quote.delivery.place.longitude,
+        delivery_city_id=quote.delivery.city.id,
+        delivery_zone_id=quote.delivery.zone.id,
+        route_distance_meters=quote.distance_meters,
+        route_duration_seconds=quote.duration_seconds,
+        applied_charges=[
+            {
+                "id": str(item.id) if item.id else None,
+                "kind": item.kind,
+                "label": item.label,
+                "amount": float(item.amount),
+            }
+            for item in quote.applied_charges
+        ],
+        delivery_fees=float(quote.delivery_fee),
+    )
+    total = (
+        Decimal(str(data.get("subtotal") or 0))
+        + Decimal(str(data.get("tax_amount") or 0))
+        + quote.delivery_fee
+        + Decimal(str(data.get("delivery_tips") or 0))
+        - Decimal(str(data.get("discount") or 0))
+    )
+    data["total"] = float(total.quantize(Decimal("0.01")))
+
+
+async def _apply_default_tax(db: AsyncSession, data: dict) -> None:
+    policy = await db.scalar(select(DeliveryPolicy).where(DeliveryPolicy.key == "default"))
+    tax_rate = Decimal(policy.default_tax_percentage) if policy else Decimal("0.00")
+    subtotal = Decimal(str(data.get("subtotal") or 0))
+    tax_amount = (subtotal * tax_rate / Decimal("100")).quantize(Decimal("0.01"))
+    data["tax_rate"] = float(tax_rate)
+    data["tax_amount"] = float(tax_amount)
+
+
+async def _get_quote_or_http_error(
+    db: AsyncSession,
+    pickup_place_id: str | None,
+    delivery_place_id: str | None,
+    category_id: UUID | None,
+    vendor_id: UUID | None = None,
+    delivery_date: str | None = None,
+    delivery_time: str | None = None,
+    surcharge_ids: list[UUID] | None = None,
+) -> DeliveryQuote:
+    if not pickup_place_id or not delivery_place_id:
+        raise HTTPException(status_code=422, detail="Select valid pickup and delivery addresses.")
+    if not category_id:
+        raise HTTPException(status_code=422, detail="Select a delivery category.")
+    try:
+        return await build_delivery_quote(
+            db=db,
+            pickup_place_id=pickup_place_id,
+            delivery_place_id=delivery_place_id,
+            category_id=category_id,
+            vendor_id=vendor_id,
+            delivery_date=delivery_date,
+            delivery_time=delivery_time,
+            surcharge_ids=surcharge_ids,
+        )
+    except DeliveryQuoteError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
 def _stamp_activity_status(order: Order, new_status: ActivityStatus) -> None:
@@ -139,6 +284,27 @@ async def get_orders(
     return result.scalars().all()
 
 
+@router.post("/quote", response_model=DeliveryQuoteResponse)
+async def quote_delivery(
+    payload: DeliveryQuoteRequest,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    if not current_user.is_platform_admin:
+        raise HTTPException(status_code=403, detail="Platform admin access required.")
+    quote = await _get_quote_or_http_error(
+        db,
+        payload.pickup_place_id,
+        payload.delivery_place_id,
+        payload.delivery_category_id,
+        payload.vendor_id,
+        payload.delivery_date,
+        payload.delivery_time,
+        payload.surcharge_ids,
+    )
+    return _quote_response(quote)
+
+
 # -------------------------
 # CREATE ORDER
 # -------------------------
@@ -155,6 +321,21 @@ async def create_order(
         )
     try:
         data = payload.model_dump()
+
+        await _apply_default_tax(db, data)
+
+        quote = await _get_quote_or_http_error(
+            db,
+            data.get("pickup_place_id"),
+            data.get("delivery_place_id"),
+            data.get("delivery_category_id"),
+            data.get("vendor_id"),
+            data.get("delivery_date"),
+            data.get("delivery_time"),
+            data.get("surcharge_ids"),
+        )
+        _apply_quote(data, quote)
+        data["surcharge_ids"] = [str(value) for value in data.get("surcharge_ids", [])]
 
         data["order_number"] = await generate_order_number(db)
         data["order_placed_time"] = datetime.now(APP_TIMEZONE).strftime("%I:%M %p")
@@ -220,6 +401,49 @@ async def update_order(
         raise HTTPException(status_code=404, detail="Order not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    # The charge breakdown is always recalculated by the server.
+    update_data.pop("applied_charges", None)
+
+    if {"subtotal", "items", "tax_rate", "tax_amount"}.intersection(update_data):
+        tax_data = {"subtotal": update_data.get("subtotal", order.subtotal)}
+        await _apply_default_tax(db, tax_data)
+        update_data.update(tax_data)
+
+    quote_fields = {
+        "pickup_address",
+        "delivery_address",
+        "pickup_place_id",
+        "delivery_place_id",
+        "delivery_category_id",
+        "vendor_id",
+        "delivery_date",
+        "delivery_time",
+        "surcharge_ids",
+    }
+    if quote_fields.intersection(update_data):
+        quote = await _get_quote_or_http_error(
+            db,
+            update_data.get("pickup_place_id", order.pickup_place_id),
+            update_data.get("delivery_place_id", order.delivery_place_id),
+            update_data.get("delivery_category_id", order.delivery_category_id),
+            update_data.get("vendor_id", order.vendor_id),
+            update_data.get("delivery_date", order.delivery_date),
+            update_data.get("delivery_time", order.delivery_time),
+            update_data.get("surcharge_ids", order.surcharge_ids),
+        )
+        merged_totals = {
+            "subtotal": update_data.get("subtotal", order.subtotal),
+            "tax_amount": update_data.get("tax_amount", order.tax_amount),
+            "delivery_tips": update_data.get("delivery_tips", order.delivery_tips),
+            "discount": update_data.get("discount", order.discount),
+        }
+        _apply_quote(merged_totals, quote)
+        update_data.update(merged_totals)
+
+    if "surcharge_ids" in update_data:
+        update_data["surcharge_ids"] = [
+            str(value) for value in (update_data["surcharge_ids"] or [])
+        ]
 
     # Editing an order must not wipe an already-captured POD submission
     # (signature/photo paths written by the driver upload endpoints).
@@ -1072,5 +1296,3 @@ async def accept_order(
     })
 
     return order
-
-

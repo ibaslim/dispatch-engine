@@ -23,6 +23,7 @@ from app.models.location import (
 from app.models.delivery_configuration import (
     AfterHoursDelivery,
     DeliveryCategory,
+    DeliveryPolicy,
     OperationalZone,
     OperationalZoneCity,
     PartnerZoneCategoryPrice,
@@ -59,6 +60,7 @@ __all__ = [
     "OperationalZone",
     "OperationalZoneCity",
     "DeliveryCategory",
+    "DeliveryPolicy",
     "AfterHoursDelivery",
     "ZoneBasePrice",
     "ZoneCategoryPrice",

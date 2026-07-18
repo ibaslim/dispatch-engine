@@ -934,15 +934,18 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const value = this.newOrderValue;
     if (!value.pickup.name.trim()) return true;
     if (!value.pickup.address.trim()) return true;
+    if (!value.pickup.location) return true;
     if (!value.pickup.email.trim()) return true;
     if (!value.pickup.pickupDate || !value.pickup.pickupTime) return true;
     if (!this.isValidPhone(value.pickup.phone.number)) return true;
     if (!value.delivery.name.trim()) return true;
     if (!value.delivery.email.trim() || !this.isValidEmail(value.delivery.email)) return true;
     if (!value.delivery.address.trim()) return true;
+    if (!value.delivery.location) return true;
     if (!value.delivery.deliveryDate || !value.delivery.deliveryTime) return true;
     if (!this.isValidPhone(value.delivery.phone.number)) return true;
     if (this.isDeliveryBeforeOrEqualPickup(value)) return true;
+    if (!value.deliveryCategoryId || !value.routeQuote) return true;
 
     const hasValidItem = (value.details.items || []).some((item) =>
       item.itemName.trim() && toNumber(item.itemPrice) > 0 && toNumber(item.itemQty) > 0
@@ -1028,4 +1031,3 @@ export class OrdersComponent implements OnInit, OnDestroy {
     window.open('/map', '_blank', 'noopener');
   }
 }
-

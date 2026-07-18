@@ -22,6 +22,7 @@ import { ErrorMessageComponent } from '../error-message/error-message.component'
 })
 export class OtherOrderDetailsComponent {
   @Input() value!: NewOrderFormValue['details'];
+  @Input() routeQuote: NewOrderFormValue['routeQuote'] = null;
   @Input() showSubmitValidation = false;
 
   @Output() valueChange = new EventEmitter<NewOrderFormValue['details']>();

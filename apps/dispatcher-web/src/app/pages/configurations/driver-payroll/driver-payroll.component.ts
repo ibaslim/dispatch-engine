@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { PopupComponent } from '@components/popup/popup.component';
 import { SearchBarComponent } from '@components/search-bar/search-bar.component';
+import { ToastService } from '@core/toast/toast.service';
 import {
   DriverPayrollCity,
   DriverPayrollRates,
@@ -41,19 +42,31 @@ type PayrollTarget =
 })
 export class DriverPayrollComponent implements OnInit {
   private readonly driversService = inject(DriversService);
+  private readonly toast = inject(ToastService);
 
   driverViews: DriverPayrollView[] = [];
   savingIds = new Set<string>();
   confirmationTarget: PayrollTarget | null = null;
   isLoading = false;
   errorMessage = '';
-  successMessage = '';
   searchQuery = '';
 
   get filteredDriverViews(): DriverPayrollView[] {
     const query = this.normalizedSearchQuery();
     if (!query) return this.driverViews;
     return this.driverViews.filter((view) => this.driverHasSearchMatch(view));
+  }
+
+  trackByDriverView(_: number, view: DriverPayrollView): string {
+    return view.driver.id;
+  }
+
+  trackByState(_: number, state: DriverPayrollState): string {
+    return state.state_id;
+  }
+
+  trackByCity(_: number, city: DriverPayrollCity): string {
+    return city.city_id;
   }
 
   async ngOnInit(): Promise<void> {
@@ -239,7 +252,7 @@ export class DriverPayrollComponent implements OnInit {
         Object.assign(state, rates);
         state.cities.forEach((city) => Object.assign(city, rates));
       });
-      this.successMessage = `${target.view.driver.name}'s general payroll compensation was updated.`;
+      this.toast.success(`${target.view.driver.name}'s general payroll compensation was updated.`);
       return;
     }
     if (target.type === 'state') {
@@ -252,7 +265,7 @@ export class DriverPayrollComponent implements OnInit {
         )
       );
       target.state.cities.forEach((city) => Object.assign(city, rates));
-      this.successMessage = `${target.state.state_name} payroll compensation for ${target.view.driver.name} was updated.`;
+      this.toast.success(`${target.state.state_name} payroll compensation for ${target.view.driver.name} was updated.`);
       return;
     }
     await firstValueFrom(
@@ -262,7 +275,7 @@ export class DriverPayrollComponent implements OnInit {
         this.toRates(target.city)
       )
     );
-    this.successMessage = `${target.city.city_name} payroll compensation for ${target.view.driver.name} was updated.`;
+    this.toast.success(`${target.city.city_name} payroll compensation for ${target.view.driver.name} was updated.`);
   }
 
   private async loadAllDrivers(): Promise<void> {
@@ -317,7 +330,6 @@ export class DriverPayrollComponent implements OnInit {
 
   private clearFeedback(): void {
     this.errorMessage = '';
-    this.successMessage = '';
   }
 
   private normalizedSearchQuery(): string {

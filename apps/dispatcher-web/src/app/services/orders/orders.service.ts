@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { DeliveryRouteQuote } from '../../models/new-order-form/new-order-form.model';
 
 @Injectable({ providedIn: 'root' })
 export class OrdersService {
@@ -14,6 +15,18 @@ export class OrdersService {
 
   createOrder(data: any): Observable<any> {
     return this.http.post(this.baseUrl, data);
+  }
+
+  quoteDelivery(data: {
+    pickup_place_id: string;
+    delivery_place_id: string;
+    delivery_category_id: string;
+    vendor_id?: string | null;
+    delivery_date?: string | null;
+    delivery_time?: string | null;
+    surcharge_ids?: string[];
+  }): Observable<DeliveryRouteQuote> {
+    return this.http.post<DeliveryRouteQuote>(`${this.baseUrl}/quote`, data);
   }
 
   updateStatus(id: string, status: string): Observable<any> {
@@ -96,4 +109,3 @@ export class OrdersService {
     return this.http.post(`${this.baseUrl}/${id}/report`, { stage, reason, description });
   }
 }
-

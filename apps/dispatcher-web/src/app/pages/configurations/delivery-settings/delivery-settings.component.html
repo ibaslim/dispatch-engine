@@ -25,8 +25,10 @@
     <div *ngIf="errorMessage" class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
       {{ errorMessage }}
     </div>
-    <div *ngIf="successMessage" class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
-      {{ successMessage }}
+    <div class="relative mb-5 max-w-md">
+      <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+      <input type="search" [(ngModel)]="searchQuery" [placeholder]="'Search ' + pageTitle.toLowerCase() + '...'"
+        class="h-10 w-full rounded-lg border border-gray-300 bg-white pl-10 pr-3 text-sm outline-none focus:border-[#3ddc97] focus:ring-2 focus:ring-[#3ddc97]/20 dark:border-[#4a4d4a] dark:bg-[#232623]">
     </div>
 
     <div *ngIf="isLoading" class="rounded-xl border border-gray-200 bg-white p-10 text-center text-sm text-gray-500 dark:border-[#343734] dark:bg-[#232623] dark:text-gray-400">
@@ -35,7 +37,21 @@
 
     <ng-container *ngIf="!isLoading" [ngSwitch]="section">
       <div *ngSwitchCase="'regions'" class="grid gap-4 md:grid-cols-2">
-        <article *ngFor="let zone of zones" class="rounded-xl border border-gray-200 bg-white p-5 dark:border-[#343734] dark:bg-[#232623]">
+        <article class="flex flex-col justify-between gap-4 rounded-xl border border-gray-200 bg-white p-5 md:col-span-2 sm:flex-row sm:items-center dark:border-[#343734] dark:bg-[#232623]">
+          <div>
+            <h3 class="font-semibold">Inter-city deliveries</h3>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">When disabled, pickup and delivery must be in the same operational city. Both addresses must always be inside configured zones.</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <button type="button" role="switch" [attr.aria-checked]="allowIntercity" [disabled]="savingPolicy" (click)="toggleIntercity()"
+              class="relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-[#3ddc97]/40 disabled:opacity-60"
+              [ngClass]="allowIntercity ? 'bg-[#3ddc97]' : 'bg-gray-300 dark:bg-gray-600'">
+              <span class="pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-md transition-transform" [ngClass]="allowIntercity ? 'translate-x-5' : 'translate-x-0.5'"></span>
+            </button>
+            <span class="text-sm font-semibold" [ngClass]="allowIntercity ? 'text-emerald-700 dark:text-emerald-300' : 'text-gray-500'">{{ savingPolicy ? 'Saving...' : (allowIntercity ? 'Enabled' : 'Disabled') }}</span>
+          </div>
+        </article>
+        <article *ngFor="let zone of filteredZones" class="rounded-xl border border-gray-200 bg-white p-5 dark:border-[#343734] dark:bg-[#232623]">
           <div class="flex items-start justify-between gap-3">
             <div>
               <h3 class="font-semibold">{{ zone.name }}</h3>
@@ -60,7 +76,7 @@
       </div>
 
       <div *ngSwitchCase="'categories'" class="space-y-3">
-        <article *ngFor="let item of categories" class="flex items-start justify-between gap-4 rounded-xl border border-gray-200 bg-white p-5 dark:border-[#343734] dark:bg-[#232623]">
+        <article *ngFor="let item of filteredCategories" class="flex items-start justify-between gap-4 rounded-xl border border-gray-200 bg-white p-5 dark:border-[#343734] dark:bg-[#232623]">
           <div>
             <h3 class="font-semibold">{{ item.name }}</h3>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ item.description }}</p>
@@ -75,7 +91,7 @@
 
       <div *ngSwitchCase="'after-hours'" class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-[#343734] dark:bg-[#232623]">
         <div *ngIf="afterHours.length" class="divide-y divide-gray-100 dark:divide-[#343734]">
-          <div *ngFor="let item of afterHours" class="flex items-center justify-between gap-4 p-5">
+          <div *ngFor="let item of filteredAfterHours" class="flex items-center justify-between gap-4 p-5">
             <div class="flex items-center gap-4">
               <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-300"><i class="ph ph-moon-stars text-xl"></i></span>
               <div>
@@ -93,6 +109,13 @@
       </div>
 
       <div *ngSwitchCase="'base-prices'">
+        <div class="mb-5 flex flex-col justify-between gap-4 rounded-xl border border-gray-200 bg-white p-5 sm:flex-row sm:items-end dark:border-[#343734] dark:bg-[#232623]">
+          <div><h3 class="font-semibold">Default order tax</h3><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Applied automatically to every new order and shown in the order form.</p></div>
+          <div class="flex items-end gap-3">
+            <label><span class="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-500">Tax percentage</span><span class="currency-input"><span>%</span><input type="number" min="0" max="100" step="0.01" [(ngModel)]="defaultTaxPercentage" (ngModelChange)="scheduleDefaultTaxSave()"></span></label>
+            <span class="pb-2 text-xs text-gray-400">{{ savingDefaultTax ? 'Saving...' : 'Saved automatically' }}</span>
+          </div>
+        </div>
         <div class="mb-5 inline-flex rounded-lg bg-gray-100 p-1 dark:bg-[#292c29]">
           <button type="button" (click)="basePricingTab = 'general'" [ngClass]="basePricingTab === 'general' ? 'bg-white shadow-sm dark:bg-[#383b38]' : 'text-gray-500 dark:text-gray-400'" class="rounded-md px-4 py-2 text-sm font-medium">General Pricing</button>
           <button type="button" (click)="basePricingTab = 'partners'" [ngClass]="basePricingTab === 'partners' ? 'bg-white shadow-sm dark:bg-[#383b38]' : 'text-gray-500 dark:text-gray-400'" class="rounded-md px-4 py-2 text-sm font-medium">Partners</button>
@@ -100,22 +123,22 @@
 
         <div *ngIf="basePricingTab === 'general'" class="space-y-3">
           <div class="border-b border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-950 dark:bg-blue-950/20 dark:text-blue-300"><i class="ph ph-info mr-1"></i> Total price = base price + (distance beyond the included radius × extra charge per km).</div>
-          <article *ngFor="let group of basePriceGroups" class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-[#343734] dark:bg-[#232623]">
+          <article *ngFor="let group of filteredBasePriceGroups; trackBy: trackByPricingGroup" class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-[#343734] dark:bg-[#232623]">
             <button type="button" (click)="togglePricingZone(group.zone.id)" class="flex w-full items-center justify-between gap-4 p-5 text-left hover:bg-gray-50 dark:hover:bg-[#292c29]" [attr.aria-expanded]="isPricingZoneExpanded(group.zone.id)">
               <div><h3 class="font-semibold">{{ group.zone.name }}</h3><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ group.rows.length }} delivery {{ group.rows.length === 1 ? 'category' : 'categories' }} · {{ group.radius_km | number:'1.0-2' }} km radius</p></div>
               <i class="ph text-xl transition-transform" [ngClass]="isPricingZoneExpanded(group.zone.id) ? 'ph-caret-up' : 'ph-caret-down'"></i>
             </button>
             <div *ngIf="isPricingZoneExpanded(group.zone.id)" class="border-t border-gray-200 dark:border-[#343734]">
               <div class="flex flex-wrap items-end justify-between gap-4 bg-gray-50 px-5 py-4 dark:bg-[#1d201d]">
-                <label><span class="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-500">Zone included radius</span><span class="currency-input"><span>KM</span><input type="number" min="0.01" step="0.01" [(ngModel)]="group.radius_km"></span></label>
-                <button type="button" (click)="saveZoneRadius(group)" [disabled]="group.savingRadius" class="secondary-button">{{ group.savingRadius ? 'Saving...' : 'Save radius' }}</button>
+                <label><span class="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-500">Zone included radius</span><span class="currency-input"><span>KM</span><input type="number" min="0.01" step="0.01" [(ngModel)]="group.radius_km" (ngModelChange)="scheduleZoneRadiusSave(group)"></span></label>
+                <span class="pb-2 text-xs text-gray-400">{{ group.savingRadius ? 'Saving...' : 'Saved automatically' }}</span>
               </div>
               <div class="divide-y divide-gray-100 dark:divide-[#343734]">
-                <section *ngFor="let row of group.rows" class="p-5">
-                  <div class="flex flex-wrap items-start justify-between gap-3"><div><h4 class="font-semibold">{{ row.category.name }}</h4><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ row.category.description }}</p></div><button type="button" (click)="saveBasePrice(row)" [disabled]="row.saving" class="secondary-button">{{ row.saving ? 'Saving...' : 'Save category prices' }}</button></div>
+                <section *ngFor="let row of group.rows; trackBy: trackByBasePriceRow" class="p-5">
+                  <div class="flex flex-wrap items-start justify-between gap-3"><div><h4 class="font-semibold">{{ row.category.name }}</h4><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ row.category.description }}</p></div><span class="text-xs text-gray-400">{{ row.saving ? 'Saving...' : 'Saved automatically' }}</span></div>
                   <div class="mt-4 grid gap-4 md:grid-cols-2">
-                    <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-[#3a3d3a] dark:bg-[#1d201d]"><h5 class="mb-3 text-sm font-semibold">Individual customers</h5><div class="grid gap-3 sm:grid-cols-2"><label><span class="mb-1.5 block text-xs text-gray-500">Base price</span><span class="currency-input"><span>CAD</span><input type="number" min="0" step="0.01" [(ngModel)]="row.individual_price"></span></label><label><span class="mb-1.5 block text-xs text-gray-500">Extra per km</span><span class="currency-input"><span>CAD</span><input type="number" min="0" step="0.01" [(ngModel)]="row.individual_out_of_radius_per_km"></span></label></div></div>
-                    <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-[#3a3d3a] dark:bg-[#1d201d]"><h5 class="mb-3 text-sm font-semibold">Default partner pricing</h5><div class="grid gap-3 sm:grid-cols-2"><label><span class="mb-1.5 block text-xs text-gray-500">Base price</span><span class="currency-input"><span>CAD</span><input type="number" min="0" step="0.01" [(ngModel)]="row.partner_price"></span></label><label><span class="mb-1.5 block text-xs text-gray-500">Extra per km</span><span class="currency-input"><span>CAD</span><input type="number" min="0" step="0.01" [(ngModel)]="row.partner_out_of_radius_per_km"></span></label></div></div>
+                    <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-[#3a3d3a] dark:bg-[#1d201d]"><h5 class="mb-3 text-sm font-semibold">Individual customers</h5><div class="grid gap-3 sm:grid-cols-2"><label><span class="mb-1.5 block text-xs text-gray-500">Base price</span><span class="currency-input"><span>CAD</span><input type="number" min="0" step="0.01" [(ngModel)]="row.individual_price" (ngModelChange)="scheduleBasePriceSave(row)"></span></label><label><span class="mb-1.5 block text-xs text-gray-500">Extra per km</span><span class="currency-input"><span>CAD</span><input type="number" min="0" step="0.01" [(ngModel)]="row.individual_out_of_radius_per_km" (ngModelChange)="scheduleBasePriceSave(row)"></span></label></div></div>
+                    <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-[#3a3d3a] dark:bg-[#1d201d]"><h5 class="mb-3 text-sm font-semibold">Default partner pricing</h5><div class="grid gap-3 sm:grid-cols-2"><label><span class="mb-1.5 block text-xs text-gray-500">Base price</span><span class="currency-input"><span>CAD</span><input type="number" min="0" step="0.01" [(ngModel)]="row.partner_price" (ngModelChange)="scheduleBasePriceSave(row)"></span></label><label><span class="mb-1.5 block text-xs text-gray-500">Extra per km</span><span class="currency-input"><span>CAD</span><input type="number" min="0" step="0.01" [(ngModel)]="row.partner_out_of_radius_per_km" (ngModelChange)="scheduleBasePriceSave(row)"></span></label></div></div>
                   </div>
                 </section>
               </div>
@@ -128,7 +151,7 @@
           <aside class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-[#343734] dark:bg-[#232623]">
             <div class="border-b border-gray-200 px-4 py-3 dark:border-[#343734]"><h3 class="font-semibold">Partners</h3><p class="mt-1 text-xs text-gray-400">Select a partner to edit their prices</p></div>
             <div class="max-h-[600px] overflow-y-auto p-2">
-              <button *ngFor="let partner of partners" type="button" (click)="selectPartner(partner.id)" [ngClass]="selectedPartnerId === partner.id ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300' : 'hover:bg-gray-50 dark:hover:bg-[#2d302d]'" class="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm"><span class="font-medium">{{ partner.name }}</span><i class="ph ph-caret-right"></i></button>
+              <button *ngFor="let partner of filteredPartners" type="button" (click)="selectPartner(partner.id)" [ngClass]="selectedPartnerId === partner.id ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300' : 'hover:bg-gray-50 dark:hover:bg-[#2d302d]'" class="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm"><span class="font-medium">{{ partner.name }}</span><i class="ph ph-caret-right"></i></button>
               <p *ngIf="!partners.length" class="p-4 text-center text-sm text-gray-400">No active partners</p>
             </div>
           </aside>
@@ -137,9 +160,9 @@
               <article *ngFor="let row of partnerMatrixRows" class="p-5" [class.opacity-60]="!row.base.basePriceId">
                 <div class="flex flex-wrap items-center justify-between gap-3"><div><p class="font-semibold">{{ row.base.zone.name }}</p><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ row.base.category.name }} · {{ row.base.zone.radius_km | number:'1.0-2' }} km included</p></div><div><span *ngIf="row.hasOverride" class="rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">Custom pricing</span><span *ngIf="!row.hasOverride && row.base.basePriceId" class="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-500 dark:bg-[#303330]">Using defaults</span><span *ngIf="!row.base.basePriceId" class="text-xs text-amber-600">Configure general price first</span></div></div>
                 <div class="mt-4 grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-                  <label><span class="mb-1.5 block text-xs text-gray-500">Partner base price</span><span class="currency-input"><span>CAD</span><input type="number" min="0" step="0.01" [(ngModel)]="row.price" [disabled]="!row.base.basePriceId"></span></label>
-                  <label><span class="mb-1.5 block text-xs text-gray-500">Extra per km</span><span class="currency-input"><span>CAD</span><input type="number" min="0" step="0.01" [(ngModel)]="row.out_of_radius_per_km" [disabled]="!row.base.basePriceId"></span></label>
-                  <div class="flex gap-2 sm:col-span-2 xl:col-span-1"><button type="button" (click)="resetPartnerMatrixRow(row)" [disabled]="!row.hasOverride || row.saving" class="secondary-button">Reset</button><button type="button" (click)="savePartnerMatrixRow(row)" [disabled]="!row.base.basePriceId || row.saving" class="primary-button">{{ row.saving ? 'Saving...' : 'Save' }}</button></div>
+                  <label><span class="mb-1.5 block text-xs text-gray-500">Partner base price</span><span class="currency-input"><span>CAD</span><input type="number" min="0" step="0.01" [(ngModel)]="row.price" (ngModelChange)="schedulePartnerPriceSave(row)" [disabled]="!row.base.basePriceId"></span></label>
+                  <label><span class="mb-1.5 block text-xs text-gray-500">Extra per km</span><span class="currency-input"><span>CAD</span><input type="number" min="0" step="0.01" [(ngModel)]="row.out_of_radius_per_km" (ngModelChange)="schedulePartnerPriceSave(row)" [disabled]="!row.base.basePriceId"></span></label>
+                  <div class="flex items-center gap-2 sm:col-span-2 xl:col-span-1"><button type="button" (click)="resetPartnerMatrixRow(row)" [disabled]="!row.hasOverride || row.saving" class="secondary-button">Reset</button><span class="text-xs text-gray-400">{{ row.saving ? 'Saving...' : 'Saved automatically' }}</span></div>
                 </div>
               </article>
             </div>
@@ -154,17 +177,17 @@
           <button type="button" (click)="surchargeTab = 'occasions'" [ngClass]="surchargeTab === 'occasions' ? 'bg-white shadow-sm dark:bg-[#383b38]' : 'text-gray-500 dark:text-gray-400'" class="rounded-md px-4 py-2 text-sm font-medium">Special Occasions</button>
         </div>
         <div *ngIf="surchargeTab === 'standard'" class="grid gap-4 md:grid-cols-2">
-          <article *ngFor="let item of surcharges" class="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-5 dark:border-[#343734] dark:bg-[#232623]">
+          <article *ngFor="let item of filteredSurcharges" class="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-5 dark:border-[#343734] dark:bg-[#232623]">
             <div><h3 class="font-semibold">{{ item.name }}</h3><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">+ CAD {{ item.extra_amount | number:'1.2-2' }}</p></div>
             <div class="flex gap-1"><button type="button" (click)="openSurcharge(item)" class="icon-button"><i class="ph ph-pencil-simple"></i></button><button type="button" (click)="requestDelete('surcharge', item.id, item.name)" class="icon-button text-red-500"><i class="ph ph-trash"></i></button></div>
           </article>
           <div *ngIf="!surcharges.length" class="empty-state md:col-span-2"><i class="ph ph-plus-circle text-3xl"></i><p class="mt-2 font-medium">No surcharges yet</p></div>
         </div>
         <div *ngIf="surchargeTab === 'occasions'" class="space-y-3">
-          <article *ngFor="let item of occasions" class="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-5 dark:border-[#343734] dark:bg-[#232623]">
+          <article *ngFor="let item of filteredOccasions" class="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-5 dark:border-[#343734] dark:bg-[#232623]">
             <div class="flex items-center gap-4">
               <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300"><i class="ph ph-calendar-star text-xl"></i></span>
-              <div><h3 class="font-semibold">{{ item.name }}</h3><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ item.occasion_date | date:'longDate' }}<span *ngIf="item.repeats_annually" class="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">Repeats yearly</span></p></div>
+              <div><h3 class="font-semibold">{{ item.name }}</h3><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ item.occasion_date | date:'longDate' }} · +{{ item.extra_percentage | number:'1.0-2' }}%<span *ngIf="item.repeats_annually" class="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">Repeats yearly</span></p></div>
             </div>
             <div class="flex gap-1"><button type="button" (click)="openOccasion(item)" class="icon-button"><i class="ph ph-pencil-simple"></i></button><button type="button" (click)="requestDelete('occasion', item.id, item.name)" class="icon-button text-red-500"><i class="ph ph-trash"></i></button></div>
           </article>
@@ -217,6 +240,7 @@
     <ng-container *ngIf="modal === 'occasion'">
       <label class="form-field"><span>Occasion name</span><input name="occasionName" [(ngModel)]="occasionForm.name" maxlength="100" placeholder="e.g. Canada Day" required></label>
       <label class="form-field"><span>Date</span><input type="date" name="occasionDate" [(ngModel)]="occasionForm.occasion_date" required></label>
+      <label class="form-field"><span>Additional delivery charge (%)</span><input type="number" name="occasionPercentage" min="0" max="100" step="0.01" [(ngModel)]="occasionForm.extra_percentage" required></label>
       <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-4 dark:border-[#3a3d3a]"><input type="checkbox" name="repeatsAnnually" [(ngModel)]="occasionForm.repeats_annually" class="mt-0.5 h-4 w-4 accent-[#3ddc97]"><span><strong class="block text-sm font-medium">Repeat every year</strong><span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">Use this for national days and annual holidays.</span></span></label>
     </ng-container>
 

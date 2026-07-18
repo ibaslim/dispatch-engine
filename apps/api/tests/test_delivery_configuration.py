@@ -1,3 +1,4 @@
+from datetime import date, time
 from decimal import Decimal
 
 import pytest
@@ -7,10 +8,18 @@ from app.api.routers.delivery_configuration import (
     AfterHoursInput,
     BasePriceInput,
     CategoryInput,
+    DeliveryPolicyInput,
     SpecialOccasionInput,
     SurchargeInput,
     ZoneInput,
     ZoneRadiusInput,
+)
+from app.models.delivery_configuration import SpecialOccasion
+from app.services.delivery_quote_service import (
+    _occasion_matches,
+    _within_time_range,
+    calculate_delivery_fee,
+    calculate_percentage_charge,
 )
 
 
@@ -53,8 +62,11 @@ def test_customer_facing_text_is_trimmed() -> None:
 
 
 def test_special_occasion_defaults_to_non_repeating() -> None:
-    value = SpecialOccasionInput(name="One-off event", occasion_date="2026-08-10")
+    value = SpecialOccasionInput(
+        name="One-off event", occasion_date="2026-08-10", extra_percentage="15.00"
+    )
     assert value.repeats_annually is False
+    assert value.extra_percentage == Decimal("15.00")
 
 
 def test_base_price_supports_separate_radius_charges() -> None:
@@ -72,3 +84,62 @@ def test_base_price_supports_separate_radius_charges() -> None:
 def test_base_price_rejects_zero_radius() -> None:
     with pytest.raises(ValidationError):
         ZoneRadiusInput(radius_km=0)
+
+
+def test_delivery_fee_stays_fixed_within_zone_radius() -> None:
+    extra_km, fee = calculate_delivery_fee(
+        distance_meters=29_999,
+        radius_km=Decimal("30.00"),
+        base_price=Decimal("25.00"),
+        additional_per_km=Decimal("2.00"),
+    )
+
+    assert extra_km == Decimal("0.00")
+    assert fee == Decimal("25.00")
+
+
+def test_delivery_fee_adds_only_distance_beyond_radius() -> None:
+    extra_km, fee = calculate_delivery_fee(
+        distance_meters=32_500,
+        radius_km=Decimal("30.00"),
+        base_price=Decimal("25.00"),
+        additional_per_km=Decimal("2.00"),
+    )
+
+    assert extra_km == Decimal("2.50")
+    assert fee == Decimal("30.00")
+
+
+def test_after_hours_charge_window_supports_overnight_ranges() -> None:
+    assert _within_time_range(time(23, 30), time(21), time(2, 30)) is True
+    assert _within_time_range(time(1, 15), time(21), time(2, 30)) is True
+    assert _within_time_range(time(12), time(21), time(2, 30)) is False
+
+
+def test_special_occasion_percentage_is_calculated_from_delivery_charges() -> None:
+    assert calculate_percentage_charge(Decimal("80.00"), Decimal("15.00")) == Decimal("12.00")
+
+
+def test_repeating_special_occasion_matches_month_and_day() -> None:
+    occasion = SpecialOccasion(
+        name="Canada Day",
+        occasion_date=date(2025, 7, 1),
+        repeats_annually=True,
+        extra_percentage=Decimal("10.00"),
+    )
+
+    assert _occasion_matches(occasion, date(2026, 7, 1)) is True
+    assert _occasion_matches(occasion, date(2026, 7, 2)) is False
+
+
+def test_delivery_policy_validates_default_tax_percentage() -> None:
+    value = DeliveryPolicyInput(
+        allow_intercity=True,
+        default_tax_percentage="13.00",
+    )
+
+    assert value.allow_intercity is True
+    assert value.default_tax_percentage == Decimal("13.00")
+
+    with pytest.raises(ValidationError):
+        DeliveryPolicyInput(allow_intercity=False, default_tax_percentage=101)

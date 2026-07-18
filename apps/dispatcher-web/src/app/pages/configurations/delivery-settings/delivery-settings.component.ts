@@ -1,11 +1,12 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom, Observable } from 'rxjs';
 
 import { PopupComponent } from '@components/popup/popup.component';
+import { ToastService } from '@core/toast/toast.service';
 import {
   AfterHoursDelivery,
   DeliveryCategory,
@@ -73,10 +74,11 @@ interface SelectedZoneCity {
   templateUrl: './delivery-settings.component.html',
   styleUrl: './delivery-settings.component.css',
 })
-export class DeliverySettingsComponent implements OnInit {
+export class DeliverySettingsComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly service = inject(DeliveryConfigurationService);
   private readonly locations = inject(LocationsService);
+  private readonly toast = inject(ToastService);
 
   readonly section = this.route.snapshot.data['section'] as Section;
   zones: OperationalZone[] = [];
@@ -96,13 +98,18 @@ export class DeliverySettingsComponent implements OnInit {
   cities: City[] = [];
   selectedCityIds = new Set<string>();
   selectedCityDetails = new Map<string, SelectedZoneCity>();
+  allowIntercity = false;
+  defaultTaxPercentage = 0;
+  savingPolicy = false;
+  savingDefaultTax = false;
+  searchQuery = '';
+  private readonly autosaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   modal: Modal = null;
   editingId: string | null = null;
   isLoading = false;
   isSaving = false;
   errorMessage = '';
-  successMessage = '';
   formError = '';
   deleteTarget: { kind: DeleteKind; id: string; name: string } | null = null;
 
@@ -110,7 +117,7 @@ export class DeliverySettingsComponent implements OnInit {
   categoryForm = { name: '', description: '' };
   afterHoursForm = { start_time: '', end_time: '', extra_amount: 0 };
   surchargeForm = { name: '', extra_amount: 0 };
-  occasionForm = { name: '', occasion_date: '', repeats_annually: false };
+  occasionForm = { name: '', occasion_date: '', repeats_annually: false, extra_percentage: 0 };
 
   get pageTitle(): string {
     return {
@@ -146,14 +153,27 @@ export class DeliverySettingsComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     this.isLoading = true;
     try {
-      if (this.section === 'regions') this.zones = await firstValueFrom(this.service.getZones());
+      if (this.section === 'regions') {
+        const [zones, policy] = await Promise.all([
+          firstValueFrom(this.service.getZones()),
+          firstValueFrom(this.service.getDeliveryPolicy()),
+        ]);
+        this.zones = zones;
+        this.allowIntercity = policy.allow_intercity;
+        this.defaultTaxPercentage = Number(policy.default_tax_percentage);
+      }
       if (this.section === 'categories') {
         this.categories = await firstValueFrom(this.service.getCategories());
       }
       if (this.section === 'after-hours') {
         this.afterHours = await firstValueFrom(this.service.getAfterHours());
       }
-      if (this.section === 'base-prices') await this.loadBasePrices();
+      if (this.section === 'base-prices') {
+        await this.loadBasePrices();
+        const policy = await firstValueFrom(this.service.getDeliveryPolicy());
+        this.allowIntercity = policy.allow_intercity;
+        this.defaultTaxPercentage = Number(policy.default_tax_percentage);
+      }
       if (this.section === 'surcharges') {
         [this.surcharges, this.occasions] = await Promise.all([
           firstValueFrom(this.service.getSurcharges()),
@@ -165,6 +185,79 @@ export class DeliverySettingsComponent implements OnInit {
     } finally {
       this.isLoading = false;
     }
+  }
+
+  ngOnDestroy(): void {
+    for (const timer of this.autosaveTimers.values()) clearTimeout(timer);
+  }
+
+  private get normalizedSearch(): string {
+    return this.searchQuery.trim().toLowerCase();
+  }
+
+  get filteredZones(): OperationalZone[] {
+    const query = this.normalizedSearch;
+    return !query ? this.zones : this.zones.filter((zone) =>
+      zone.name.toLowerCase().includes(query)
+      || zone.cities.some((city) => `${city.name} ${city.state_name}`.toLowerCase().includes(query))
+    );
+  }
+
+  get filteredCategories(): DeliveryCategory[] {
+    const query = this.normalizedSearch;
+    return !query ? this.categories : this.categories.filter((item) =>
+      `${item.name} ${item.description}`.toLowerCase().includes(query)
+    );
+  }
+
+  get filteredAfterHours(): AfterHoursDelivery[] {
+    const query = this.normalizedSearch;
+    return !query ? this.afterHours : this.afterHours.filter((item) =>
+      `${this.formatTime(item.start_time)} ${this.formatTime(item.end_time)} ${item.extra_amount}`.toLowerCase().includes(query)
+    );
+  }
+
+  get filteredSurcharges(): Surcharge[] {
+    const query = this.normalizedSearch;
+    return !query ? this.surcharges : this.surcharges.filter((item) =>
+      `${item.name} ${item.extra_amount}`.toLowerCase().includes(query)
+    );
+  }
+
+  get filteredOccasions(): SpecialOccasion[] {
+    const query = this.normalizedSearch;
+    return !query ? this.occasions : this.occasions.filter((item) =>
+      `${item.name} ${item.occasion_date} ${item.extra_percentage}`.toLowerCase().includes(query)
+    );
+  }
+
+  get filteredPartners(): PricingPartner[] {
+    const query = this.normalizedSearch;
+    return !query ? this.partners : this.partners.filter((item) =>
+      item.name.toLowerCase().includes(query)
+    );
+  }
+
+  get filteredBasePriceGroups(): ZonePricingGroup[] {
+    const query = this.normalizedSearch;
+    if (!query) return this.basePriceGroups;
+    // Keep the original group and row references stable. Cloning groups from a
+    // template getter caused Angular to destroy and recreate every ngModel form
+    // control on each change-detection pass when an accordion was expanded.
+    return this.basePriceGroups.filter((group) =>
+      group.zone.name.toLowerCase().includes(query)
+      || group.rows.some((row) =>
+        `${row.category.name} ${row.category.description}`.toLowerCase().includes(query)
+      )
+    );
+  }
+
+  trackByPricingGroup(_: number, group: ZonePricingGroup): string {
+    return group.zone.id;
+  }
+
+  trackByBasePriceRow(_: number, row: BasePriceRow): string {
+    return `${row.zone.id}:${row.category.id}`;
   }
 
   async openZone(zone?: OperationalZone): Promise<void> {
@@ -185,6 +278,81 @@ export class DeliverySettingsComponent implements OnInit {
     } catch (error) {
       this.formError = this.errorText(error, 'Failed to load provinces and cities.');
     }
+  }
+
+  async saveIntercityPolicy(): Promise<void> {
+    this.savingPolicy = true;
+    this.clearFeedback();
+    try {
+      const saved = await firstValueFrom(
+        this.service.saveDeliveryPolicy({
+          allow_intercity: this.allowIntercity,
+          default_tax_percentage: this.defaultTaxPercentage,
+        })
+      );
+      this.allowIntercity = saved.allow_intercity;
+      this.toast.success('Inter-city delivery policy saved.');
+    } catch (error) {
+      this.allowIntercity = !this.allowIntercity;
+      this.errorMessage = this.errorText(error, 'Unable to save the delivery policy.');
+    } finally {
+      this.savingPolicy = false;
+    }
+  }
+
+  toggleIntercity(): void {
+    if (this.savingPolicy) return;
+    this.allowIntercity = !this.allowIntercity;
+    void this.saveIntercityPolicy();
+  }
+
+  async saveDefaultTax(): Promise<void> {
+    this.clearFeedback();
+    if (this.defaultTaxPercentage < 0 || this.defaultTaxPercentage > 100) {
+      this.errorMessage = 'Default tax must be between 0 and 100 percent.';
+      return;
+    }
+    this.savingDefaultTax = true;
+    try {
+      const saved = await firstValueFrom(
+        this.service.saveDeliveryPolicy({
+          allow_intercity: this.allowIntercity,
+          default_tax_percentage: this.defaultTaxPercentage,
+        })
+      );
+      this.defaultTaxPercentage = Number(saved.default_tax_percentage);
+      this.toast.success('Default order tax saved.');
+    } catch (error) {
+      this.errorMessage = this.errorText(error, 'Unable to save the default tax.');
+    } finally {
+      this.savingDefaultTax = false;
+    }
+  }
+
+  scheduleDefaultTaxSave(): void {
+    this.scheduleAutosave('default-tax', () => void this.saveDefaultTax());
+  }
+
+  scheduleBasePriceSave(row: BasePriceRow): void {
+    this.scheduleAutosave(`base:${row.zone.id}:${row.category.id}`, () => void this.saveBasePrice(row));
+  }
+
+  scheduleZoneRadiusSave(group: ZonePricingGroup): void {
+    this.scheduleAutosave(`radius:${group.zone.id}`, () => void this.saveZoneRadius(group));
+  }
+
+  schedulePartnerPriceSave(row: PartnerMatrixRow): void {
+    if (!row.base.basePriceId) return;
+    this.scheduleAutosave(`partner:${this.selectedPartnerId}:${row.base.basePriceId}`, () => void this.savePartnerMatrixRow(row));
+  }
+
+  private scheduleAutosave(key: string, action: () => void): void {
+    const existing = this.autosaveTimers.get(key);
+    if (existing) clearTimeout(existing);
+    this.autosaveTimers.set(key, setTimeout(() => {
+      this.autosaveTimers.delete(key);
+      action();
+    }, 700));
   }
 
   async onStateChange(): Promise<void> {
@@ -254,6 +422,7 @@ export class DeliverySettingsComponent implements OnInit {
       name: item?.name || '',
       occasion_date: item?.occasion_date || '',
       repeats_annually: item?.repeats_annually || false,
+      extra_percentage: Number(item?.extra_percentage || 0),
     };
   }
 
@@ -311,7 +480,7 @@ export class DeliverySettingsComponent implements OnInit {
         this.replaceOrAdd(this.occasions, saved);
         this.occasions.sort((a, b) => a.occasion_date.localeCompare(b.occasion_date));
       }
-      this.successMessage = 'Configuration saved successfully.';
+      this.toast.success('Configuration saved successfully.');
       this.modal = null;
     } catch (error) {
       this.formError = this.errorText(error, 'Unable to save this configuration.');
@@ -337,18 +506,17 @@ export class DeliverySettingsComponent implements OnInit {
     }
     row.saving = true;
     try {
-      await firstValueFrom(
+      const saved = await firstValueFrom(
         this.service.saveBasePrice(row.zone.id, row.category.id, {
           individual_price: row.individual_price,
           partner_price: row.partner_price,
           individual_out_of_radius_per_km: row.individual_out_of_radius_per_km,
           partner_out_of_radius_per_km: row.partner_out_of_radius_per_km,
         })
-      ).then((saved) => {
-        row.basePriceId = saved.id;
-        row.partner_overrides = saved.partner_overrides;
-      });
-      this.successMessage = `${row.zone.name} / ${row.category.name} prices saved.`;
+      );
+      row.basePriceId = saved.id;
+      row.partner_overrides = saved.partner_overrides;
+      this.toast.success(`${row.zone.name} / ${row.category.name} prices saved.`);
     } catch (error) {
       this.errorMessage = this.errorText(error, 'Unable to save base prices.');
     } finally {
@@ -380,7 +548,7 @@ export class DeliverySettingsComponent implements OnInit {
         this.service.saveZoneRadius(group.zone.id, group.radius_km)
       );
       group.zone.radius_km = group.radius_km;
-      this.successMessage = `${group.zone.name} radius saved.`;
+      this.toast.success(`${group.zone.name} radius saved.`);
     } catch (error) {
       this.errorMessage = this.errorText(error, 'Unable to save the zone radius.');
     } finally {
@@ -427,7 +595,7 @@ export class DeliverySettingsComponent implements OnInit {
       );
       this.replaceOrAdd(row.base.partner_overrides, saved);
       row.hasOverride = true;
-      this.successMessage = `${saved.partner_name}'s custom rate was saved.`;
+      this.toast.success(`${saved.partner_name}'s custom rate was saved.`);
     } catch (error) {
       this.errorMessage = this.errorText(error, 'Unable to save the partner rate.');
     } finally {
@@ -454,7 +622,7 @@ export class DeliverySettingsComponent implements OnInit {
         row.base.partner_out_of_radius_per_km ?? 0
       );
       row.hasOverride = false;
-      this.successMessage = 'Partner rate reset to the default.';
+      this.toast.success('Partner rate reset to the default.');
     } catch (error) {
       this.errorMessage = this.errorText(error, 'Unable to reset the partner rate.');
     } finally {
@@ -479,7 +647,7 @@ export class DeliverySettingsComponent implements OnInit {
       else request = this.service.deleteSpecialOccasion(target.id);
       await firstValueFrom(request);
       this.removeDeleted(target.kind, target.id);
-      this.successMessage = `${target.name} deleted.`;
+      this.toast.success(`${target.name} deleted.`);
       this.deleteTarget = null;
     } catch (error) {
       this.errorMessage = this.errorText(error, 'Unable to delete this configuration.');
@@ -514,8 +682,8 @@ export class DeliverySettingsComponent implements OnInit {
           zone,
           category,
           basePriceId: price?.id || null,
-          individual_price: price ? Number(price.individual_price) : null,
-          partner_price: price ? Number(price.partner_price) : null,
+          individual_price: price ? Number(price.individual_price) : 0,
+          partner_price: price ? Number(price.partner_price) : 0,
           individual_out_of_radius_per_km: price
             ? Number(price.individual_out_of_radius_per_km)
             : 0,
@@ -555,8 +723,12 @@ export class DeliverySettingsComponent implements OnInit {
       this.formError = 'Enter different start and end times and a valid extra amount.';
     } else if (this.modal === 'surcharge' && (!this.surchargeForm.name.trim() || this.surchargeForm.extra_amount < 0)) {
       this.formError = 'Enter a surcharge name and a valid extra amount.';
-    } else if (this.modal === 'occasion' && (!this.occasionForm.name.trim() || !this.occasionForm.occasion_date)) {
-      this.formError = 'Enter an occasion name and date.';
+    } else if (
+      this.modal === 'occasion'
+      && (!this.occasionForm.name.trim() || !this.occasionForm.occasion_date
+        || this.occasionForm.extra_percentage < 0 || this.occasionForm.extra_percentage > 100)
+    ) {
+      this.formError = 'Enter an occasion name, date, and percentage from 0 to 100.';
     }
     return !this.formError;
   }
@@ -577,7 +749,6 @@ export class DeliverySettingsComponent implements OnInit {
 
   private clearFeedback(): void {
     this.errorMessage = '';
-    this.successMessage = '';
   }
 
   private errorText(error: unknown, fallback: string): string {
