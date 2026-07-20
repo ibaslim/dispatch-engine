@@ -1,30 +1,22 @@
-<div class="card !container">
-  <div class="top" *ngIf="orderId || driverName || vehicleId">
-    <div>
-      <p class="eyebrow">Dispatch Tracker</p>
-      <h1 class="title" *ngIf="orderId">Order #{{ orderId }}</h1>
-      <div class="order-id" *ngIf="driverName || vehicleId">
+<div class="card  !mb-0">
+  <div class="card-header flex justify-between flex-wrap gap-3" *ngIf="orderId || driverName || vehicleId">
+      <div class="truncate font-display text-2xl leading-none text-courier-ink dark:text-courier-yellow" *ngIf="driverName || vehicleId">
         <ng-container *ngIf="driverName">Driver: {{ driverName }}</ng-container>
-        <ng-container *ngIf="driverName && vehicleId">&nbsp;&bull;&nbsp;</ng-container>
-        <ng-container *ngIf="vehicleId">Vehicle: {{ vehicleId }}</ng-container>
+<!--        <ng-container *ngIf="driverName && vehicleId">&nbsp;&bull;&nbsp;</ng-container>-->
+<!--        <ng-container *ngIf="vehicleId">Vehicle: {{ vehicleId }}</ng-container>-->
       </div>
-    </div>
-    <div class="top-actions">
-<!--      <div class="status-chip">-->
-<!--        <span class="status-dot" [class.delivered]="isDelivered"></span>-->
-<!--        <span>{{ currentStageData?.label }}</span>-->
-<!--      </div>-->
-      <button type="button" class="realtime-btn" [disabled]="isDelivered" (click)="trackRealtime.emit()">
-        <span class="realtime-dot" [class.driving]="driving"></span>
-        Track realtime
+      <button type="button" class="btn font-body flex gap-1" [disabled]="isDelivered" (click)="trackRealtime.emit()">
+        <span class="realtime-dot w-[7px] h-[7px] rounded-full bg-black/35 shrink-0" [class.driving]="driving"></span>
+        Track Realtime
       </button>
-    </div>
   </div>
 
-  <p class="stage-name">{{ currentStageData?.name }}</p>
-  <p class="stage-sub">{{ currentStageData?.sub }}</p>
+<div class="card-body overflow-hidden">
+  <p class="mt-[22px] mx-0.5 mb-0.5 min-h-[20px] text-[15px] font-semibold text-courier-ink dark:text-courier-yellow">{{ currentStageData?.name }}</p>
+  <p class="mx-0.5 mb-3.5 min-h-[16px] text-[12.5px] text-gray-500 dark:text-gray-400">{{ currentStageData?.sub }}</p>
 
-  <svg class="route" viewBox="0 0 1200 210" preserveAspectRatio="xMidYMid meet">
+
+  <svg class="block w-full h-auto overflow-visible" [attr.viewBox]="viewBox" preserveAspectRatio="xMidYMid meet">
     <path class="road-base" [attr.d]="pathD"></path>
     <path class="road-fill" [attr.d]="pathD"
           [style.stroke-dasharray]="roadFillDasharray"
@@ -33,14 +25,14 @@
 
     <g>
       <ng-container *ngFor="let stage of stages; let i = index">
-        <circle class="station-dot-outer"
-                [class.done]="isDone(i)" [class.active]="isActive(i)"
+        <circle class="station-dot-outer lg:!block"
+                [class.done]="isDone(i)" [class.active]="isActive(i)" [class.hidden]="!isMobileVisible(i)"
                 [attr.cx]="stationX[i]" [attr.cy]="roadY" r="9"></circle>
-        <circle class="station-dot-inner"
-                [class.done]="isDone(i)" [class.active]="isActive(i)"
+        <circle class="station-dot-inner lg:!block"
+                [class.done]="isDone(i)" [class.active]="isActive(i)" [class.hidden]="!isMobileVisible(i)"
                 [attr.cx]="stationX[i]" [attr.cy]="roadY" r="3.5"></circle>
-        <text class="station-label"
-              [class.done]="isDone(i)" [class.active]="isActive(i)"
+        <text class="station-label text-[8px] lg:text-[9.5px] lg:!block"
+              [class.done]="isDone(i)" [class.active]="isActive(i)" [class.hidden]="!isMobileVisible(i)"
               [attr.x]="stationX[i]" [attr.y]="roadY + 34">{{ stage.label }}</text>
       </ng-container>
     </g>
@@ -65,7 +57,7 @@
         <path class="truck-fill truck-outline" d="M16 158 A20 20 0 0 1 56 158"></path>
         <path class="truck-fill truck-outline" d="M183 158 A20 20 0 0 1 223 158"></path>
 
-        <g class="wheel">
+        <g class="wheel wheel-left">
           <circle class="tire" cx="36" cy="162" r="15"></circle>
           <circle cx="36" cy="162" r="9" fill="none" stroke="#FFFFFF" stroke-width="2.5"></circle>
           <g stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round">
@@ -76,7 +68,7 @@
           </g>
           <circle cx="36" cy="162" r="3" fill="#FFFFFF"></circle>
         </g>
-        <g class="wheel">
+        <g class="wheel wheel-right">
           <circle class="tire" cx="203" cy="162" r="15"></circle>
           <circle cx="203" cy="162" r="9" fill="none" stroke="#FFFFFF" stroke-width="2.5"></circle>
           <g stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round">
@@ -98,4 +90,5 @@
       </g>
     </g>
   </svg>
+</div>
 </div>

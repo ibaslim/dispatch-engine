@@ -9,8 +9,21 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    (function () {
+      var stored = localStorage.getItem('theme');
+      var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.classList.toggle('dark', dark);
+    })();
+    // Mouse/touch clicks on .btn shouldn't leave the focus-visible ring on screen;
+    // keyboard activation never fires pointerup, so Tab-based focus is unaffected.
+    document.addEventListener('pointerup', function (e) {
+      var btn = e.target.closest && e.target.closest('.btn');
+      if (btn) btn.blur();
+    });
+  </script>
 </head>
-<body class="bg-gray-50">
+<body>
   <app-root></app-root>
 </body>
 </html>

@@ -84,7 +84,7 @@ export interface StageTimestamps {
           <div class="w-9 flex items-center justify-center shrink-0">
             @switch (stage.state) {
               @case ('done') {
-                <div class="node relative z-10 w-7 h-7 rounded-full bg-courier-ink text-courier-yellow flex items-center justify-center">
+                <div class="node relative z-10 w-7 h-7 rounded-full bg-courier-ink text-courier-yellow flex items-center justify-center dark:bg-courier-yellow dark:text-courier-ink">
                   <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"
                        stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M5 13l4 4 10-10" />
@@ -102,8 +102,8 @@ export interface StageTimestamps {
                 </div>
               }
               @default {
-                <div class="node relative z-10 w-7 h-7 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center">
-                  <div class="w-1.5 h-1.5 rounded-full bg-gray-300"></div>
+                <div class="node relative z-10 w-7 h-7 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center dark:bg-gray-800 dark:border-gray-700">
+                  <div class="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-600"></div>
                 </div>
               }
             }
@@ -113,12 +113,14 @@ export interface StageTimestamps {
             <span
               class="text-xs sm:text-sm font-extrabold uppercase tracking-wide leading-tight"
               [class.text-courier-ink]="stage.state !== 'todo'"
+              [class.dark:text-courier-yellow]="stage.state !== 'todo'"
               [class.text-gray-400]="stage.state === 'todo'"
+              [class.dark:text-gray-600]="stage.state === 'todo'"
             >
               {{ stage.label }}
             </span>
             @if (stage.time) {
-              <span class="text-[10px] sm:text-xs text-gray-400 leading-tight whitespace-nowrap">
+              <span class="text-[10px] sm:text-xs text-gray-400 leading-tight whitespace-nowrap dark:text-gray-500">
                 {{ stage.time }}
               </span>
             }
@@ -169,6 +171,10 @@ export interface StageTimestamps {
         width: 0;
         margin-left: -1px;
         border-left: 2px dashed #d1d5db;
+      }
+
+      :host-context(.dark) .seg-todo {
+        border-left-color: #374151;
       }
 
       .node-current {
