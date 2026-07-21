@@ -13,6 +13,7 @@ from app.api.routers.delivery_configuration import (
     SurchargeInput,
     ZoneInput,
     ZoneRadiusInput,
+    _time_ranges_overlap,
 )
 from app.models.delivery_configuration import SpecialOccasion
 from app.models.delivery_configuration import OperationalZone, OperationalZoneCity
@@ -41,6 +42,24 @@ def test_after_hours_accepts_an_overnight_range() -> None:
 def test_after_hours_rejects_identical_start_and_end_times() -> None:
     with pytest.raises(ValidationError, match="Start and end time must be different"):
         AfterHoursInput(start_time="21:00", end_time="21:00", extra_amount=5)
+
+
+@pytest.mark.parametrize(
+    ("first_start", "first_end", "second_start", "second_end"),
+    [
+        (time(21), time(2), time(23), time(1)),
+        (time(21), time(2), time(1), time(3)),
+        (time(9), time(12), time(11), time(13)),
+    ],
+)
+def test_after_hours_detects_overlapping_ranges(
+    first_start: time, first_end: time, second_start: time, second_end: time
+) -> None:
+    assert _time_ranges_overlap(first_start, first_end, second_start, second_end) is True
+
+
+def test_after_hours_allows_ranges_that_only_touch_at_boundary() -> None:
+    assert _time_ranges_overlap(time(21), time(2), time(2), time(5)) is False
 
 
 @pytest.mark.parametrize(

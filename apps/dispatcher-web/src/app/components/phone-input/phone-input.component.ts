@@ -29,16 +29,20 @@ export class PhoneInputComponent implements OnChanges {
 
   private interacted = false;
   private invalidChars = false;
+  countryOptions = this.buildCountryOptions(this.countries);
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['countries']) {
+      this.countryOptions = this.buildCountryOptions(this.countries);
+    }
     if (changes['showSubmitValidation'] && !this.showSubmitValidation) {
       this.interacted = false;
       this.invalidChars = false;
     }
   }
 
-  get countryOptions() {
-    return this.countries.map(c => ({
+  private buildCountryOptions(countries: PhoneCountry[]) {
+    return countries.map(c => ({
       value: c.dialCode,
       label: `${c.flag} ${c.dialCode}`
     }));

@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import mimetypes
 import os
@@ -1306,42 +1307,77 @@ async def publish_order(
     # Each driver receives only their group-based payout; platform pricing is
     # deliberately omitted from the driver websocket payload.
     from app.api.routers.ws import manager
-    driver_ids = list((await db.scalars(
-        select(Tenant.id).where(Tenant.role == TenantRole.driver, Tenant.is_active.is_(True))
-    )).all())
-    assignments = {
-        assignment.driver_id: assignment.group
-        for assignment in (await db.scalars(
-            select(DriverPaymentGroupAssignment).options(
-                joinedload(DriverPaymentGroupAssignment.group)
-            )
-        )).all()
-    }
+
+    connected_driver_ids = [
+        UUID(value) for value in manager.connected_driver_tenant_ids()
+    ]
+    driver_ids = (
+        list(
+            (
+                await db.scalars(
+                    select(Tenant.id).where(
+                        Tenant.id.in_(connected_driver_ids),
+                        Tenant.role == TenantRole.driver,
+                        Tenant.is_active.is_(True),
+                    )
+                )
+            ).all()
+        )
+        if connected_driver_ids
+        else []
+    )
+    assignments = {}
+    if driver_ids:
+        assignments = {
+            assignment.driver_id: assignment.group
+            for assignment in (
+                await db.scalars(
+                    select(DriverPaymentGroupAssignment)
+                    .where(DriverPaymentGroupAssignment.driver_id.in_(driver_ids))
+                    .options(joinedload(DriverPaymentGroupAssignment.group))
+                )
+            ).all()
+        }
+    notifications = []
     for driver_id in driver_ids:
         payout = calculate_driver_payout(
             assignments.get(driver_id),
             order.delivery_fees,
             order.delivery_tips,
         )
-        await manager.broadcast_to_tenant(str(driver_id), {
-            "type": "new_order",
-            "order": {
-                "id": str(order.id),
-                "order_number": order.order_number,
-                "pickup_address": order.pickup_address,
-                "delivery_address": order.delivery_address,
-                "driver_payout": float(payout.total),
-                "driver_fee_payout": float(payout.delivery_fee),
-                "driver_tip_payout": float(payout.tip),
-                "driver_payment_rule": payout.rule_type,
-                "published_at": order.published_at.isoformat() if order.published_at else None,
-            }
-        })
-    # Also broadcast to platform/admin connections so they can update their UI
-    await manager.broadcast_to_all({
-        "type": "order_published",
-        "order_id": str(order.id),
-    })
+        notifications.append(
+            manager.broadcast_to_tenant(
+                str(driver_id),
+                {
+                    "type": "new_order",
+                    "order": {
+                        "id": str(order.id),
+                        "order_number": order.order_number,
+                        "pickup_address": order.pickup_address,
+                        "delivery_address": order.delivery_address,
+                        "driver_payout": float(payout.total),
+                        "driver_fee_payout": float(payout.delivery_fee),
+                        "driver_tip_payout": float(payout.tip),
+                        "driver_payment_rule": payout.rule_type,
+                        "published_at": (
+                            order.published_at.isoformat() if order.published_at else None
+                        ),
+                    },
+                },
+            )
+        )
+    if notifications:
+        await asyncio.gather(*notifications)
+
+    # Driver views received their tailored notification above; only platform
+    # views need to reload the broader dispatch state.
+    await manager.broadcast_to_tenant(
+        "platform",
+        {
+            "type": "order_published",
+            "order_id": str(order.id),
+        },
+    )
 
     return order
 

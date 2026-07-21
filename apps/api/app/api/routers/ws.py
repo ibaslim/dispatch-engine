@@ -7,6 +7,7 @@ Connection channels:
   - Clients with role="driver" are additionally tracked in `driver_connections`
     so we can broadcast published orders to all drivers at once.
 """
+import asyncio
 import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,8 +21,8 @@ class ConnectionManager:
     def __init__(self):
         # All connections keyed by tenant_id (or "platform")
         self.active_connections: dict[str, list[WebSocket]] = {}
-        # Driver-only connections for broadcast
-        self.driver_connections: list[WebSocket] = []
+        # Driver-only connections keyed by tenant.
+        self.driver_connections: dict[str, list[WebSocket]] = {}
 
     async def connect(self, websocket: WebSocket, tenant_id: str, is_driver: bool = False):
         await websocket.accept()
@@ -29,64 +30,64 @@ class ConnectionManager:
             self.active_connections[tenant_id] = []
         self.active_connections[tenant_id].append(websocket)
         if is_driver:
-            self.driver_connections.append(websocket)
+            self.driver_connections.setdefault(tenant_id, []).append(websocket)
 
     def disconnect(self, websocket: WebSocket, tenant_id: str, is_driver: bool = False):
-        if tenant_id in self.active_connections:
+        self._remove_connection(websocket, tenant_id, is_driver=is_driver)
+
+    def _remove_connection(
+        self, websocket: WebSocket, tenant_id: str, is_driver: bool = False
+    ) -> None:
+        connections = self.active_connections.get(tenant_id, [])
+        try:
+            connections.remove(websocket)
+        except ValueError:
+            pass
+        if not connections:
+            self.active_connections.pop(tenant_id, None)
+
+        if is_driver or tenant_id in self.driver_connections:
+            driver_connections = self.driver_connections.get(tenant_id, [])
             try:
-                self.active_connections[tenant_id].remove(websocket)
+                driver_connections.remove(websocket)
             except ValueError:
                 pass
-        if is_driver:
-            try:
-                self.driver_connections.remove(websocket)
-            except ValueError:
-                pass
+            if not driver_connections:
+                self.driver_connections.pop(tenant_id, None)
+
+    def connected_driver_tenant_ids(self) -> list[str]:
+        return list(self.driver_connections)
 
     async def broadcast_to_tenant(self, tenant_id: str, message: dict):
         connections = self.active_connections.get(tenant_id, [])
-        dead = []
-        for connection in connections:
+        payload = json.dumps(message)
+
+        async def send(connection: WebSocket) -> WebSocket | None:
             try:
-                await connection.send_text(json.dumps(message))
+                await connection.send_text(payload)
+                return None
             except Exception:
-                dead.append(connection)
+                return connection
+
+        dead = [connection for connection in await asyncio.gather(
+            *(send(connection) for connection in list(connections))
+        ) if connection is not None]
         for conn in dead:
-            try:
-                connections.remove(conn)
-            except ValueError:
-                pass
+            self._remove_connection(conn, tenant_id)
 
     async def broadcast_to_all_drivers(self, message: dict):
         """Broadcast a message to every connected driver WebSocket."""
-        payload = json.dumps(message)
-        dead = []
-        for connection in self.driver_connections:
-            try:
-                await connection.send_text(payload)
-            except Exception:
-                dead.append(connection)
-        for conn in dead:
-            try:
-                self.driver_connections.remove(conn)
-            except ValueError:
-                pass
+        await asyncio.gather(*(
+            self.broadcast_to_tenant(tenant_id, message)
+            for tenant_id in self.connected_driver_tenant_ids()
+        ))
 
     async def broadcast_to_all(self, message: dict):
         """Broadcast a message to every connected client (all tenants + platform)."""
-        payload = json.dumps(message)
-        for connections in self.active_connections.values():
-            dead = []
-            for connection in connections:
-                try:
-                    await connection.send_text(payload)
-                except Exception:
-                    dead.append(connection)
-            for conn in dead:
-                try:
-                    connections.remove(conn)
-                except ValueError:
-                    pass
+        await asyncio.gather(*(
+            self.broadcast_to_tenant(tenant_id, message)
+            for tenant_id in list(self.active_connections)
+        ))
 
 
 manager = ConnectionManager()
@@ -124,4 +125,6 @@ async def websocket_endpoint(
             # Echo back as acknowledgement
             await websocket.send_text(json.dumps({"type": "ack", "data": data}))
     except WebSocketDisconnect:
+        pass
+    finally:
         manager.disconnect(websocket, tenant_id, is_driver=is_driver)

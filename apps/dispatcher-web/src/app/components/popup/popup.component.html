@@ -38,8 +38,8 @@
             </div>
 
             <!-- Footer -->
-            <div #footerContent [class.hidden]="!hasFooterContent"
-                class="px-6 py-4 border-t border-gray-200 dark:border-[#5a5d5a] bg-gray-50 dark:bg-[#1d201d]">
+            <div
+                class="empty:hidden px-6 py-4 border-t border-gray-200 dark:border-[#5a5d5a] bg-gray-50 dark:bg-[#1d201d]">
                 <ng-content select="[modal-footer]"></ng-content>
             </div>
         </div>

@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import {ErrorMessageComponent} from "../error-message/error-message.component";
+import { ErrorMessageComponent } from '../error-message/error-message.component';
 
 export interface ProofOfDeliveryValue {
     signature: boolean;
@@ -12,7 +12,7 @@ export interface ProofOfDeliveryValue {
     standalone: true,
     imports: [
         ErrorMessageComponent
-    ] // Add ErrorMessageComponent if needed
+    ]
 })
 export class ProofOfDeliveryComponent {
     @Input() value: ProofOfDeliveryValue = { signature: false, picture: false };

@@ -721,6 +721,18 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
         this.afterHoursForm.start_time === this.afterHoursForm.end_time || this.afterHoursForm.extra_amount < 0)
     ) {
       this.formError = 'Enter different start and end times and a valid extra amount.';
+    } else if (
+      this.modal === 'after-hours' &&
+      this.afterHours.some((item) =>
+        item.id !== this.editingId && this.timeRangesOverlap(
+          this.afterHoursForm.start_time,
+          this.afterHoursForm.end_time,
+          item.start_time,
+          item.end_time,
+        )
+      )
+    ) {
+      this.formError = 'This time range overlaps an existing after-hours range.';
     } else if (this.modal === 'surcharge' && (!this.surchargeForm.name.trim() || this.surchargeForm.extra_amount < 0)) {
       this.formError = 'Enter a surcharge name and a valid extra amount.';
     } else if (
@@ -731,6 +743,31 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
       this.formError = 'Enter an occasion name, date, and percentage from 0 to 100.';
     }
     return !this.formError;
+  }
+
+  private timeRangesOverlap(
+    firstStart: string,
+    firstEnd: string,
+    secondStart: string,
+    secondEnd: string,
+  ): boolean {
+    const segments = (start: string, end: string): Array<[number, number]> => {
+      const minutes = (value: string): number => {
+        const [hours, mins] = value.split(':').map(Number);
+        return hours * 60 + mins;
+      };
+      const startMinute = minutes(start);
+      const endMinute = minutes(end);
+      return startMinute < endMinute
+        ? [[startMinute, endMinute]]
+        : [[startMinute, 24 * 60], [0, endMinute]];
+    };
+
+    return segments(firstStart, firstEnd).some(([firstSegmentStart, firstSegmentEnd]) =>
+      segments(secondStart, secondEnd).some(([secondSegmentStart, secondSegmentEnd]) =>
+        firstSegmentStart < secondSegmentEnd && secondSegmentStart < firstSegmentEnd
+      )
+    );
   }
 
   private replaceOrAdd<T extends { id: string }>(items: T[], saved: T): void {

@@ -113,6 +113,8 @@ export class DispatchComponent implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private ws: WebSocket | null = null;
   private countdownHandle: ReturnType<typeof setInterval> | null = null;
+  private reconnectHandle: ReturnType<typeof setTimeout> | null = null;
+  private destroyed = false;
 
   get isReadOnlyTenant(): boolean { return !this.auth.isPlatformAdmin(); }
   get isDriver(): boolean { return this.auth.isDriver(); }
@@ -129,10 +131,14 @@ export class DispatchComponent implements OnInit, OnDestroy {
       this.loadPublishedOrders();
     }
     // Countdown ticker — updates every second
-    this.countdownHandle = setInterval(() => this.tickCountdowns(), 1000);
+    if (this.isDriver) {
+      this.countdownHandle = setInterval(() => this.tickCountdowns(), 1000);
+    }
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
+    if (this.reconnectHandle) clearTimeout(this.reconnectHandle);
     this.ws?.close();
     if (this.countdownHandle) clearInterval(this.countdownHandle);
   }
@@ -140,6 +146,7 @@ export class DispatchComponent implements OnInit, OnDestroy {
   // ─── WebSocket ───────────────────────────────────────────────────────────────
 
   private connectWebSocket(): void {
+    if (this.destroyed) return;
     const token = this.auth.getAccessToken();
     if (!token) return;
 
@@ -159,8 +166,9 @@ export class DispatchComponent implements OnInit, OnDestroy {
       };
 
       this.ws.onclose = () => {
-        // Reconnect after 5 seconds if not intentionally closed
-        setTimeout(() => this.connectWebSocket(), 5000);
+        if (!this.destroyed) {
+          this.reconnectHandle = setTimeout(() => this.connectWebSocket(), 5000);
+        }
       };
 
       this.ws.onerror = () => this.ws?.close();
@@ -208,7 +216,7 @@ export class DispatchComponent implements OnInit, OnDestroy {
       this.loadDispatchState();
     }
 
-    if (type === 'order_published') {
+    if (type === 'order_published' && !this.isDriver) {
       // Admin published an order — if this is also an admin view, refresh dispatch
       this.loadDispatchState();
     }

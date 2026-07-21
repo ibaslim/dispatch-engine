@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, ElementRef, EventEmitter, Input, OnChanges, Output, SimpleChanges, ViewChild } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges } from '@angular/core';
 import { ButtonComponent } from '../button/button.component';
 
 @Component({
@@ -8,18 +8,11 @@ import { ButtonComponent } from '../button/button.component';
   imports: [CommonModule, ButtonComponent],
   templateUrl: './popup.component.html'
 })
-export class PopupComponent implements OnChanges {
+export class PopupComponent implements OnChanges, OnDestroy {
   @Input() open = false;
   @Input() title = '';
   @Input() widthClass = 'max-w-5xl';
   @Output() close = new EventEmitter<void>();
-
-  hasFooterContent = false;
-
-  @ViewChild('footerContent')
-  set footerContentRef(ref: ElementRef<HTMLElement> | undefined) {
-    this.hasFooterContent = !!ref?.nativeElement.childElementCount;
-  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['open']) {
@@ -28,6 +21,12 @@ export class PopupComponent implements OnChanges {
       } else {
         document.body.style.overflow = '';
       }
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (this.open) {
+      document.body.style.overflow = '';
     }
   }
 

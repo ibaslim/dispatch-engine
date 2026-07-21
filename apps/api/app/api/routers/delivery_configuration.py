@@ -146,6 +146,45 @@ async def _entity(db: AsyncSession, model, entity_id: uuid.UUID, label: str):
     return entity
 
 
+def _time_range_segments(start: time, end: time) -> list[tuple[int, int]]:
+    start_second = start.hour * 3600 + start.minute * 60 + start.second
+    end_second = end.hour * 3600 + end.minute * 60 + end.second
+    if start_second < end_second:
+        return [(start_second, end_second)]
+    return [(start_second, 24 * 3600), (0, end_second)]
+
+
+def _time_ranges_overlap(
+    first_start: time, first_end: time, second_start: time, second_end: time
+) -> bool:
+    return any(
+        first_segment_start < second_segment_end
+        and second_segment_start < first_segment_end
+        for first_segment_start, first_segment_end in _time_range_segments(first_start, first_end)
+        for second_segment_start, second_segment_end in _time_range_segments(second_start, second_end)
+    )
+
+
+async def _ensure_after_hours_no_overlap(
+    db: AsyncSession,
+    start_time: time,
+    end_time: time,
+    excluding_id: uuid.UUID | None = None,
+) -> None:
+    statement = select(AfterHoursDelivery)
+    if excluding_id:
+        statement = statement.where(AfterHoursDelivery.id != excluding_id)
+    existing_ranges = (await db.scalars(statement)).all()
+    if any(
+        _time_ranges_overlap(start_time, end_time, item.start_time, item.end_time)
+        for item in existing_ranges
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This after-hours range overlaps an existing range.",
+        )
+
+
 def _base_price_out(item: ZoneCategoryPrice) -> BasePriceOut:
     return BasePriceOut(
         id=item.id,
@@ -343,6 +382,7 @@ async def list_after_hours(_: PlatformAdmin, db: AsyncSession = Depends(get_db))
 async def create_after_hours(
     payload: AfterHoursInput, _: PlatformAdmin, db: AsyncSession = Depends(get_db)
 ):
+    await _ensure_after_hours_no_overlap(db, payload.start_time, payload.end_time)
     item = AfterHoursDelivery(**payload.model_dump())
     db.add(item)
     await db.commit()
@@ -355,6 +395,9 @@ async def update_after_hours(
     item_id: uuid.UUID, payload: AfterHoursInput, _: PlatformAdmin, db: AsyncSession = Depends(get_db)
 ):
     item = await _entity(db, AfterHoursDelivery, item_id, "After-hours range")
+    await _ensure_after_hours_no_overlap(
+        db, payload.start_time, payload.end_time, excluding_id=item_id
+    )
     item.start_time, item.end_time, item.extra_amount = (
         payload.start_time,
         payload.end_time,

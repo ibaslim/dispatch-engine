@@ -27,6 +27,8 @@ export class PublishedOrdersFeedComponent implements OnInit, OnDestroy {
 
   private ws: WebSocket | null = null;
   private countdownHandle: ReturnType<typeof setInterval> | null = null;
+  private reconnectHandle: ReturnType<typeof setTimeout> | null = null;
+  private destroyed = false;
 
   constructor(
     private readonly ordersService: OrdersService,
@@ -41,6 +43,10 @@ export class PublishedOrdersFeedComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
+    if (this.reconnectHandle) {
+      clearTimeout(this.reconnectHandle);
+    }
     if (this.countdownHandle) {
       clearInterval(this.countdownHandle);
     }
@@ -48,6 +54,7 @@ export class PublishedOrdersFeedComponent implements OnInit, OnDestroy {
   }
 
   private connectWebSocket(): void {
+    if (this.destroyed) return;
     const token = this.auth.getAccessToken();
     if (!token) return;
 
@@ -84,7 +91,11 @@ export class PublishedOrdersFeedComponent implements OnInit, OnDestroy {
           }
         } catch { /* ignore */ }
       };
-      this.ws.onclose = () => setTimeout(() => this.connectWebSocket(), 5000);
+      this.ws.onclose = () => {
+        if (!this.destroyed) {
+          this.reconnectHandle = setTimeout(() => this.connectWebSocket(), 5000);
+        }
+      };
     } catch { /* ignore */ }
   }
 
