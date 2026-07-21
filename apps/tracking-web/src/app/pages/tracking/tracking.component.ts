@@ -12,14 +12,14 @@ import {
 import { TrackingService } from '@services/tracking.service';
 import { OrderTrackingDetails } from '@models/order-tracking.model';
 
-/** Maps an order's activity_status to a stage index in DISPATCH_STAGES / order-progress. */
+/** Maps an order's activity_status to a stage index in DISPATCH_STAGES (truck tracker only). */
 const ACTIVITY_TO_STAGE_INDEX: Record<string, number> = {
   driver_not_assigned: 0,
   pickup_initiated: 1,
   picked_up: 2,
   delivery_initiated: 2,
-  delivery_in_progress: 3,
-  delivered: 4,
+  delivery_in_progress: 2,
+  delivered: 3,
 };
 
 const DISPATCH_STAGES: DispatchStage[] = [
@@ -36,16 +36,10 @@ const DISPATCH_STAGES: DispatchStage[] = [
     sub: 'The driver has collected your parcel.',
   },
   {
-    key: 'IN_TRANSIT',
-    label: 'In transit',
-    name: 'On the road',
-    sub: 'Your parcel is moving through the network.',
-  },
-  {
     key: 'OUT_FOR_DELIVERY',
     label: 'Out for delivery',
     name: 'Out for delivery',
-    sub: 'The driver is heading to your address.',
+    sub: 'Your parcel is on the road and heading to your address.',
   },
   {
     key: 'DELIVERED',
@@ -143,12 +137,12 @@ export class TrackingComponent implements OnInit, OnDestroy {
   activityClass(): string {
     const s = this.order()?.activity_status ?? '';
     switch (s) {
-      case 'delivered': return 'bg-green-100 text-green-800';
+      case 'delivered': return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
       case 'delivery_in_progress':
-      case 'delivery_initiated': return 'bg-blue-100 text-blue-800';
-      case 'picked_up': return 'bg-indigo-100 text-indigo-800';
-      case 'pickup_initiated': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'delivery_initiated': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
+      case 'picked_up': return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300';
+      case 'pickup_initiated': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
     }
   }
 }

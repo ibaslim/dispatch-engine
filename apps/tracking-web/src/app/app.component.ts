@@ -18,7 +18,7 @@ import { FooterComponent } from './components/footer/footer.component';
       Skip to content
     </a>
 
-    <div class="flex min-h-screen flex-col">
+    <div class="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-950">
       <app-navbar></app-navbar>
 
       @if (showBanner()) {

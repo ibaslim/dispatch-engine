@@ -6,7 +6,7 @@ import { RouterLink } from '@angular/router';
   standalone: true,
   imports: [RouterLink],
   template: `
-    <footer class="bg-courier-ink text-gray-300">
+    <footer class="bg-courier-ink text-gray-300 dark:bg-black">
       <!-- Road strip: yellow band with dashed center line -->
       <div class="h-2 bg-courier-yellow relative" aria-hidden="true">
         <div class="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-courier-ink/60"></div>
@@ -23,7 +23,7 @@ import { RouterLink } from '@angular/router';
               <img
                 src="assets/logo-courier.webp"
                 alt="Central Courier Services — Fast. Reliable. Always on time"
-                class="h-14 w-auto brightness-0 invert"
+                class="h-16 w-auto brightness-0 invert"
               />
             </a>
             <ul class="space-y-3 text-sm">
