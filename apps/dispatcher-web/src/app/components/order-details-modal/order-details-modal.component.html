@@ -78,10 +78,22 @@
                             <span>Total</span><span>{{ order.full.details.total }}</span>
                         </div>
                     </ng-container>
-                    <ng-container *ngIf="isReadOnlyTenant">
-                        <div class="flex justify-between font-semibold text-[#3ddc97] pt-2">
+                    <ng-container *ngIf="isDriver">
+                        <div class="flex justify-between text-xs text-gray-500">
+                            <span>Payment rule</span>
+                            <span>{{ driverPaymentRuleLabel(order.full.details.driverPaymentRule) }}</span>
+                        </div>
+                        <div class="flex justify-between pt-1">
+                            <span>Delivery earnings</span>
+                            <span>{{ driverEarningsLabel(order.full.details.driverFeePayout) }}</span>
+                        </div>
+                        <div *ngIf="(order.full.details.driverTipPayout || 0) > 0" class="flex justify-between">
+                            <span>Tip earnings</span>
+                            <span>{{ driverEarningsLabel(order.full.details.driverTipPayout) }}</span>
+                        </div>
+                        <div class="mt-1 flex justify-between border-t border-gray-200 pt-2 font-semibold text-[#3ddc97] dark:border-[#5a5d5a]">
                             <span>Driver Earnings</span>
-                            <span>{{ driverEarningsLabel(order.full.details.total) }}</span>
+                            <span>{{ driverEarningsLabel(order.full.details.driverPayout) }}</span>
                         </div>
                     </ng-container>
                 </div>

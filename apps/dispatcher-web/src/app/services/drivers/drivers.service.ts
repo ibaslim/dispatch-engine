@@ -15,6 +15,26 @@ export class DriversService {
     return this.http.get<TenantDriverEntity[]>(`${this.baseUrl}/available`);
   }
 
+  getDrivers(): Observable<DriverProfile[]> {
+    return this.http.get<DriverProfile[]>(this.baseUrl);
+  }
+
+  getPaymentGroups(): Observable<DriverPaymentGroup[]> {
+    return this.http.get<DriverPaymentGroup[]>(`${this.payrollUrl}/groups`);
+  }
+
+  createPaymentGroup(payload: PaymentGroupPayload): Observable<DriverPaymentGroup> {
+    return this.http.post<DriverPaymentGroup>(`${this.payrollUrl}/groups`, payload);
+  }
+
+  updatePaymentGroup(id: string, payload: PaymentGroupPayload): Observable<DriverPaymentGroup> {
+    return this.http.put<DriverPaymentGroup>(`${this.payrollUrl}/groups/${id}`, payload);
+  }
+
+  deletePaymentGroup(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.payrollUrl}/groups/${id}`);
+  }
+
   getPayrollDrivers(): Observable<PayrollDriver[]> {
     return this.http.get<PayrollDriver[]>(`${this.payrollUrl}/drivers`);
   }
@@ -62,6 +82,53 @@ export class DriversService {
       rates
     );
   }
+}
+
+export type PaymentRuleType = 'fixed' | 'percentage' | 'passthrough';
+
+export interface DriverProfile {
+  id: string;
+  name: string;
+  is_active: boolean;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone_country_code: string | null;
+  contact_phone_number: string | null;
+  address: string | null;
+  notes: string | null;
+  rating: number;
+  vehicle_type: string | null;
+  plate_number: string | null;
+  is_online: boolean;
+  completed_deliveries: number;
+  payment_group_id: string | null;
+  payment_group_name: string | null;
+  payment_rule_type: PaymentRuleType | null;
+}
+
+export interface PaymentGroupDriver {
+  id: string;
+  name: string;
+}
+
+export interface DriverPaymentGroup {
+  id: string;
+  name: string;
+  rule_type: PaymentRuleType;
+  fixed_amount: number | null;
+  delivery_fee_percentage: number | null;
+  platform_tip_percentage: number | null;
+  drivers: PaymentGroupDriver[];
+}
+
+export interface PaymentGroupPayload {
+  name: string;
+  rule_type: PaymentRuleType;
+  fixed_amount: number | null;
+  delivery_fee_percentage: number | null;
+  platform_tip_percentage: number | null;
+  driver_ids: string[];
+  confirm_reassignments: boolean;
 }
 
 export interface PayrollDriver {

@@ -25,6 +25,8 @@ export class OrdersService {
     delivery_date?: string | null;
     delivery_time?: string | null;
     surcharge_ids?: string[];
+    pickup_address?: string;
+    delivery_address?: string;
   }): Observable<DeliveryRouteQuote> {
     return this.http.post<DeliveryRouteQuote>(`${this.baseUrl}/quote`, data);
   }

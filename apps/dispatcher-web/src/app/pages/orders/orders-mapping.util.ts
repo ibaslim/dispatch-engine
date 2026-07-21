@@ -52,6 +52,10 @@ export type BackendOrder = {
   delivery_tips: number;
   discount: number;
   total: number;
+  driver_payout?: number | null;
+  driver_fee_payout?: number | null;
+  driver_tip_payout?: number | null;
+  driver_payment_rule?: string | null;
   instructions?: string | null;
   payment_method: PaymentMethodType;
   payment_details?: Record<string, unknown> | null;
@@ -201,7 +205,7 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
     orderNo: order.order_number,
     customerName: order.delivery_name,
     vendorName: order.pickup_name,
-    amount: isDriver ? driverEarningsLabel(order.total) : money(order.total),
+    amount: isDriver ? driverEarningsLabel(order.driver_payout) : money(order.total),
     distance: '?',
     orderPlacedTime: order.order_placed_time || '',
     pickupTime: formatTime(order.pickup_time),
@@ -281,6 +285,10 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
         deliveryTips: order.delivery_tips,
         discount: order.discount,
         total: order.total,
+        driverPayout: order.driver_payout ?? 0,
+        driverFeePayout: order.driver_fee_payout ?? 0,
+        driverTipPayout: order.driver_tip_payout ?? 0,
+        driverPaymentRule: order.driver_payment_rule ?? null,
         instructions: order.instructions || '',
         payment,
         proofOfDelivery: normalizeProofOfDelivery(order.proof_of_delivery),

@@ -37,6 +37,7 @@ export class OrderDetailsModalComponent implements OnChanges {
   @Input() open = false;
   @Input() order: OrderEntity | null = null;
   @Input() isReadOnlyTenant = false;
+  @Input() isDriver = false;
   @Input() readyForPickup = false;
   @Output() close = new EventEmitter<void>();
   @Output() menuAction = new EventEmitter<string>();
@@ -53,6 +54,13 @@ export class OrderDetailsModalComponent implements OnChanges {
   protected readonly maskCard = maskCard;
   protected readonly formatPaymentMethod = formatPaymentMethod;
   protected readonly driverEarningsLabel = driverEarningsLabel;
+
+  driverPaymentRuleLabel(rule: string | null | undefined): string {
+    if (rule === 'fixed') return 'Fixed pay per delivery';
+    if (rule === 'percentage') return 'Delivery fee percentage';
+    if (rule === 'passthrough') return 'Pass-through earnings';
+    return 'No payment group assigned';
+  }
 
   constructor(private ordersService: OrdersService) {}
 

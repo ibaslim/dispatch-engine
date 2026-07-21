@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
+import { BehaviorSubject } from 'rxjs';
 
 interface PublicConfig {
   google_maps_api_key: string;
@@ -28,6 +29,9 @@ export interface SelectedGooglePlace {
   formattedAddress: string;
   latitude: number;
   longitude: number;
+  manual?: boolean;
+  operationalZoneId?: string;
+  operationalZoneName?: string;
 }
 
 interface PlacePredictionSelectEvent extends Event {
@@ -51,6 +55,8 @@ export class GoogleMapsService {
   private loadPromise?: Promise<PlacesLibrary>;
   private mapsLoadPromise?: Promise<void>;
   private apiKeyPromise?: Promise<string>;
+  private readonly manualFallbackSubject = new BehaviorSubject(false);
+  readonly manualFallback$ = this.manualFallbackSubject.asObservable();
 
   constructor(private readonly http: HttpClient) {}
 
@@ -91,6 +97,23 @@ export class GoogleMapsService {
 
   isPlaceSelection(event: Event): event is PlacePredictionSelectEvent {
     return 'placePrediction' in event;
+  }
+
+  enableManualFallback(): boolean {
+    if (this.manualFallbackSubject.value) return false;
+    this.manualFallbackSubject.next(true);
+    return true;
+  }
+
+  isQuotaError(error: unknown): boolean {
+    let text = '';
+    try {
+      text = `${String(error)} ${JSON.stringify(error)}`.toLowerCase();
+    } catch {
+      text = String(error).toLowerCase();
+    }
+    return ['429', 'resource_exhausted', 'over_query_limit', 'quota', 'rate limit']
+      .some((value) => text.includes(value));
   }
 
   private async loadPlacesOnce(): Promise<PlacesLibrary> {

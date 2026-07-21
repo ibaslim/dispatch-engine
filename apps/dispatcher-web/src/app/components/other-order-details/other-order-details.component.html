@@ -108,7 +108,7 @@
         <div *ngIf="routeQuote" class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm dark:border-[#3a3d3a] dark:bg-[#252825]">
             <p class="mb-2 font-semibold text-gray-800 dark:text-gray-100">Delivery fee breakdown</p>
             <div class="space-y-1.5 text-gray-600 dark:text-gray-300">
-                <div class="flex justify-between gap-4"><span>Base delivery · {{ routeQuote.radius_km | number:'1.0-2' }} km included</span><span>+ C$ {{ routeQuote.base_price | number:'1.2-2' }}</span></div>
+                <div class="flex justify-between gap-4"><span>{{ routeQuote.manual_fallback ? 'Manual-address fixed base delivery' : 'Base delivery · ' + (routeQuote.radius_km | number:'1.0-2') + ' km included' }}</span><span>+ C$ {{ routeQuote.base_price | number:'1.2-2' }}</span></div>
                 <div *ngIf="routeQuote.distance_charge > 0" class="flex justify-between gap-4"><span>Extra distance · {{ routeQuote.extra_distance_km | number:'1.2-2' }} km</span><span>+ C$ {{ routeQuote.distance_charge | number:'1.2-2' }}</span></div>
                 <div *ngFor="let charge of routeQuote.applied_charges" class="flex justify-between gap-4"><span>{{ charge.label }}</span><span>+ C$ {{ charge.amount | number:'1.2-2' }}</span></div>
             </div>

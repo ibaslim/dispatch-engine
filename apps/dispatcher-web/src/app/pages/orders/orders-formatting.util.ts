@@ -15,8 +15,8 @@ export function formatStatusLabel(status: OrderTab): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-export function driverEarningsLabel(total: unknown): string {
-  return money(Math.round(toNumber(total) * 0.05 * 100) / 100);
+export function driverEarningsLabel(payout: unknown): string {
+  return money(toNumber(payout));
 }
 
 export function truncateWords(text: string, wordLimit: number): string {

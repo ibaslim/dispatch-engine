@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, DateTime, Boolean, JSON, Enum, ForeignKey
+from sqlalchemy import Column, String, Integer, Float, Numeric, DateTime, Boolean, JSON, Enum, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -80,6 +80,20 @@ class Order(Base):
     delivery_tips = Column(Float, default=0)
     discount = Column(Float, default=0)
     total = Column(Float, default=0)
+
+    # Immutable payout agreed when a driver is assigned/accepts the delivery.
+    driver_payout = Column(Numeric(10, 2), nullable=True)
+    driver_fee_payout = Column(Numeric(10, 2), nullable=True)
+    driver_tip_payout = Column(Numeric(10, 2), nullable=True)
+    driver_payment_rule = Column(String(24), nullable=True)
+    driver_payment_group_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("driver_payment_groups.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    driver_payment_group_name = Column(String(100), nullable=True)
+    driver_payment_rule_snapshot = Column(JSON, nullable=True)
+    driver_payout_locked_at = Column(DateTime(timezone=True), nullable=True)
 
     instructions = Column(String)
     payment_method = Column(String)

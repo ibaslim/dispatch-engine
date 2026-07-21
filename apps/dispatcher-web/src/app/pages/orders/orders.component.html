@@ -114,7 +114,7 @@
     </app-pod-capture-modal>
 
     <!-- ORDER DETAILS MODAL -->
-    <app-order-details-modal [open]="isDetailsOpen" [order]="selectedOrderForDetails" [isReadOnlyTenant]="isReadOnlyTenant"
+    <app-order-details-modal [open]="isDetailsOpen" [order]="selectedOrderForDetails" [isReadOnlyTenant]="isReadOnlyTenant" [isDriver]="isDriver"
         [readyForPickup]="selectedOrderReadyForPickup"
         (close)="closeDetails()" (menuAction)="handleDetailsMenu($event)" (readyForPickupChange)="updateReadyForPickup($event)">
     </app-order-details-modal>

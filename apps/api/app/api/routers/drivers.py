@@ -1,12 +1,74 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+import uuid
 
-from app.core.deps import get_db, CurrentUser
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select
+from sqlalchemy.orm import joinedload
+
+from app.core.deps import get_db, CurrentUser, PlatformAdmin
+from app.models.driver_payment import DriverPaymentGroupAssignment
+from app.models.order import ActivityStatus, Order
 from app.models.tenant import Tenant, TenantRole
 from app.schemas.tenant import TenantResponse
 
 router = APIRouter()
+
+
+class DriverProfileOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    is_active: bool
+    contact_name: str | None
+    contact_email: str | None
+    contact_phone_country_code: str | None
+    contact_phone_number: str | None
+    address: str | None
+    notes: str | None
+    rating: float = 0
+    vehicle_type: str | None = None
+    plate_number: str | None = None
+    is_online: bool = False
+    completed_deliveries: int = 0
+    payment_group_id: uuid.UUID | None = None
+    payment_group_name: str | None = None
+    payment_rule_type: str | None = None
+
+
+@router.get("", response_model=list[DriverProfileOut])
+async def list_driver_profiles(
+    _: PlatformAdmin,
+    db: AsyncSession = Depends(get_db),
+):
+    drivers = list((await db.scalars(
+        select(Tenant).where(Tenant.role == TenantRole.driver).order_by(Tenant.name)
+    )).all())
+    assignments = {
+        item.driver_id: item.group
+        for item in (await db.scalars(
+            select(DriverPaymentGroupAssignment).options(joinedload(DriverPaymentGroupAssignment.group))
+        )).all()
+    }
+    completion_counts = dict((await db.execute(
+        select(Order.driver_id, func.count(Order.id))
+        .where(Order.driver_id.is_not(None), Order.activity_status == ActivityStatus.delivered)
+        .group_by(Order.driver_id)
+    )).all())
+    return [DriverProfileOut(
+        id=driver.id,
+        name=driver.name,
+        is_active=driver.is_active,
+        contact_name=driver.contact_name,
+        contact_email=driver.contact_email,
+        contact_phone_country_code=driver.contact_phone_country_code,
+        contact_phone_number=driver.contact_phone_number,
+        address=driver.address,
+        notes=driver.notes,
+        completed_deliveries=completion_counts.get(driver.id, 0),
+        payment_group_id=assignments[driver.id].id if driver.id in assignments else None,
+        payment_group_name=assignments[driver.id].name if driver.id in assignments else None,
+        payment_rule_type=assignments[driver.id].rule_type if driver.id in assignments else None,
+    ) for driver in drivers]
 
 
 @router.get("/available", response_model=list[TenantResponse])

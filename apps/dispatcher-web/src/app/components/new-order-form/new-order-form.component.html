@@ -3,11 +3,13 @@
         <div class="space-y-7">
 
             <app-pickup-from [value]="value.pickup" (valueChange)="onPickupChange($event)"
+                [operationalZones]="operationalZones"
                 (pinClick)="pinPickup.emit()" [pickupTimeError]="deliveryTimeError"
                 [showPickupTimeError]="showDeliveryTimeError" [showSubmitValidation]="showSubmitValidation">
             </app-pickup-from>
 
             <app-deliver-to [value]="value.delivery" (valueChange)="onDeliveryChange($event)"
+                [operationalZones]="operationalZones"
                 (pinClick)="pinDelivery.emit()" [deliveryTimeError]="deliveryTimeError"
                 [showDeliveryTimeError]="showDeliveryTimeError" [showSubmitValidation]="showSubmitValidation">
             </app-deliver-to>
@@ -25,11 +27,39 @@
                 <div order-details-leading class="space-y-3">
                     <div>
                         <label class="block text-sm text-gray-600 dark:text-gray-200">Delivery Category <span class="text-red-500">*</span></label>
-                        <select class="mt-1 h-10 w-full max-w-xs rounded-md border border-gray-300 bg-white px-3 text-sm dark:border-[#5a5d5a] dark:bg-[#1E201E]"
-                            [ngModel]="value.deliveryCategoryId" (ngModelChange)="onCategoryChange($event)">
-                            <option value="">Select a category</option>
-                            <option *ngFor="let category of categories" [value]="category.id">{{ category.name }}</option>
-                        </select>
+                        <div class="delivery-category-dropdown relative mt-1 w-full max-w-xs">
+                            <button type="button"
+                                class="flex h-10 w-full items-center justify-between gap-3 rounded-md border border-gray-300 bg-white px-3 text-left text-sm transition hover:border-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-[#5a5d5a] dark:bg-[#1E201E] dark:hover:border-gray-500"
+                                [attr.aria-expanded]="categoryDropdownOpen"
+                                aria-haspopup="listbox"
+                                (click)="categoryDropdownOpen = !categoryDropdownOpen">
+                                <span class="truncate" [ngClass]="selectedCategory ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'">
+                                    {{ selectedCategory?.name || 'Select a category' }}
+                                </span>
+                                <i class="ph ph-caret-down flex-none text-base text-gray-500 transition-transform"
+                                    [class.rotate-180]="categoryDropdownOpen"></i>
+                            </button>
+
+                            <div *ngIf="categoryDropdownOpen"
+                                class="absolute z-50 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white p-1.5 shadow-xl dark:border-[#404340] dark:bg-[#252725]"
+                                role="listbox" aria-label="Delivery categories">
+                                <button *ngFor="let category of categories" type="button" role="option"
+                                    class="flex w-full items-start gap-2 rounded-md px-3 py-2.5 text-left transition hover:bg-gray-100 focus:bg-gray-100 focus:outline-none dark:hover:bg-[#323532] dark:focus:bg-[#323532]"
+                                    [attr.aria-selected]="category.id === value.deliveryCategoryId"
+                                    [ngClass]="category.id === value.deliveryCategoryId ? 'bg-emerald-50 dark:bg-emerald-950/30' : ''"
+                                    (click)="onCategoryChange(category.id)">
+                                    <span class="min-w-0 flex-1">
+                                        <span class="block text-sm font-medium text-gray-900 dark:text-white">{{ category.name }}</span>
+                                        <span class="mt-0.5 block text-xs leading-4 text-gray-500 dark:text-gray-400">{{ category.description }}</span>
+                                    </span>
+                                    <i *ngIf="category.id === value.deliveryCategoryId"
+                                        class="ph ph-check mt-0.5 flex-none text-base text-emerald-600 dark:text-emerald-400"></i>
+                                </button>
+                                <p *ngIf="!categories.length" class="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                    No delivery categories available.
+                                </p>
+                            </div>
+                        </div>
                         <p *ngIf="showSubmitValidation && !value.deliveryCategoryId" class="mt-1 text-xs text-red-600">Delivery category is required.</p>
                     </div>
                     <div *ngIf="surcharges.length">
