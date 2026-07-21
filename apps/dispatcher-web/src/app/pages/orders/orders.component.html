@@ -45,6 +45,7 @@
     <app-table *ngIf="activeTab !== 'New Orders'" [columns]="columns" [rows]="rows" [emptyTitle]="emptyTitle" [emptySubtitle]="emptySubtitle"
         [activeMenuRow]="activeMenuRow" [menuItems]="getContextMenuItems()"
         (actionClick)="toggleMenu($event)"
+        (menuClose)="closeMenu()"
         (assignClick)="openAssignDriver($event)"
         (menuSelect)="handleMenuAction($event.item, $event.row)"
         (readyForPickupChange)="updateReadyForPickupFromRow($event.id, $event.value)"

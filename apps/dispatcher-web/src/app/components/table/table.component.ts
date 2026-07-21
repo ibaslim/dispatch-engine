@@ -26,6 +26,7 @@ export class TableComponent {
   @Input() actionLabel = 'Row actions';
 
   @Output() menuSelect = new EventEmitter<any>();
+  @Output() menuClose = new EventEmitter<void>();
 
   // action button click
   @Output() actionClick = new EventEmitter<any>();
@@ -66,6 +67,10 @@ export class TableComponent {
     this.reportIncidentClick.emit(row);
   }
 
+  trackByRowId(index: number, row: any): string | number {
+    return row?.id ?? index;
+  }
+
   getInitials(name: string): string {
     if (!name) return '';
     const parts = name.trim().split(/\s+/);
@@ -101,7 +106,8 @@ export class TableComponent {
 
     if (clickedInsideMenu || clickedInsideActionButton) return;
 
-    // Otherwise close menu
-    this.activeMenuRow = null;
+    if (this.activeMenuRow) {
+      this.menuClose.emit();
+    }
   }
 }

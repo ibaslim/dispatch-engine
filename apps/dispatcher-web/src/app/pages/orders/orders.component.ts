@@ -226,6 +226,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   // ─── Tab ───────────────────────────────────────────────────────────────────
 
   setActiveTab(tab: string): void {
+    this.closeMenu();
     this.activeTab = tab;
   }
 
@@ -402,6 +403,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   toggleMenu(row: { id: string }): void {
     this.activeMenuRow = this.activeMenuRow?.id === row.id ? null : row;
+  }
+
+  closeMenu(): void {
+    this.activeMenuRow = null;
   }
 
   getContextMenuItems(): Array<{ label: string; action: string; icon: string }> {

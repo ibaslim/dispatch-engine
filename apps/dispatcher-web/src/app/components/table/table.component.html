@@ -27,7 +27,7 @@
     <!-- ROWS -->
     <div *ngIf="rows.length > 0" class="divide-y divide-gray-200 dark:divide-[#2a2d2a]">
 
-        <div *ngFor="let row of rows" class="grid items-center gap-4 px-4 py-3 text-sm"
+        <div *ngFor="let row of rows; trackBy: trackByRowId" class="grid items-center gap-4 px-4 py-3 text-sm"
             [ngClass]="activeMenuRow?.id === row.id ? 'relative z-40' : 'relative z-0'"
             [style.gridTemplateColumns]="columnTemplate ? columnTemplate : ('repeat(' + columns.length + ', minmax(0, 1fr))')">
 
