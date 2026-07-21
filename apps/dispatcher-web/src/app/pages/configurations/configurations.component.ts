@@ -7,5 +7,15 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
   standalone: true,
   imports: [CommonModule, RouterLink, RouterLinkActive, RouterOutlet],
   templateUrl: './configurations.component.html',
+  styles: [`
+    .configuration-tabs {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .configuration-tabs::-webkit-scrollbar {
+      display: none;
+    }
+  `],
 })
 export class ConfigurationsComponent {}

@@ -12,6 +12,7 @@ import {
   ViewEncapsulation,
   ViewChild,
 } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { FormsModule, NgModel } from '@angular/forms';
 import { ButtonComponent } from '../button/button.component';
 import { ErrorMessageComponent } from '../error-message/error-message.component';
@@ -20,6 +21,8 @@ import {
   GooglePlaceAutocompleteElement,
   SelectedGooglePlace,
 } from '../../services/google-maps/google-maps.service';
+import { OperationalZone } from '../../services/delivery-configuration/delivery-configuration.service';
+import { ToastService } from '../../core/toast/toast.service';
 
 @Component({
   selector: 'app-address-input',
@@ -122,6 +125,7 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
   @Input() pattern?: string;
   @Input() showSubmitValidation = false;
   @Input() errorMessages: Partial<Record<'required' | 'pattern', string>> = {};
+  @Input() operationalZones: OperationalZone[] = [];
 
   @Output() valueChange = new EventEmitter<string>();
   @Output() placeChange = new EventEmitter<SelectedGooglePlace | null>();
@@ -131,20 +135,34 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
   @ViewChild('autocompleteHost', { static: true }) autocompleteHost?: ElementRef<HTMLDivElement>;
 
   autocompleteReady = false;
+  manualFallback = false;
+  manualValue = '';
+  manualTouched = false;
+  manualMatchedRegion = '';
   private autocomplete?: GooglePlaceAutocompleteElement;
   private readonly onAutocompleteInput = () => this.onInput(this.autocomplete?.value ?? '');
   // Keep the custom element mounted when an individual prediction request fails.
   // Removing/recreating it here blurs the field after every keystroke and forces
   // the user to focus it again. The Places widget can handle a later request.
-  private readonly onAutocompleteError = () => undefined;
+  private readonly onAutocompleteError = (event: Event) => this.activateManualFallback(event);
   private readonly onPlaceSelected = (event: Event) => void this.selectPlace(event);
+  private manualFallbackSubscription?: Subscription;
 
   constructor(
     private readonly googleMaps: GoogleMapsService,
     private readonly changeDetector: ChangeDetectorRef,
+    private readonly toast: ToastService,
   ) {}
 
   ngAfterViewInit(): void {
+    this.manualFallbackSubscription = this.googleMaps.manualFallback$.subscribe((enabled) => {
+      if (!enabled || this.manualFallback) return;
+      this.manualFallback = true;
+      this.manualValue = '';
+      this.manualMatchedRegion = '';
+      this.placeChange.emit(null);
+      this.changeDetector.detectChanges();
+    });
     void this.initializeAutocomplete();
   }
 
@@ -157,6 +175,7 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
 
   ngOnDestroy(): void {
     this.removeAutocompleteListeners();
+    this.manualFallbackSubscription?.unsubscribe();
   }
 
   onInput(v: string): void {
@@ -166,6 +185,27 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
 
   openInGoogleMaps(): void {
     this.googleMaps.openAddress(this.value);
+  }
+
+  onManualInput(address: string): void {
+    this.manualValue = address;
+    this.manualTouched = true;
+    this.valueChange.emit(address);
+    const match = this.findOperationalMatch(address);
+    this.manualMatchedRegion = match?.matchedName || '';
+    if (!match) {
+      this.placeChange.emit(null);
+      return;
+    }
+    this.placeChange.emit({
+      placeId: `manual:${match.zone.id}`,
+      formattedAddress: address.trim(),
+      latitude: 0,
+      longitude: 0,
+      manual: true,
+      operationalZoneId: match.zone.id,
+      operationalZoneName: match.zone.name,
+    });
   }
 
   private async initializeAutocomplete(): Promise<void> {
@@ -187,7 +227,11 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
       this.autocompleteHost.nativeElement.appendChild(autocomplete);
       this.autocompleteReady = true;
       this.changeDetector.detectChanges();
-    } catch {
+    } catch (error) {
+      if (this.googleMaps.isQuotaError(error)) {
+        this.activateManualFallback(error);
+        return;
+      }
       // Keep the normal address input available when Maps is not configured or unavailable.
       this.disableAutocomplete();
     }
@@ -211,7 +255,11 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
         latitude: place.location.lat(),
         longitude: place.location.lng(),
       });
-    } catch {
+    } catch (error) {
+      if (this.googleMaps.isQuotaError(error)) {
+        this.activateManualFallback(error);
+        return;
+      }
       this.onInput(this.autocomplete?.value ?? '');
     }
   }
@@ -228,6 +276,36 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
     this.autocomplete?.removeEventListener('input', this.onAutocompleteInput);
     this.autocomplete?.removeEventListener('gmp-select', this.onPlaceSelected);
     this.autocomplete?.removeEventListener('gmp-error', this.onAutocompleteError);
+  }
+
+  private activateManualFallback(_error: unknown): void {
+    const firstNotification = this.googleMaps.enableManualFallback();
+    if (firstNotification) {
+      this.toast.warning(
+        'Google address lookup quota is exhausted. Enter pickup and delivery addresses manually.'
+      );
+    }
+  }
+
+  private findOperationalMatch(address: string): { zone: OperationalZone; matchedName: string } | null {
+    const normalized = this.normalize(address);
+    if (!normalized) return null;
+    const matches: Array<{ zone: OperationalZone; matchedName: string }> = [];
+    for (const zone of this.operationalZones) {
+      if (normalized.includes(this.normalize(zone.name))) {
+        matches.push({ zone, matchedName: zone.name });
+      }
+      for (const city of zone.cities) {
+        if (normalized.includes(this.normalize(city.name))) {
+          matches.push({ zone, matchedName: city.name });
+        }
+      }
+    }
+    return matches.sort((a, b) => b.matchedName.length - a.matchedName.length)[0] || null;
+  }
+
+  private normalize(value: string): string {
+    return value.toLocaleLowerCase().replace(/\s+/g, ' ').trim();
   }
 
   getName(): string {

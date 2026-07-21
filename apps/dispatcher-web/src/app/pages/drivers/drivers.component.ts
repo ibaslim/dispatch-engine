@@ -1,191 +1,137 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 
 import { PageComponent } from '../../components/page/page.component';
-import { TableComponent } from '../../components/table/table.component';
-import { SearchBarComponent } from '../../components/search-bar/search-bar.component';
-import { ButtonComponent } from '../../components/button/button.component';
 import { PopupComponent } from '../../components/popup/popup.component';
-import { BaseInputComponent } from '../../components/base-input/base-input.component';
-import { PhoneInputComponent } from '../../components/phone-input/phone-input.component';
-import { DropdownSelectorComponent } from '../../components/dropdown-selector/dropdown-selector.component';
-import { PhoneValue } from '../../models/phone-input/phone-input.model';
+import { SearchBarComponent } from '../../components/search-bar/search-bar.component';
+import { TableComponent } from '../../components/table/table.component';
+import { ToastService } from '../../core/toast/toast.service';
 import { TableColumn } from '../../models/table.model';
-import { DailyPaymentRow } from '../../models/drivers/daily-payment.model';
-import { DriverRow } from '../../models/drivers/drivers-list.model';
-import { DriverFormValue, DriverStatus } from '../../models/drivers/driver.model';
-import { DemoDriversService } from '../../services/demo-drivers/demo-drivers.service';
+import {
+  DriverPaymentGroup,
+  DriverProfile,
+  DriversService,
+  PaymentRuleType,
+} from '../../services/drivers/drivers.service';
+
+interface DriverTableRow {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  vehicle: string;
+  paymentGroup: string;
+  completed: number;
+  status: string;
+  actions: string;
+  source: DriverProfile;
+}
+
+type ProfileTab = 'bio' | 'payments' | 'reviews';
 
 @Component({
   selector: 'app-drivers',
   standalone: true,
-  imports: [
-    CommonModule,
-    PageComponent,
-    TableComponent,
-    SearchBarComponent,
-    ButtonComponent,
-    PopupComponent,
-    BaseInputComponent,
-    PhoneInputComponent,
-    DropdownSelectorComponent
-  ],
-  templateUrl: './drivers.component.html'
+  imports: [CommonModule, PageComponent, PopupComponent, SearchBarComponent, TableComponent],
+  templateUrl: './drivers.component.html',
 })
 export class DriversComponent implements OnInit {
-  tabs = ['Driver List', 'Daily Payment'];
-  activeTab = 'Driver List';
+  private readonly driversService = inject(DriversService);
+  private readonly toast = inject(ToastService);
 
-  searchQuery = '';
-  feedbackMessage = '';
-  feedbackTone: 'success' | 'error' | 'info' = 'info';
-
-  isNewDriverOpen = false;
-  driverFormValue: DriverFormValue;
-
-  readonly showLocalDemoButton = this.isLocalhost();
-
-  driverColumns: TableColumn[] = [
-    { key: 'name', label: 'Name', sortable: true },
-    { key: 'rating', label: 'Rating', sortable: true },
-    { key: 'phone', label: 'Phone', sortable: true },
-    { key: 'email', label: 'Email', sortable: true },
+  readonly columns: TableColumn[] = [
+    { key: 'name', label: 'Driver', sortable: true, align: 'left' },
+    { key: 'phone', label: 'Phone', sortable: true, align: 'left' },
     { key: 'vehicle', label: 'Vehicle', sortable: true },
-    { key: 'status', label: 'Status', sortable: true }
+    { key: 'paymentGroup', label: 'Payment group', sortable: true },
+    { key: 'completed', label: 'Completed', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'actions', label: 'Action' },
   ];
 
-  dailyPaymentColumns: TableColumn[] = [
-    { key: 'name', label: 'Name', sortable: true },
-    { key: 'phone', label: 'Phone Number', sortable: true },
-    { key: 'completed', label: '# Of Completed Deliveries', sortable: true },
-    { key: 'basePay', label: 'Base Driver Pay', sortable: true },
-    { key: 'tips', label: 'Online Tips', sortable: true },
-    { key: 'shiftEarning', label: 'Shift Earning', sortable: true },
-    { key: 'adjustments', label: 'Adjustments', sortable: false },
-    { key: 'paymentDue', label: 'Payment Due', sortable: true }
-  ];
+  drivers: DriverProfile[] = [];
+  paymentGroups: DriverPaymentGroup[] = [];
+  selectedDriver: DriverProfile | null = null;
+  activeProfileTab: ProfileTab = 'bio';
+  searchQuery = '';
+  isLoading = false;
 
-  driverColumnTemplate = '1.7fr .8fr 1.1fr 1.8fr 1.2fr 1fr';
-  dailyColumnTemplate = '1.7fr 1.1fr 1.4fr 1fr 1fr 1fr 1fr 1fr';
-
-  constructor(private readonly demoDriversService: DemoDriversService) {
-    this.driverFormValue = this.demoDriversService.createDefaultDriverFormValue();
-  }
-
-  ngOnInit(): void {
-    if (this.showLocalDemoButton && this.demoDriversService.listDrivers().length === 0) {
-      this.seedDrivers();
+  async ngOnInit(): Promise<void> {
+    this.isLoading = true;
+    try {
+      [this.drivers, this.paymentGroups] = await Promise.all([
+        firstValueFrom(this.driversService.getDrivers()),
+        firstValueFrom(this.driversService.getPaymentGroups()),
+      ]);
+    } catch {
+      this.toast.error('Failed to load drivers.');
+    } finally {
+      this.isLoading = false;
     }
   }
 
-  setActiveTab(tab: string): void {
-    this.activeTab = tab;
+  get rows(): DriverTableRow[] {
+    const query = this.searchQuery.trim().toLowerCase();
+    return this.drivers
+      .map((driver) => ({
+        id: driver.id,
+        name: driver.name,
+        phone: this.phone(driver),
+        email: driver.contact_email || 'Not provided',
+        vehicle: driver.vehicle_type || 'Not provided',
+        paymentGroup: driver.payment_group_name || 'Not assigned',
+        completed: driver.completed_deliveries,
+        status: driver.is_active ? 'Active' : 'Inactive',
+        actions: '',
+        source: driver,
+      }))
+      .filter((row) => !query || [row.name, row.phone, row.email, row.vehicle, row.paymentGroup, row.status]
+        .some((value) => String(value).toLowerCase().includes(query)));
   }
 
-  get driverRows(): DriverRow[] {
-    return this.demoDriversService.toDriverRows(this.searchQuery);
+  openProfile(row: DriverTableRow): void {
+    this.selectedDriver = row.source;
+    this.activeProfileTab = 'bio';
   }
 
-  get dailyRows(): DailyPaymentRow[] {
-    return this.demoDriversService.toDailyPaymentRows(this.searchQuery);
+  closeProfile(): void {
+    this.selectedDriver = null;
   }
 
-  get columns(): TableColumn[] {
-    return this.activeTab === 'Daily Payment'
-      ? this.dailyPaymentColumns
-      : this.driverColumns;
+  setProfileTab(tab: ProfileTab): void {
+    this.activeProfileTab = tab;
   }
 
-  get rows(): Array<DriverRow | DailyPaymentRow> {
-    return this.activeTab === 'Daily Payment'
-      ? this.dailyRows
-      : this.driverRows;
+  initials(name: string): string {
+    return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   }
 
-  get columnTemplate(): string {
-    return this.activeTab === 'Daily Payment'
-      ? this.dailyColumnTemplate
-      : this.driverColumnTemplate;
+  phone(driver: DriverProfile): string {
+    const value = `${driver.contact_phone_country_code || ''}${driver.contact_phone_number || ''}`.trim();
+    return value || 'Not provided';
   }
 
-  get emptyTitle(): string {
-    return 'No data available';
+  selectedPaymentGroup(): DriverPaymentGroup | null {
+    return this.paymentGroups.find((group) => group.id === this.selectedDriver?.payment_group_id) || null;
   }
 
-  get emptySubtitle(): string {
-    return this.activeTab === 'Daily Payment'
-      ? 'No daily payment data available'
-      : 'No driver data available';
+  ruleLabel(rule: PaymentRuleType | null | undefined): string {
+    if (!rule) return 'Not assigned';
+    return {
+      fixed: 'Fixed pay per delivery',
+      percentage: 'Order value percentage',
+      passthrough: 'Pass-through earnings',
+    }[rule];
   }
 
-  get driverStatusOptions(): Array<{ label: DriverStatus; value: DriverStatus }> {
-    return this.demoDriversService.getDriverStatusOptions();
+  ruleSummary(group: DriverPaymentGroup): string {
+    if (group.rule_type === 'fixed') return `C$${this.money(group.fixed_amount)} per completed delivery`;
+    if (group.rule_type === 'percentage') return `${group.delivery_fee_percentage || 0}% of the delivery fee`;
+    return `${group.delivery_fee_percentage || 0}% of the delivery fee plus ${100 - (group.platform_tip_percentage || 0)}% of tips`;
   }
 
-  openNewDriver(): void {
-    this.driverFormValue = this.demoDriversService.createDefaultDriverFormValue();
-    this.isNewDriverOpen = true;
-  }
-
-  closeNewDriver(): void {
-    this.isNewDriverOpen = false;
-  }
-
-  seedDrivers(): void {
-    this.demoDriversService.seedDrivers();
-    this.setFeedback('Demo drivers loaded for assignment and payment walkthroughs.', 'success');
-  }
-
-  fillDriverDummyData(): void {
-    this.driverFormValue = this.demoDriversService.createDummyDriverFormValue();
-    this.setFeedback('Driver form filled with demo data.', 'success');
-  }
-
-  patchDriverForm(patch: Partial<DriverFormValue>): void {
-    this.driverFormValue = {
-      ...this.driverFormValue,
-      ...patch
-    };
-  }
-
-  patchDriverPhone(phone: PhoneValue): void {
-    this.driverFormValue = {
-      ...this.driverFormValue,
-      phone
-    };
-  }
-
-  saveDriver(): void {
-    if (this.hasDriverFormErrors()) {
-      this.setFeedback('Complete the driver form before saving.', 'error');
-      return;
-    }
-
-    const driver = this.demoDriversService.saveDriverFromForm(this.driverFormValue);
-    this.setFeedback(`${driver.name} saved to Drivers.`, 'success');
-    this.closeNewDriver();
-  }
-
-  private hasDriverFormErrors(): boolean {
-    const value = this.driverFormValue;
-    if (!value.name.trim()) return true;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email.trim())) return true;
-    if (!/^\d{10}$/.test(value.phone.number)) return true;
-    if (!value.vehicle.trim()) return true;
-    if (!value.status) return true;
-    return false;
-  }
-
-  private setFeedback(
-    message: string,
-    tone: 'success' | 'error' | 'info'
-  ): void {
-    this.feedbackMessage = message;
-    this.feedbackTone = tone;
-  }
-
-  private isLocalhost(): boolean {
-    if (typeof window === 'undefined') return false;
-    return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+  private money(value: number | null): string {
+    return Number(value || 0).toFixed(2);
   }
 }

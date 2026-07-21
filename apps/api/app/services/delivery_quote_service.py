@@ -62,6 +62,7 @@ class DeliveryQuote:
     distance_charge: Decimal
     applied_charges: tuple["AppliedCharge", ...]
     delivery_fee: Decimal
+    manual_fallback: bool = False
 
 
 @dataclass(frozen=True)
@@ -134,6 +135,11 @@ async def _fetch_place(client: httpx.AsyncClient, place_id: str) -> PlaceDetails
             "X-Goog-FieldMask": "id,formattedAddress,location,addressComponents",
         },
     )
+    if response.status_code == 429:
+        raise DeliveryQuoteError(
+            "Google Maps API quota is exhausted. Enter both addresses manually.",
+            status_code=429,
+        )
     if response.status_code != 200:
         raise DeliveryQuoteError("Unable to verify the selected address.", status_code=503)
     payload = response.json()
@@ -170,6 +176,11 @@ async def _fetch_route(
             "routingPreference": "TRAFFIC_AWARE",
         },
     )
+    if response.status_code == 429:
+        raise DeliveryQuoteError(
+            "Google Maps API quota is exhausted. Enter both addresses manually.",
+            status_code=429,
+        )
     if response.status_code != 200:
         raise DeliveryQuoteError("Unable to calculate a driving route.", status_code=503)
     routes = response.json().get("routes") or []
@@ -366,4 +377,199 @@ async def build_delivery_quote(
         distance_charge=(distance_fee - Decimal(base_price)).quantize(Decimal("0.01")),
         applied_charges=tuple(applied_charges),
         delivery_fee=delivery_fee,
+    )
+
+
+def _normalized_address(value: str) -> str:
+    return " ".join(value.casefold().split())
+
+
+def match_manual_operational_region(
+    address: str,
+    zones: list[OperationalZone],
+) -> tuple[OperationalZone, City] | None:
+    normalized = _normalized_address(address)
+    if not normalized:
+        return None
+    matches: list[tuple[int, OperationalZone, City]] = []
+    for zone in zones:
+        zone_cities = [item.city for item in zone.cities]
+        if zone_cities and _normalized_address(zone.name) in normalized:
+            matches.append((len(zone.name), zone, zone_cities[0]))
+        matches.extend(
+            (len(city.name), zone, city)
+            for city in zone_cities
+            if _normalized_address(city.name) in normalized
+        )
+    if not matches:
+        return None
+    _, zone, city = max(matches, key=lambda item: item[0])
+    return zone, city
+
+
+async def _resolve_manual_location(
+    db: AsyncSession,
+    address: str,
+) -> ResolvedLocation:
+    if not _normalized_address(address):
+        raise DeliveryQuoteError("Enter a manual street address.")
+    zones = list((await db.scalars(
+        select(OperationalZone)
+        .options(
+            selectinload(OperationalZone.cities)
+            .joinedload(OperationalZoneCity.city)
+            .joinedload(City.state)
+        )
+        .order_by(OperationalZone.name)
+    )).unique().all())
+    match = match_manual_operational_region(address, zones)
+    if not match:
+        raise DeliveryQuoteError(
+            "Manual address is outside the operational regions. Include a configured zone or city name."
+        )
+    zone, city = match
+    return ResolvedLocation(
+        place=PlaceDetails(
+            place_id=f"manual:{zone.id}",
+            formatted_address=address.strip(),
+            latitude=0,
+            longitude=0,
+            city=city.name,
+            province=city.state.name,
+            country_code="CA",
+        ),
+        city=city,
+        zone=zone,
+    )
+
+
+async def build_manual_delivery_quote(
+    db: AsyncSession,
+    pickup_address: str,
+    delivery_address: str,
+    category_id: UUID,
+    vendor_id: UUID | None = None,
+    delivery_date: str | None = None,
+    delivery_time: str | None = None,
+    surcharge_ids: list[UUID] | None = None,
+) -> DeliveryQuote:
+    pickup = await _resolve_manual_location(db, pickup_address)
+    delivery = await _resolve_manual_location(db, delivery_address)
+    policy = await db.scalar(select(DeliveryPolicy).where(DeliveryPolicy.key == "default"))
+    if not bool(policy and policy.allow_intercity) and pickup.city.id != delivery.city.id:
+        raise DeliveryQuoteError(
+            "Inter-city delivery is disabled. Pickup and delivery must include the same configured city."
+        )
+
+    price = await db.scalar(
+        select(ZoneCategoryPrice)
+        .where(
+            ZoneCategoryPrice.zone_id == pickup.zone.id,
+            ZoneCategoryPrice.category_id == category_id,
+        )
+        .options(
+            selectinload(ZoneCategoryPrice.partner_overrides).joinedload(
+                PartnerZoneCategoryPrice.partner
+            )
+        )
+    )
+    if price is None:
+        raise DeliveryQuoteError(
+            "Pricing is not configured for this pickup zone and delivery category."
+        )
+    base_price = price.individual_price
+    if vendor_id:
+        override = next(
+            (item for item in price.partner_overrides if item.partner_id == vendor_id),
+            None,
+        )
+        base_price = override.price if override else price.partner_price
+
+    # Manual fallback intentionally uses fixed base pricing. Configured
+    # after-hours, selected surcharge and special-occasion charges still apply.
+    applied_charges: list[AppliedCharge] = []
+    if delivery_time:
+        try:
+            requested_time = time.fromisoformat(delivery_time)
+        except ValueError as exc:
+            raise DeliveryQuoteError("Enter a valid delivery time.") from exc
+        after_hours = (
+            await db.scalars(select(AfterHoursDelivery).order_by(AfterHoursDelivery.start_time))
+        ).all()
+        applied_charges.extend(
+            AppliedCharge(
+                id=item.id,
+                kind="after_hours",
+                label="After-hours delivery",
+                amount=Decimal(item.extra_amount),
+            )
+            for item in after_hours
+            if _within_time_range(requested_time, item.start_time, item.end_time)
+        )
+
+    try:
+        requested_surcharge_ids = list(
+            dict.fromkeys(UUID(str(value)) for value in (surcharge_ids or []))
+        )
+    except ValueError as exc:
+        raise DeliveryQuoteError("One or more selected surcharges are invalid.") from exc
+    if requested_surcharge_ids:
+        surcharges = list((await db.scalars(
+            select(Surcharge)
+            .where(Surcharge.id.in_(requested_surcharge_ids))
+            .order_by(Surcharge.name)
+        )).all())
+        if len(surcharges) != len(requested_surcharge_ids):
+            raise DeliveryQuoteError("One or more selected surcharges no longer exist.")
+        applied_charges.extend(
+            AppliedCharge(
+                id=item.id,
+                kind="surcharge",
+                label=item.name,
+                amount=Decimal(item.extra_amount),
+            )
+            for item in surcharges
+        )
+
+    chargeable_delivery_fee = Decimal(base_price) + _sum_charges(applied_charges)
+    if delivery_date:
+        try:
+            requested_date = date.fromisoformat(delivery_date)
+        except ValueError as exc:
+            raise DeliveryQuoteError("Enter a valid delivery date.") from exc
+        occasions = list((await db.scalars(
+            select(SpecialOccasion).order_by(
+                SpecialOccasion.occasion_date, SpecialOccasion.name
+            )
+        )).all())
+        applied_charges.extend(
+            AppliedCharge(
+                id=item.id,
+                kind="special_occasion",
+                label=f"{item.name} ({Decimal(item.extra_percentage):g}%)",
+                amount=calculate_percentage_charge(
+                    chargeable_delivery_fee, Decimal(item.extra_percentage)
+                ),
+            )
+            for item in occasions
+            if _occasion_matches(item, requested_date)
+            and Decimal(item.extra_percentage) > 0
+        )
+
+    delivery_fee = (Decimal(base_price) + _sum_charges(applied_charges)).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    return DeliveryQuote(
+        pickup=pickup,
+        delivery=delivery,
+        distance_meters=0,
+        duration_seconds=0,
+        radius_km=Decimal(pickup.zone.radius_km),
+        extra_distance_km=Decimal("0.00"),
+        base_price=Decimal(base_price),
+        additional_per_km=Decimal("0.00"),
+        distance_charge=Decimal("0.00"),
+        applied_charges=tuple(applied_charges),
+        delivery_fee=delivery_fee,
+        manual_fallback=True,
     )

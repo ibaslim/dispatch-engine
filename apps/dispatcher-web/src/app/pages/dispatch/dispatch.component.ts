@@ -34,6 +34,7 @@ type BackendOrder = {
   delivery_tips: number;
   discount: number;
   total: number;
+  driver_payout?: number | null;
   instructions?: string | null;
   driver?: { id: string; name: string } | null;
   payment_method: PaymentMethodType;
@@ -57,6 +58,7 @@ type DispatchOrder = {
   tip: number;
   discount: number;
   total: number;
+  driverPayout: number;
   payment: string;
   instructions: string;
   assignedDriverId: string | null;
@@ -77,8 +79,7 @@ export type PublishedOrderCard = {
   orderNumber: string;
   pickupAddress: string;
   deliveryAddress: string;
-  total: number;
-  driverFee: number;       // 5% of total
+  driverFee: number;
   publishedAt: Date;
   remainingSeconds: number; // countdown (0 = expired)
   accepting: boolean;       // in-flight API call
@@ -189,8 +190,7 @@ export class DispatchComponent implements OnInit, OnDestroy {
           orderNumber: String(o['order_number'] ?? ''),
           pickupAddress: String(o['pickup_address'] ?? ''),
           deliveryAddress: String(o['delivery_address'] ?? ''),
-          total: Number(o['total'] ?? 0),
-          driverFee: Number(o['driver_fee'] ?? 0),
+          driverFee: Number(o['driver_payout'] ?? 0),
           publishedAt,
           remainingSeconds: remaining,
           accepting: false,
@@ -230,8 +230,7 @@ export class DispatchComponent implements OnInit, OnDestroy {
               orderNumber: String(o.order_number ?? ''),
               pickupAddress: String(o.pickup_address ?? ''),
               deliveryAddress: String(o.delivery_address ?? ''),
-              total: Number(o.total ?? 0),
-              driverFee: Math.round(Number(o.total ?? 0) * 0.05 * 100) / 100,
+              driverFee: Number(o.driver_payout ?? 0),
               publishedAt,
               remainingSeconds: remaining,
               accepting: false,
@@ -366,7 +365,7 @@ export class DispatchComponent implements OnInit, OnDestroy {
         pickup: o.pickup.name,
         dropoff: o.delivery.name,
         eta: this.estimateEta(o.delivery.date, o.delivery.time),
-        total: this.money(o.total)
+        total: this.money(this.isDriver ? o.driverPayout : o.total)
       }));
 
     this.selectedOrder =
@@ -407,6 +406,7 @@ export class DispatchComponent implements OnInit, OnDestroy {
       tip: order.delivery_tips,
       discount: order.discount,
       total: order.total,
+      driverPayout: this.toNumber(order.driver_payout),
       payment: this.formatPaymentMethod(order.payment_method),
       instructions: order.instructions || '',
       proofOfDelivery: {
@@ -444,8 +444,8 @@ export class DispatchComponent implements OnInit, OnDestroy {
 
   money(amount: number): string { return `C$ ${amount.toFixed(2)}`; }
 
-  driverEarningsLabel(total: unknown): string {
-    return this.money(Math.round(this.toNumber(total) * 0.05 * 100) / 100);
+  driverEarningsLabel(payout: unknown): string {
+    return this.money(this.toNumber(payout));
   }
 
   private toNumber(v: unknown): number {

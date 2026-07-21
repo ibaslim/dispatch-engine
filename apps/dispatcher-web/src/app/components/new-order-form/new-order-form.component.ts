@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, HostListener, Input, OnInit, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 
@@ -8,6 +8,7 @@ import { NewOrderFormValue } from '../../models/new-order-form/new-order-form.mo
 import {
   DeliveryCategory,
   DeliveryConfigurationService,
+  OperationalZone,
   Surcharge,
 } from '../../services/delivery-configuration/delivery-configuration.service';
 import { OrdersService } from '../../services/orders/orders.service';
@@ -15,6 +16,8 @@ import { ProofOfDeliveryComponent } from '../proof-of-delivery/proof-of-delivery
 import { PickupFromComponent } from '../pickup-from/pickup-from.component';
 import { DeliverToComponent } from '../deliver-to/deliver-to.component';
 import { OtherOrderDetailsComponent } from '../other-order-details/other-order-details.component';
+import { GoogleMapsService } from '../../services/google-maps/google-maps.service';
+import { ToastService } from '../../core/toast/toast.service';
 
 @Component({
   selector: 'app-new-order-form',
@@ -39,6 +42,8 @@ export class NewOrderFormComponent implements OnInit {
 
   categories: DeliveryCategory[] = [];
   surcharges: Surcharge[] = [];
+  operationalZones: OperationalZone[] = [];
+  categoryDropdownOpen = false;
   isQuoting = false;
   quoteError = '';
   private quoteRequest = 0;
@@ -46,17 +51,38 @@ export class NewOrderFormComponent implements OnInit {
   constructor(
     private readonly configurations: DeliveryConfigurationService,
     private readonly orders: OrdersService,
+    private readonly googleMaps: GoogleMapsService,
+    private readonly toast: ToastService,
   ) {}
+
+  get selectedCategory(): DeliveryCategory | undefined {
+    return this.categories.find((category) => category.id === this.value.deliveryCategoryId);
+  }
+
+  @HostListener('document:click', ['$event'])
+  closeCategoryDropdownOnOutsideClick(event: MouseEvent): void {
+    const target = event.target;
+    if (!(target instanceof Element) || !target.closest('.delivery-category-dropdown')) {
+      this.categoryDropdownOpen = false;
+    }
+  }
+
+  @HostListener('document:keydown.escape')
+  closeCategoryDropdownOnEscape(): void {
+    this.categoryDropdownOpen = false;
+  }
 
   async ngOnInit(): Promise<void> {
     try {
-      const [categories, policy, surcharges] = await Promise.all([
+      const [categories, policy, surcharges, operationalZones] = await Promise.all([
         firstValueFrom(this.configurations.getCategories()),
         firstValueFrom(this.configurations.getDeliveryPolicy()),
         firstValueFrom(this.configurations.getSurcharges()),
+        firstValueFrom(this.configurations.getZones()),
       ]);
       this.categories = categories;
       this.surcharges = surcharges;
+      this.operationalZones = operationalZones;
       if (!this.value.orderNumber) {
         const details = this.withTaxRate(
           this.value.details,
@@ -144,6 +170,7 @@ export class NewOrderFormComponent implements OnInit {
   }
 
   onCategoryChange(deliveryCategoryId: string): void {
+    this.categoryDropdownOpen = false;
     this.patchAndQuote({ deliveryCategoryId });
   }
 
@@ -181,12 +208,22 @@ export class NewOrderFormComponent implements OnInit {
         delivery_date: value.delivery.deliveryDate || null,
         delivery_time: value.delivery.deliveryTime || null,
         surcharge_ids: value.surchargeIds,
+        pickup_address: value.pickup.address,
+        delivery_address: value.delivery.address,
       }));
       if (request !== this.quoteRequest) return;
       const details = this.withDeliveryFee(this.value.details, quote.delivery_fee);
       this.valueChange.emit({ ...this.value, details, routeQuote: quote });
     } catch (error: unknown) {
       if (request !== this.quoteRequest) return;
+      if (error instanceof HttpErrorResponse && error.status === 429) {
+        const firstNotification = this.googleMaps.enableManualFallback();
+        if (firstNotification) {
+          this.toast.warning(
+            'Google Maps API limit is exhausted. Enter pickup and delivery addresses manually.'
+          );
+        }
+      }
       this.quoteError = this.quoteErrorText(error);
       this.valueChange.emit({
         ...this.value,

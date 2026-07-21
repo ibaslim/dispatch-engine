@@ -79,6 +79,10 @@ export interface NewOrderFormValue {
         subtotal: number;
         taxAmount: number;
         total: number;
+        driverPayout?: number;
+        driverFeePayout?: number;
+        driverTipPayout?: number;
+        driverPaymentRule?: string | null;
 
         instructions: string;
         payment: PaymentDetails;
@@ -107,6 +111,7 @@ export interface DeliveryRouteQuote {
     distance_charge: number;
     applied_charges: AppliedCharge[];
     delivery_fee: number;
+    manual_fallback?: boolean;
 }
 
 export interface AppliedCharge {

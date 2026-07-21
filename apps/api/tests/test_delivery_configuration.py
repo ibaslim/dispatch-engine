@@ -15,11 +15,14 @@ from app.api.routers.delivery_configuration import (
     ZoneRadiusInput,
 )
 from app.models.delivery_configuration import SpecialOccasion
+from app.models.delivery_configuration import OperationalZone, OperationalZoneCity
+from app.models.location import City, State
 from app.services.delivery_quote_service import (
     _occasion_matches,
     _within_time_range,
     calculate_delivery_fee,
     calculate_percentage_charge,
+    match_manual_operational_region,
 )
 
 
@@ -143,3 +146,31 @@ def test_delivery_policy_validates_default_tax_percentage() -> None:
 
     with pytest.raises(ValidationError):
         DeliveryPolicyInput(allow_intercity=False, default_tax_percentage=101)
+
+
+def test_manual_address_matches_zone_or_city_case_insensitively() -> None:
+    state = State(name="Alberta")
+    city = City(name="Edmonton", state=state)
+    zone = OperationalZone(name="Capital Region")
+    zone.cities = [OperationalZoneCity(city=city)]
+
+    city_match = match_manual_operational_region(
+        "101 Main Street, EDMONTON, AB",
+        [zone],
+    )
+    zone_match = match_manual_operational_region(
+        "Warehouse 4, capital region",
+        [zone],
+    )
+
+    assert city_match == (zone, city)
+    assert zone_match == (zone, city)
+
+
+def test_manual_address_outside_configured_regions_is_rejected() -> None:
+    state = State(name="Alberta")
+    city = City(name="Edmonton", state=state)
+    zone = OperationalZone(name="Capital Region")
+    zone.cities = [OperationalZoneCity(city=city)]
+
+    assert match_manual_operational_region("101 Main Street, Calgary", [zone]) is None

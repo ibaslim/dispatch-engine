@@ -1,101 +1,127 @@
-<app-page title="Drivers" titleClass="text-2xl font-semibold text-gray-900 dark:text-gray-100"
-    containerClass="w-full px-4 py-8 sm:px-6 lg:px-8 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]"
-    contentClass="w-full space-y-6">
+<app-page
+  title="Drivers"
+  titleClass="text-2xl font-semibold text-gray-900 dark:text-gray-100"
+  containerClass="min-h-[calc(100vh-4rem)] w-full bg-white px-4 py-8 text-gray-900 dark:bg-[#1E201E] dark:text-gray-100 sm:px-6 lg:px-8"
+  contentClass="w-full space-y-6"
+>
+  <app-search-bar
+    page-actions
+    class="w-full sm:w-auto"
+    [value]="searchQuery"
+    (valueChange)="searchQuery = $event"
+    placeholder="Search drivers"
+  ></app-search-bar>
 
-    <div page-actions class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-        <app-search-bar [value]="searchQuery" (valueChange)="searchQuery = $event" class="w-full sm:w-auto"></app-search-bar>
+  <div *ngIf="isLoading" class="flex h-48 items-center justify-center text-sm text-gray-500 dark:text-gray-400">
+    <i class="ph ph-spinner animate-spin text-2xl"></i><span class="ml-2">Loading drivers...</span>
+  </div>
 
-        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <app-button *ngIf="showLocalDemoButton" variant="ghost-success" label="Seed Drivers"
-                (onClick)="seedDrivers()"
-                [extraClasses]="'flex-1 sm:flex-none justify-center px-3 py-2 rounded-md text-sm h-9'">
-            </app-button>
+  <app-table
+    *ngIf="!isLoading"
+    [columns]="columns"
+    [rows]="rows"
+    columnTemplate="1.45fr 1.25fr 1fr 1.35fr .7fr .8fr .55fr"
+    actionIcon="eye"
+    actionLabel="View driver profile"
+    emptyTitle="No drivers found"
+    emptySubtitle="Drivers will appear here when they are added to the platform."
+    (actionClick)="openProfile($event)"
+  ></app-table>
 
-            <app-button variant="ghost" label="Get the app"
-                [extraClasses]="'border border-gray-300 dark:border-grey-100 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-3 py-2 rounded-md text-sm flex-1 sm:flex-none justify-center h-9'">
-            </app-button>
+  <app-popup
+    [open]="selectedDriver !== null"
+    title="Driver profile"
+    widthClass="max-w-6xl"
+    (close)="closeProfile()"
+  >
+    <div *ngIf="selectedDriver as driver" class="overflow-hidden rounded-xl border border-gray-200 dark:border-[#3a3d3a] lg:grid lg:grid-cols-[300px_minmax(0,1fr)]">
+      <aside class="bg-gray-50 p-6 dark:bg-[#1d201d]">
+        <div class="flex flex-col items-center text-center">
+          <div class="relative flex h-24 w-24 items-center justify-center rounded-full bg-emerald-100 text-2xl font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+            {{ initials(driver.name) }}
+            <span class="absolute -bottom-2 rounded-full border border-gray-200 bg-white px-2 py-1 text-xs font-semibold text-gray-700 shadow-sm dark:border-[#444744] dark:bg-[#292c29] dark:text-gray-200">
+              <i class="ph-fill ph-star mr-1 text-amber-400"></i>{{ driver.rating || 0 }}
+            </span>
+          </div>
+          <h3 class="mt-5 text-lg font-semibold">{{ driver.name }}</h3>
+          <p class="mt-1 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+            <i class="ph ph-car"></i>{{ driver.vehicle_type || 'Vehicle not provided' }}
+            <span>•</span>
+            <span [class.text-emerald-600]="driver.is_active">{{ driver.is_online ? 'Online' : (driver.is_active ? 'Active' : 'Inactive') }}</span>
+          </p>
 
-            <app-button variant="primary" label="+ New Driver" (onClick)="openNewDriver()"
-                [extraClasses]="'px-3 py-2 rounded-md text-sm h-9 flex-1 sm:flex-none justify-center'">
-            </app-button>
+          <a
+            *ngIf="driver.contact_email; else messageUnavailable"
+            [href]="'mailto:' + driver.contact_email"
+            class="mt-5 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white text-sm font-medium hover:bg-gray-100 dark:border-[#454845] dark:bg-[#252825] dark:hover:bg-[#303330]"
+          ><i class="ph ph-chat-circle-text text-lg"></i>Send message</a>
+          <ng-template #messageUnavailable>
+            <button disabled class="mt-5 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-gray-300 text-sm text-gray-400 opacity-70 dark:border-[#454845]">
+              <i class="ph ph-chat-circle-text text-lg"></i>Send message
+            </button>
+          </ng-template>
         </div>
+
+        <div class="my-6 border-t border-gray-200 dark:border-[#3a3d3a]"></div>
+        <div class="space-y-4 text-sm">
+          <div class="flex gap-3"><i class="ph ph-phone mt-0.5 text-xl text-gray-500"></i><span class="break-all">{{ phone(driver) }}</span></div>
+          <div class="flex gap-3"><i class="ph ph-map-pin mt-0.5 text-xl text-gray-500"></i><span>{{ driver.address || 'Not provided' }}</span></div>
+          <div class="flex gap-3"><i class="ph ph-envelope mt-0.5 text-xl text-gray-500"></i><span class="break-all">{{ driver.contact_email || 'Not provided' }}</span></div>
+        </div>
+      </aside>
+
+      <section class="min-h-[520px] p-6">
+        <nav class="flex gap-7 border-b border-gray-200 text-sm font-medium dark:border-[#3a3d3a]">
+          <button *ngFor="let tab of ['bio', 'payments', 'reviews']" type="button" class="-mb-px border-b-2 px-1 pb-3 capitalize transition"
+            [class.border-emerald-500]="activeProfileTab === tab"
+            [class.text-emerald-600]="activeProfileTab === tab"
+            [class.border-transparent]="activeProfileTab !== tab"
+            [class.text-gray-500]="activeProfileTab !== tab"
+            (click)="setProfileTab($any(tab))">{{ tab }}</button>
+        </nav>
+
+        <div *ngIf="activeProfileTab === 'bio'" class="mt-6 space-y-5">
+          <article class="rounded-xl border border-gray-200 p-5 dark:border-[#3a3d3a]">
+            <h4 class="font-semibold">Personal information</h4>
+            <div class="mt-5 grid gap-5 sm:grid-cols-2">
+              <div><p class="text-xs text-gray-500">Full name</p><p class="mt-1 text-sm font-medium">{{ driver.contact_name || driver.name }}</p></div>
+              <div><p class="text-xs text-gray-500">Phone</p><p class="mt-1 text-sm font-medium">{{ phone(driver) }}</p></div>
+              <div><p class="text-xs text-gray-500">Email</p><p class="mt-1 break-all text-sm font-medium">{{ driver.contact_email || 'Not provided' }}</p></div>
+              <div><p class="text-xs text-gray-500">Area</p><p class="mt-1 text-sm font-medium">{{ driver.address || 'Not provided' }}</p></div>
+            </div>
+          </article>
+          <article class="rounded-xl border border-gray-200 p-5 dark:border-[#3a3d3a]">
+            <h4 class="font-semibold">Vehicle details</h4>
+            <div class="mt-5 grid gap-5 sm:grid-cols-2">
+              <div><p class="text-xs text-gray-500">Type</p><p class="mt-1 text-sm font-medium">{{ driver.vehicle_type || 'Not provided' }}</p></div>
+              <div><p class="text-xs text-gray-500">Plate number</p><p class="mt-1 text-sm font-medium">{{ driver.plate_number || 'Not provided' }}</p></div>
+            </div>
+          </article>
+          <article class="rounded-xl border border-gray-200 p-5 dark:border-[#3a3d3a]">
+            <h4 class="font-semibold">Driver note</h4>
+            <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">{{ driver.notes || 'Include personalized notes regarding this driver.' }}</p>
+          </article>
+        </div>
+
+        <div *ngIf="activeProfileTab === 'payments'" class="mt-6">
+          <article *ngIf="selectedPaymentGroup() as group; else noPaymentGroup" class="rounded-xl border border-gray-200 p-5 dark:border-[#3a3d3a]">
+            <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Payment group</p>
+            <h4 class="mt-2 text-lg font-semibold">{{ group.name }}</h4>
+            <div class="mt-5 grid gap-5 sm:grid-cols-2">
+              <div><p class="text-xs text-gray-500">Payment rule</p><p class="mt-1 text-sm font-medium">{{ ruleLabel(group.rule_type) }}</p></div>
+              <div><p class="text-xs text-gray-500">Driver earns</p><p class="mt-1 text-sm font-medium">{{ ruleSummary(group) }}</p></div>
+              <div><p class="text-xs text-gray-500">Completed deliveries</p><p class="mt-1 text-sm font-medium">{{ driver.completed_deliveries }}</p></div>
+            </div>
+          </article>
+          <ng-template #noPaymentGroup><div class="rounded-xl border border-dashed border-gray-300 p-12 text-center text-sm text-gray-500 dark:border-[#414441]">This driver has not been assigned to a payment group.</div></ng-template>
+        </div>
+
+        <div *ngIf="activeProfileTab === 'reviews'" class="flex min-h-80 flex-col items-center justify-center text-center">
+          <div class="flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-900/20"><i class="ph ph-star text-2xl"></i></div>
+          <h4 class="mt-4 font-semibold">Reviews coming soon</h4>
+          <p class="mt-1 max-w-sm text-sm text-gray-500 dark:text-gray-400">Driver ratings and customer feedback will appear here.</p>
+        </div>
+      </section>
     </div>
-
-    <p *ngIf="feedbackMessage" [class]="'text-sm ' +
-        (feedbackTone === 'error'
-        ? 'text-red-600 dark:text-red-400'
-        : feedbackTone === 'success'
-        ? 'text-green-700 dark:text-green-400'
-        : 'text-gray-600 dark:text-gray-300')">
-        {{ feedbackMessage }}
-    </p>
-
-    <div class="flex items-center gap-6 text-sm text-gray-500 border-b pb-2 mt-2 overflow-x-auto whitespace-nowrap scrollbar-none">
-        <app-button *ngFor="let tab of tabs" variant="tab" [label]="tab" (onClick)="setActiveTab(tab)" [extraClasses]="(activeTab === tab 
-              ? 'text-[#32C896] border-b-2 border-[#32C896]' 
-              : 'text-gray-500') + ' whitespace-nowrap'">
-        </app-button>
-    </div>
-
-    <app-table [columns]="columns" [rows]="rows" [columnTemplate]="columnTemplate" [emptyTitle]="emptyTitle"
-        [emptySubtitle]="emptySubtitle">
-    </app-table>
-
-    <app-popup [open]="isNewDriverOpen" title="New Driver" widthClass="max-w-3xl" (close)="closeNewDriver()">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <app-base-input label="Full Name" [required]="true" [value]="driverFormValue.name"
-                (valueChange)="patchDriverForm({ name: $event })">
-            </app-base-input>
-
-            <app-base-input label="Email" type="email" [required]="true" [value]="driverFormValue.email"
-                (valueChange)="patchDriverForm({ email: $event })">
-            </app-base-input>
-
-            <app-phone-input label="Phone Number" [required]="true" [value]="driverFormValue.phone"
-                (valueChange)="patchDriverPhone($event)">
-            </app-phone-input>
-
-            <app-base-input label="Vehicle" [required]="true" [value]="driverFormValue.vehicle"
-                (valueChange)="patchDriverForm({ vehicle: $event })">
-            </app-base-input>
-
-            <app-base-input label="Rating" [value]="driverFormValue.rating"
-                (valueChange)="patchDriverForm({ rating: $event })">
-            </app-base-input>
-
-            <app-dropdown-selector label="Status" [options]="driverStatusOptions" [value]="driverFormValue.status"
-                (valueChange)="patchDriverForm({ status: $event || 'On Duty' })">
-            </app-dropdown-selector>
-
-            <app-base-input label="Completed Deliveries" [value]="driverFormValue.completedDeliveries"
-                (valueChange)="patchDriverForm({ completedDeliveries: $event })">
-            </app-base-input>
-
-            <app-base-input label="Base Driver Pay (C$)" [value]="driverFormValue.basePay"
-                (valueChange)="patchDriverForm({ basePay: $event })">
-            </app-base-input>
-
-            <app-base-input label="Online Tips (C$)" [value]="driverFormValue.tips"
-                (valueChange)="patchDriverForm({ tips: $event })">
-            </app-base-input>
-
-            <app-base-input label="Adjustments (C$)" [value]="driverFormValue.adjustments"
-                (valueChange)="patchDriverForm({ adjustments: $event })">
-            </app-base-input>
-        </div>
-
-        <div modal-footer class="flex items-center justify-end gap-3">
-            <app-button *ngIf="showLocalDemoButton" variant="ghost-success" label="Fill Demo Data"
-                (onClick)="fillDriverDummyData()">
-            </app-button>
-
-            <app-button variant="ghost" label="Cancel" (onClick)="closeNewDriver()"
-                [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm'">
-            </app-button>
-
-            <app-button variant="primary" label="Save Driver" (onClick)="saveDriver()"
-                [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-6 py-2 rounded-md text-sm'">
-            </app-button>
-        </div>
-    </app-popup>
+  </app-popup>
 </app-page>

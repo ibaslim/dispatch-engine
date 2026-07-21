@@ -1,189 +1,143 @@
 <div class="min-h-[calc(100vh-4rem)] w-full bg-white px-6 py-6 text-gray-900 dark:bg-[#1E201E] dark:text-gray-100">
   <div class="mx-auto max-w-7xl">
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h1 class="text-2xl font-bold sm:text-xl">Driver Payroll</h1>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Base salary and per-delivery commission by driver, province and city.
-        </p>
+        <h1 class="text-2xl font-bold sm:text-xl">Driver Payments</h1>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Group drivers and define how each group is paid.</p>
       </div>
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <app-search-bar [value]="searchQuery" (valueChange)="searchQuery = $event" placeholder="Search groups or drivers"></app-search-bar>
+        <button type="button" class="h-10 rounded-lg bg-[#FFD150] px-4 text-sm font-semibold text-black hover:bg-yellow-500" (click)="openCreate()">
+          <i class="ph ph-plus mr-1"></i>Create group
+        </button>
+      </div>
+    </header>
 
-      <app-search-bar
-        class="w-full lg:w-auto"
-        containerClass="w-full max-w-92 xs:w-auto"
-        [value]="searchQuery"
-        (valueChange)="onSearchChange($event)"
-        placeholder="Search driver, province or city"
-      ></app-search-bar>
-    </div>
+    <div *ngIf="isLoading" class="flex h-52 items-center justify-center text-sm text-gray-500"><i class="ph ph-spinner mr-2 animate-spin text-2xl"></i>Loading payment groups...</div>
 
-    <div *ngIf="isLoading" class="mt-8 flex h-40 items-center justify-center text-gray-500 dark:text-gray-400">
-      <svg class="mr-2 h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
-      </svg>
-      Loading drivers...
-    </div>
-
-    <div *ngIf="errorMessage" class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
-      {{ errorMessage }}
-    </div>
-
-    <div *ngIf="!isLoading" class="mt-6 space-y-4">
-      <section *ngFor="let view of filteredDriverViews; trackBy: trackByDriverView" class="overflow-hidden rounded-xl border border-gray-200 shadow-sm dark:border-[#343734]">
-        <div class="bg-[#FFD150]/10 p-4">
-          <div class="flex flex-col gap-4 xl:flex-row xl:items-end">
-            <button
-              type="button"
-              class="flex min-w-52 items-center gap-3 self-start text-left"
-              (click)="toggleDriver(view)"
-              [attr.aria-expanded]="isDriverExpanded(view)"
-            >
-              <ng-container *ngTemplateOutlet="chevron; context: { expanded: isDriverExpanded(view) }"></ng-container>
-              <span>
-                <span class="block font-semibold">{{ view.driver.name }}</span>
-                <span class="block text-xs font-normal text-gray-500 dark:text-gray-400">
-                  {{ view.loaded ? view.states.length + ' provinces and territories' : 'Expand to load payroll compensation' }}
-                </span>
-              </span>
-            </button>
-
-            <div *ngIf="view.loaded" class="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
-              <ng-container *ngTemplateOutlet="rateInput; context: { label: 'Base salary', model: view.defaultRates, field: 'base_salary', id: 'driver-default-salary-' + view.driver.id }"></ng-container>
-              <ng-container *ngTemplateOutlet="rateInput; context: { label: 'Commission / delivery', model: view.defaultRates, field: 'commission_per_delivery', id: 'driver-default-commission-' + view.driver.id }"></ng-container>
+    <div *ngIf="!isLoading" class="mt-7 grid gap-4 lg:grid-cols-2">
+      <article *ngFor="let group of filteredGroups" class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-[#383b38] dark:bg-[#232623]">
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex min-w-0 gap-3">
+            <span class="flex h-11 w-11 flex-none items-center justify-center rounded-xl"
+              [ngClass]="group.rule_type === 'passthrough' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'">
+              <i class="ph text-xl" [ngClass]="group.rule_type === 'fixed' ? 'ph-currency-dollar' : group.rule_type === 'percentage' ? 'ph-percent' : 'ph-receipt'"></i>
+            </span>
+            <div class="min-w-0">
+              <h2 class="truncate font-semibold">{{ group.name }}</h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ ruleLabel(group.rule_type) }}</p>
             </div>
-
-            <button
-              *ngIf="view.loaded"
-              type="button"
-              class="h-10 rounded-lg bg-[#FFD150] px-5 text-sm font-semibold text-black hover:bg-yellow-500 disabled:opacity-60"
-              [disabled]="isSaving(driverSavingId(view))"
-              (click)="requestDriverOverride(view)"
-            >
-              {{ isSaving(driverSavingId(view)) ? 'Updating...' : 'Override all' }}
-            </button>
+          </div>
+          <div class="flex gap-1">
+            <button type="button" aria-label="Edit payment group" class="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-[#303330]" (click)="openEdit(group)"><i class="ph ph-pencil-simple text-lg"></i></button>
+            <button type="button" aria-label="Delete payment group" class="rounded-lg p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" (click)="deleteTarget = group"><i class="ph ph-trash text-lg"></i></button>
           </div>
         </div>
-
-        <div *ngIf="isDriverExpanded(view)" class="bg-white dark:bg-[#1E201E]">
-          <div *ngIf="view.loading" class="flex h-24 items-center justify-center text-sm text-gray-500">
-            Loading {{ view.driver.name }} payroll compensation...
-          </div>
-
-          <div *ngIf="view.loaded" class="divide-y divide-gray-100 dark:divide-[#303330]">
-            <section *ngFor="let state of visibleStates(view); trackBy: trackByState">
-              <div class="bg-gray-50 p-4 pl-8 dark:bg-[#252825]">
-                <div class="flex flex-col gap-4 xl:flex-row xl:items-end">
-                  <button
-                    type="button"
-                    class="flex min-w-48 items-center gap-3 self-start text-left"
-                    (click)="toggleState(view, state.state_id)"
-                    [attr.aria-expanded]="isStateExpanded(view, state)"
-                  >
-                    <ng-container *ngTemplateOutlet="chevron; context: { expanded: isStateExpanded(view, state) }"></ng-container>
-                    <span>
-                      <span class="block font-medium">{{ state.state_name }}</span>
-                      <span class="block text-xs text-gray-500 dark:text-gray-400">{{ state.cities.length }} cities</span>
-                    </span>
-                  </button>
-
-                  <div class="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
-                    <ng-container *ngTemplateOutlet="rateInput; context: { label: 'Base salary', model: state, field: 'base_salary', id: 'driver-state-salary-' + view.driver.id + '-' + state.state_id }"></ng-container>
-                    <ng-container *ngTemplateOutlet="rateInput; context: { label: 'Commission / delivery', model: state, field: 'commission_per_delivery', id: 'driver-state-commission-' + view.driver.id + '-' + state.state_id }"></ng-container>
-                  </div>
-
-                  <button
-                    type="button"
-                    class="h-10 rounded-lg bg-[#FFD150] px-5 text-sm font-semibold text-black hover:bg-yellow-500 disabled:opacity-60"
-                    [disabled]="isSaving(stateSavingId(view, state))"
-                    (click)="requestStateOverride(view, state)"
-                  >
-                    {{ isSaving(stateSavingId(view, state)) ? 'Updating...' : 'Override' }}
-                  </button>
-                </div>
-              </div>
-
-              <div *ngIf="isStateExpanded(view, state)" class="divide-y divide-gray-100 dark:divide-[#303330]">
-                <div *ngFor="let city of visibleCities(state); trackBy: trackByCity" class="p-4 pl-12">
-                  <div class="flex flex-col gap-4 xl:flex-row xl:items-end">
-                    <div class="min-w-44">
-                      <p class="font-medium">{{ city.city_name }}</p>
-                      <p class="text-xs text-gray-500 dark:text-gray-400">City override</p>
-                    </div>
-                    <div class="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
-                      <ng-container *ngTemplateOutlet="rateInput; context: { label: 'Base salary', model: city, field: 'base_salary', id: 'driver-city-salary-' + view.driver.id + '-' + city.city_id }"></ng-container>
-                      <ng-container *ngTemplateOutlet="rateInput; context: { label: 'Commission / delivery', model: city, field: 'commission_per_delivery', id: 'driver-city-commission-' + view.driver.id + '-' + city.city_id }"></ng-container>
-                    </div>
-                    <button
-                      type="button"
-                      class="h-10 rounded-lg border border-gray-300 px-5 text-sm font-semibold hover:bg-gray-100 disabled:opacity-60 dark:border-[#4a4d4a] dark:hover:bg-[#2a2d2a]"
-                      [disabled]="isSaving(citySavingId(view, city))"
-                      (click)="requestCityOverride(view, state, city)"
-                    >
-                      {{ isSaving(citySavingId(view, city)) ? 'Updating...' : 'Override' }}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </section>
+        <div class="mt-5 grid grid-cols-2 gap-3 rounded-lg bg-gray-50 p-4 dark:bg-[#1d201d]">
+          <div><p class="text-xs text-gray-500">Payment rule</p><p class="mt-1 text-sm font-medium">{{ groupSummary(group) }}</p></div>
+          <div><p class="text-xs text-gray-500">$20 example payout</p><p class="mt-1 text-lg font-semibold text-emerald-600">C${{ money(samplePayout(group)) }}</p></div>
+        </div>
+        <div class="mt-4">
+          <p class="text-xs font-medium text-gray-500">{{ group.drivers.length }} {{ group.drivers.length === 1 ? 'driver' : 'drivers' }}</p>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <span *ngFor="let driver of group.drivers.slice(0, 5)" class="rounded-full bg-gray-100 px-3 py-1 text-xs dark:bg-[#303330]">{{ driver.name }}</span>
+            <span *ngIf="group.drivers.length > 5" class="rounded-full bg-gray-100 px-3 py-1 text-xs dark:bg-[#303330]">+{{ group.drivers.length - 5 }} more</span>
+            <span *ngIf="group.drivers.length === 0" class="text-sm text-gray-400">No drivers assigned</span>
           </div>
         </div>
-      </section>
+      </article>
 
-      <div *ngIf="filteredDriverViews.length === 0 && !errorMessage" class="rounded-xl border border-dashed border-gray-300 p-10 text-center text-sm text-gray-500 dark:border-[#3a3d3a] dark:text-gray-400">
-        {{ searchQuery.trim() ? 'No drivers, provinces or cities match your search.' : 'No active drivers are available.' }}
+      <div *ngIf="filteredGroups.length === 0" class="col-span-full rounded-xl border border-dashed border-gray-300 p-12 text-center dark:border-[#3e413e]">
+        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/20"><i class="ph ph-users-three text-2xl"></i></div>
+        <h2 class="mt-4 font-semibold">{{ searchQuery.trim() ? 'No matching payment groups' : 'No payment groups yet' }}</h2>
+        <p class="mt-1 text-sm text-gray-500">Create a group to assign drivers and configure their payment rule.</p>
       </div>
     </div>
   </div>
 </div>
 
-<ng-template #rateInput let-label="label" let-model="model" let-field="field" let-id="id">
-  <label class="block">
-    <span class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ label }}</span>
-    <span class="relative block">
-      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">C$</span>
-      <input
-        [id]="id"
-        type="number"
-        min="0"
-        step="0.01"
-        required
-        [(ngModel)]="model[field]"
-        class="h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm outline-none focus:border-[#FFD150] focus:ring-2 focus:ring-[#FFD150]/30 dark:border-[#454845] dark:bg-[#1E201E]"
-      />
-    </span>
-  </label>
-</ng-template>
+<app-popup [open]="formOpen" [title]="form.id ? 'Edit payment group' : 'Create payment group'" widthClass="max-w-6xl" (close)="closeForm()">
+  <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+    <section>
+      <label class="block">
+        <span class="mb-1.5 block text-sm font-medium">Group name <span class="text-red-500">*</span></span>
+        <input [(ngModel)]="form.name" maxlength="100" placeholder="e.g. Percentage drivers" class="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm outline-none focus:border-[#FFD150] focus:ring-2 focus:ring-[#FFD150]/30 dark:border-[#464946] dark:bg-[#1E201E]" />
+      </label>
 
-<ng-template #chevron let-expanded="expanded">
-  <svg class="h-5 w-5 flex-none transition-transform" [class.rotate-180]="expanded" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-  </svg>
-</ng-template>
+      <div class="mt-6">
+        <h3 class="font-semibold">Add payment rule</h3>
+        <p class="mt-1 text-sm text-gray-500">Choose one rule type to configure.</p>
+        <div class="mt-3 space-y-2">
+          <button type="button" class="flex w-full items-center gap-3 rounded-xl border p-4 text-left transition hover:bg-gray-50 dark:hover:bg-[#292c29]"
+            [ngClass]="form.ruleType === 'fixed' ? 'border-emerald-500 ring-1 ring-emerald-500' : 'border-gray-200 dark:border-[#414441]'" (click)="selectRule('fixed')">
+            <span class="flex h-11 w-11 flex-none items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300"><i class="ph ph-currency-dollar text-xl"></i></span>
+            <span class="min-w-0 flex-1"><span class="block text-sm font-semibold">Fixed pay per delivery</span><span class="mt-1 block text-xs text-gray-500">Flat amount paid for each completed delivery.</span></span>
+            <i class="ph text-xl text-gray-400" [ngClass]="form.ruleType === 'fixed' ? 'ph-check-circle text-emerald-600' : 'ph-plus'"></i>
+          </button>
+          <button type="button" class="flex w-full items-center gap-3 rounded-xl border p-4 text-left transition hover:bg-gray-50 dark:hover:bg-[#292c29]"
+            [ngClass]="form.ruleType === 'percentage' ? 'border-emerald-500 ring-1 ring-emerald-500' : 'border-gray-200 dark:border-[#414441]'" (click)="selectRule('percentage')">
+            <span class="flex h-11 w-11 flex-none items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300"><i class="ph ph-percent text-xl"></i></span>
+            <span class="min-w-0 flex-1"><span class="block text-sm font-semibold">Order value percentage</span><span class="mt-1 block text-xs text-gray-500">Driver receives a percentage of the delivery fee.</span></span>
+            <i class="ph text-xl text-gray-400" [ngClass]="form.ruleType === 'percentage' ? 'ph-check-circle text-emerald-600' : 'ph-plus'"></i>
+          </button>
+          <button type="button" class="flex w-full items-center gap-3 rounded-xl border p-4 text-left transition hover:bg-gray-50 dark:hover:bg-[#292c29]"
+            [ngClass]="form.ruleType === 'passthrough' ? 'border-amber-500 ring-1 ring-amber-500' : 'border-gray-200 dark:border-[#414441]'" (click)="selectRule('passthrough')">
+            <span class="flex h-11 w-11 flex-none items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"><i class="ph ph-receipt text-xl"></i></span>
+            <span class="min-w-0 flex-1"><span class="block text-sm font-semibold">Pass-through earnings</span><span class="mt-1 block text-xs text-gray-500">Share delivery fees and customer tips with drivers.</span></span>
+            <i class="ph text-xl text-gray-400" [ngClass]="form.ruleType === 'passthrough' ? 'ph-check-circle text-amber-600' : 'ph-plus'"></i>
+          </button>
+        </div>
+      </div>
 
-<app-popup
-  [open]="confirmationTarget !== null"
-  title="Confirm payroll override"
-  widthClass="max-w-lg"
-  (close)="closeConfirmation()"
->
-  <p class="text-sm leading-6 text-gray-600 dark:text-gray-300">{{ confirmationMessage() }}</p>
-  <div modal-footer class="flex justify-end gap-3">
-    <button
-      type="button"
-      class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-100 disabled:opacity-60 dark:border-[#4a4d4a] dark:hover:bg-[#2a2d2a]"
-      [disabled]="isConfirmationSaving()"
-      (click)="closeConfirmation()"
-    >
-      Cancel
-    </button>
-    <button
-      type="button"
-      class="rounded-lg bg-[#FFD150] px-4 py-2 text-sm font-semibold text-black hover:bg-yellow-500 disabled:opacity-60"
-      [disabled]="isConfirmationSaving()"
-      (click)="confirmOverride()"
-    >
-      {{ isConfirmationSaving() ? 'Updating...' : 'Yes, update payroll' }}
-    </button>
+      <div *ngIf="form.ruleType" class="mt-6 rounded-xl border border-gray-200 p-4 dark:border-[#414441]">
+        <h3 class="text-sm font-semibold">Configure {{ ruleLabel(form.ruleType) }}</h3>
+        <label *ngIf="form.ruleType === 'fixed'" class="mt-4 block"><span class="mb-1 block text-xs text-gray-500">Fixed amount per delivery</span><span class="relative block"><span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">C$</span><input [(ngModel)]="form.fixedAmount" type="number" min="0" step="0.01" class="h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm dark:border-[#464946] dark:bg-[#1E201E]" /></span></label>
+        <label *ngIf="form.ruleType !== 'fixed'" class="mt-4 block"><span class="mb-1 block text-xs text-gray-500">Delivery fee shared with driver</span><span class="relative block"><input [(ngModel)]="form.deliveryFeePercentage" type="number" min="0" max="100" step="0.01" class="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 pr-9 text-sm dark:border-[#464946] dark:bg-[#1E201E]" /><span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span></span></label>
+        <label *ngIf="form.ruleType === 'passthrough'" class="mt-4 block"><span class="mb-1 block text-xs text-gray-500">Customer tip retained by platform</span><span class="relative block"><input [(ngModel)]="form.platformTipPercentage" type="number" min="0" max="100" step="0.01" class="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 pr-9 text-sm dark:border-[#464946] dark:bg-[#1E201E]" /><span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span></span><span class="mt-1 block text-xs text-gray-400">The driver receives the remaining {{ 100 - (form.platformTipPercentage || 0) }}% of the tip.</span></label>
+      </div>
+
+      <div class="mt-6">
+        <div class="flex items-end justify-between gap-3"><div><h3 class="font-semibold">Drivers</h3><p class="mt-1 text-sm text-gray-500">A driver can belong to one payment group at a time.</p></div><app-search-bar [value]="driverSearchQuery" (valueChange)="driverSearchQuery = $event" placeholder="Search drivers"></app-search-bar></div>
+        <div class="mt-3 max-h-56 overflow-y-auto rounded-xl border border-gray-200 dark:border-[#414441]">
+          <label *ngFor="let driver of filteredDrivers" class="flex cursor-pointer items-center gap-3 border-b border-gray-100 px-4 py-3 last:border-0 hover:bg-gray-50 dark:border-[#343734] dark:hover:bg-[#292c29]">
+            <input type="checkbox" class="h-4 w-4 accent-emerald-500" [checked]="isDriverSelected(driver.id)" (change)="toggleDriver(driver.id, $any($event.target).checked)" />
+            <span class="min-w-0 flex-1"><span class="block truncate text-sm font-medium">{{ driver.name }}</span><span class="block truncate text-xs text-gray-500">{{ driver.payment_group_name ? 'Currently in ' + driver.payment_group_name : 'Not assigned' }}</span></span>
+          </label>
+          <p *ngIf="filteredDrivers.length === 0" class="p-6 text-center text-sm text-gray-500">No matching drivers.</p>
+        </div>
+      </div>
+    </section>
+
+    <aside class="h-fit rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-[#414441] dark:bg-[#1d201d] lg:sticky lg:top-0">
+      <h3 class="font-semibold">Driver payout breakdown</h3>
+      <p class="mt-1 text-xs text-gray-500">Based on a C$20.00 delivery fee and C$5.00 tip</p>
+      <div class="mt-6 space-y-4 text-sm">
+        <div class="flex justify-between gap-3" [class.text-gray-400]="form.ruleType !== 'fixed'"><span>Amount per delivery</span><span class="font-medium">{{ form.ruleType === 'fixed' ? 'C$' + money(driverFeePayout) : '—' }}</span></div>
+        <div class="flex justify-between gap-3" [class.text-gray-400]="form.ruleType === 'fixed' || !form.ruleType"><span>Delivery fee share</span><span class="font-medium">{{ form.ruleType !== 'fixed' && form.ruleType ? 'C$' + money(driverFeePayout) : '—' }}</span></div>
+        <div class="flex justify-between gap-3" [class.text-gray-400]="form.ruleType !== 'passthrough'"><span>Driver tip share</span><span class="font-medium">{{ form.ruleType === 'passthrough' ? 'C$' + money(driverTipPayout) : '—' }}</span></div>
+      </div>
+      <div class="my-5 border-t border-gray-200 dark:border-[#414441]"></div>
+      <div class="flex items-center justify-between"><span class="font-semibold">Total payment</span><span class="text-xl font-bold text-emerald-600">C${{ money(totalPayout) }}</span></div>
+      <p class="mt-5 rounded-lg bg-white p-3 text-xs leading-5 text-gray-500 dark:bg-[#252825]">
+        <ng-container [ngSwitch]="form.ruleType">
+          <span *ngSwitchCase="'fixed'">Drivers earn C${{ money(form.fixedAmount) }} for each completed delivery.</span>
+          <span *ngSwitchCase="'percentage'">Drivers earn {{ form.deliveryFeePercentage || 0 }}% of the delivery fee.</span>
+          <span *ngSwitchCase="'passthrough'">Drivers earn {{ form.deliveryFeePercentage || 0 }}% of delivery fees and {{ 100 - (form.platformTipPercentage || 0) }}% of tips.</span>
+          <span *ngSwitchDefault>Choose a payment rule to preview the driver payout.</span>
+        </ng-container>
+      </p>
+    </aside>
   </div>
+  <div modal-footer class="flex justify-end gap-3"><button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium dark:border-[#4a4d4a]" [disabled]="isSaving" (click)="closeForm()">Cancel</button><button type="button" class="rounded-lg bg-[#FFD150] px-5 py-2 text-sm font-semibold text-black disabled:opacity-60" [disabled]="isSaving" (click)="saveGroup()">{{ isSaving ? 'Saving...' : (form.id ? 'Save changes' : 'Create group') }}</button></div>
+</app-popup>
+
+<app-popup [open]="pendingMoves.length > 0" title="Change driver payment group?" widthClass="max-w-lg" (close)="closeMoveConfirmation()">
+  <p class="text-sm leading-6 text-gray-600 dark:text-gray-300">The selected {{ pendingMoves.length === 1 ? 'driver belongs' : 'drivers belong' }} to another payment group. Confirming will change their payment rule:</p>
+  <div class="mt-4 space-y-2"><div *ngFor="let move of pendingMoves" class="rounded-lg bg-gray-50 p-3 text-sm dark:bg-[#1d201d]"><span class="font-semibold">{{ move.driverName }}</span><span class="mt-1 block text-xs text-gray-500">{{ move.fromGroup }} <i class="ph ph-arrow-right mx-1"></i> {{ move.toGroup }}</span></div></div>
+  <div modal-footer class="flex justify-end gap-3"><button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm dark:border-[#4a4d4a]" [disabled]="isSaving" (click)="closeMoveConfirmation()">Cancel</button><button type="button" class="rounded-lg bg-[#FFD150] px-4 py-2 text-sm font-semibold text-black disabled:opacity-60" [disabled]="isSaving" (click)="confirmMoves()">{{ isSaving ? 'Moving...' : 'Yes, change payment group' }}</button></div>
+</app-popup>
+
+<app-popup [open]="deleteTarget !== null" title="Delete payment group?" widthClass="max-w-lg" (close)="deleteTarget = null">
+  <p class="text-sm leading-6 text-gray-600 dark:text-gray-300">This will delete <strong>{{ deleteTarget?.name }}</strong> and leave its drivers without a payment group. This action cannot be undone.</p>
+  <div modal-footer class="flex justify-end gap-3"><button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm dark:border-[#4a4d4a]" [disabled]="isSaving" (click)="deleteTarget = null">Cancel</button><button type="button" class="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" [disabled]="isSaving" (click)="confirmDelete()">{{ isSaving ? 'Deleting...' : 'Delete group' }}</button></div>
 </app-popup>

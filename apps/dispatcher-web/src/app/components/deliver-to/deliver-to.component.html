@@ -20,7 +20,7 @@
 
     <app-address-input label="Address" placeholder="Enter a location" [required]="true" pattern="^[A-Za-z0-9\s.,#\-/]+$"
         [value]="value.address" (valueChange)="onAddressInput($event)" (placeChange)="onPlaceSelected($event)" (pinClick)="pinClick.emit()"
-        name="deliveryAddress" [showSubmitValidation]="showSubmitValidation"></app-address-input>
+        name="deliveryAddress" [operationalZones]="operationalZones" [showSubmitValidation]="showSubmitValidation"></app-address-input>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
         <app-date-picker label="Delivery Date" [required]="true" [value]="value.deliveryDate"

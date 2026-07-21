@@ -32,6 +32,10 @@ from app.models.delivery_configuration import (
     ZoneBasePrice,
     ZoneCategoryPrice,
 )
+from app.models.driver_payment import (
+    DriverPaymentGroup,
+    DriverPaymentGroupAssignment,
+)
 
 __all__ = [
     "Tenant",
@@ -67,4 +71,6 @@ __all__ = [
     "PartnerZoneCategoryPrice",
     "Surcharge",
     "SpecialOccasion",
+    "DriverPaymentGroup",
+    "DriverPaymentGroupAssignment",
 ]

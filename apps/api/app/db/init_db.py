@@ -31,6 +31,7 @@ from app.models.delivery_configuration import (
     ZoneBasePrice,
     ZoneCategoryPrice,
 )
+from app.models.driver_payment import DriverPaymentGroup, DriverPaymentGroupAssignment
 
 
 async def init_db():

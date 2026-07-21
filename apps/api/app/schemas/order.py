@@ -214,6 +214,13 @@ class OrderResponse(OrderCreate):
     incident_report: Optional[Dict[str, Any]] = None
     driver: Optional[DriverInfo] = None
     created_at: Optional[datetime] = None
+    driver_payout: Optional[float] = None
+    driver_fee_payout: Optional[float] = None
+    driver_tip_payout: Optional[float] = None
+    driver_payment_rule: Optional[str] = None
+    driver_payment_group_id: Optional[UUID] = None
+    driver_payment_group_name: Optional[str] = None
+    driver_payout_locked_at: Optional[datetime] = None
 
 
     class Config:

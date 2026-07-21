@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.config import settings
 from app.db.session import get_db
@@ -20,10 +20,18 @@ from app.core.deps import CurrentUser
 from app.models.order import Order, OrderStatus, ActivityStatus
 from app.models.tenant import Tenant, TenantRole
 from app.models.delivery_configuration import DeliveryPolicy
+from app.models.driver_payment import DriverPaymentGroupAssignment
 from app.services.delivery_quote_service import (
     DeliveryQuote,
     DeliveryQuoteError,
     build_delivery_quote,
+    build_manual_delivery_quote,
+)
+from app.services.driver_payout_service import (
+    apply_driver_payout_snapshot,
+    calculate_driver_payout,
+    clear_driver_payout_snapshot,
+    get_driver_payment_group,
 )
 from app.schemas.order import (
     OrderCreate,
@@ -58,6 +66,8 @@ ACTIVITY_STATUS_TIMESTAMP_FIELDS: dict[ActivityStatus, str] = {
 class DeliveryQuoteRequest(BaseModel):
     pickup_place_id: str
     delivery_place_id: str
+    pickup_address: str | None = None
+    delivery_address: str | None = None
     delivery_category_id: UUID
     vendor_id: UUID | None = None
     delivery_date: str | None = None
@@ -90,6 +100,7 @@ class DeliveryQuoteResponse(BaseModel):
     distance_charge: float
     applied_charges: list[AppliedChargeResponse]
     delivery_fee: float
+    manual_fallback: bool = False
 
 
 def _quote_response(quote: DeliveryQuote) -> DeliveryQuoteResponse:
@@ -115,6 +126,7 @@ def _quote_response(quote: DeliveryQuote) -> DeliveryQuoteResponse:
             for item in quote.applied_charges
         ],
         delivery_fee=float(quote.delivery_fee),
+        manual_fallback=quote.manual_fallback,
     )
 
 
@@ -173,12 +185,30 @@ async def _get_quote_or_http_error(
     delivery_date: str | None = None,
     delivery_time: str | None = None,
     surcharge_ids: list[UUID] | None = None,
+    pickup_address: str | None = None,
+    delivery_address: str | None = None,
 ) -> DeliveryQuote:
     if not pickup_place_id or not delivery_place_id:
         raise HTTPException(status_code=422, detail="Select valid pickup and delivery addresses.")
     if not category_id:
         raise HTTPException(status_code=422, detail="Select a delivery category.")
     try:
+        is_manual = pickup_place_id.startswith("manual:") or delivery_place_id.startswith("manual:")
+        if is_manual:
+            if not pickup_place_id.startswith("manual:") or not delivery_place_id.startswith("manual:"):
+                raise DeliveryQuoteError(
+                    "Google Maps is unavailable. Enter both pickup and delivery addresses manually."
+                )
+            return await build_manual_delivery_quote(
+                db=db,
+                pickup_address=pickup_address or "",
+                delivery_address=delivery_address or "",
+                category_id=category_id,
+                vendor_id=vendor_id,
+                delivery_date=delivery_date,
+                delivery_time=delivery_time,
+                surcharge_ids=surcharge_ids,
+            )
         return await build_delivery_quote(
             db=db,
             pickup_place_id=pickup_place_id,
@@ -199,6 +229,51 @@ def _stamp_activity_status(order: Order, new_status: ActivityStatus) -> None:
     field = ACTIVITY_STATUS_TIMESTAMP_FIELDS.get(new_status)
     if field and getattr(order, field) is None:
         setattr(order, field, datetime.now(APP_TIMEZONE))
+
+
+def _driver_order_response(order: Order, payment_group) -> dict:
+    """Return operational order data plus payout, without platform finances."""
+    has_locked_payout = order.driver_id is not None and order.driver_payout is not None
+    payout = None if has_locked_payout else calculate_driver_payout(
+        payment_group, order.delivery_fees, order.delivery_tips
+    )
+    response = OrderResponse.model_validate(order).model_dump()
+    response.update(
+        subtotal=0,
+        tax_rate=0,
+        tax_amount=0,
+        delivery_fees=0,
+        delivery_tips=0,
+        discount=0,
+        total=0,
+        surcharge_ids=[],
+        applied_charges=[],
+        payment_details=None,
+        driver_payout=float(order.driver_payout if has_locked_payout else payout.total),
+        driver_fee_payout=float(
+            order.driver_fee_payout if has_locked_payout else payout.delivery_fee
+        ),
+        driver_tip_payout=float(
+            order.driver_tip_payout if has_locked_payout else payout.tip
+        ),
+        driver_payment_rule=(
+            order.driver_payment_rule if has_locked_payout else payout.rule_type
+        ),
+    )
+    response["items"] = [
+        {**item, "itemPrice": 0}
+        for item in response.get("items", [])
+    ]
+    return response
+
+
+async def _driver_order_responses(
+    db: AsyncSession,
+    driver_id: UUID,
+    orders: list[Order],
+) -> list[dict]:
+    payment_group = await get_driver_payment_group(db, driver_id)
+    return [_driver_order_response(order, payment_group) for order in orders]
 
 POD_MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 POD_CHUNK_SIZE = 1024 * 1024  # 1 MB
@@ -266,12 +341,14 @@ async def get_orders(
     db: AsyncSession = Depends(get_db),
 ):
     query = select(Order).options(selectinload(Order.driver))
+    driver_id = None
 
     if not current_user.is_platform_admin and current_user.tenant_id:
         result = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
         tenant = result.scalar_one_or_none()
         if tenant:
             if tenant.role == TenantRole.driver:
+                driver_id = tenant.id
                 query = query.where(Order.driver_id == current_user.tenant_id)
             elif tenant.role == TenantRole.vendor:
                 # Also check pickup_name fallback just in case vendor_id isn't populated
@@ -281,7 +358,10 @@ async def get_orders(
                 )
 
     result = await db.execute(query)
-    return result.scalars().all()
+    orders = list(result.scalars().all())
+    if driver_id:
+        return await _driver_order_responses(db, driver_id, orders)
+    return orders
 
 
 @router.post("/quote", response_model=DeliveryQuoteResponse)
@@ -301,6 +381,8 @@ async def quote_delivery(
         payload.delivery_date,
         payload.delivery_time,
         payload.surcharge_ids,
+        payload.pickup_address,
+        payload.delivery_address,
     )
     return _quote_response(quote)
 
@@ -333,6 +415,8 @@ async def create_order(
             data.get("delivery_date"),
             data.get("delivery_time"),
             data.get("surcharge_ids"),
+            data.get("pickup_address"),
+            data.get("delivery_address"),
         )
         _apply_quote(data, quote)
         data["surcharge_ids"] = [str(value) for value in data.get("surcharge_ids", [])]
@@ -358,6 +442,9 @@ async def create_order(
         )
 
         order = Order(**data)
+        if order.driver_id:
+            payment_group = await get_driver_payment_group(db, order.driver_id)
+            apply_driver_payout_snapshot(order, payment_group)
         db.add(order)
         await db.commit()
         await db.refresh(order)
@@ -430,6 +517,8 @@ async def update_order(
             update_data.get("delivery_date", order.delivery_date),
             update_data.get("delivery_time", order.delivery_time),
             update_data.get("surcharge_ids", order.surcharge_ids),
+            update_data.get("pickup_address", order.pickup_address),
+            update_data.get("delivery_address", order.delivery_address),
         )
         merged_totals = {
             "subtotal": update_data.get("subtotal", order.subtotal),
@@ -455,8 +544,16 @@ async def update_order(
         update_data["proof_of_delivery"] = incoming
 
     try:
+        previous_driver_id = order.driver_id
         for key, value in update_data.items():
             setattr(order, key, value)
+
+        if "driver_id" in update_data and order.driver_id != previous_driver_id:
+            if order.driver_id is None:
+                clear_driver_payout_snapshot(order)
+            else:
+                payment_group = await get_driver_payment_group(db, order.driver_id)
+                apply_driver_payout_snapshot(order, payment_group)
 
         schedule_fields = {"pickup_date", "pickup_time", "delivery_date", "delivery_time"}
         if "status" not in update_data and schedule_fields.intersection(update_data):
@@ -1105,8 +1202,12 @@ async def assign_driver(
         )
 
     try:
+        driver_changed = order.driver_id != payload.driver_id
         order.driver_id = payload.driver_id
         order.published = False
+        if driver_changed:
+            payment_group = await get_driver_payment_group(db, payload.driver_id)
+            apply_driver_payout_snapshot(order, payment_group)
         if order.activity_status == ActivityStatus.driver_not_assigned:
             _stamp_activity_status(order, ActivityStatus.pickup_initiated)
 
@@ -1164,7 +1265,8 @@ async def get_published_orders(
         .options(selectinload(Order.driver))
         .order_by(Order.published_at.desc())
     )
-    return result.scalars().all()
+    orders = list(result.scalars().all())
+    return await _driver_order_responses(db, tenant.id, orders)
 
 
 # -------------------------
@@ -1201,21 +1303,40 @@ async def publish_order(
     )
     order = result.scalar_one()
 
-    # Broadcast to all connected drivers
+    # Each driver receives only their group-based payout; platform pricing is
+    # deliberately omitted from the driver websocket payload.
     from app.api.routers.ws import manager
-    driver_fee = round(order.total * 0.05, 2)
-    await manager.broadcast_to_all_drivers({
-        "type": "new_order",
-        "order": {
-            "id": str(order.id),
-            "order_number": order.order_number,
-            "pickup_address": order.pickup_address,
-            "delivery_address": order.delivery_address,
-            "total": order.total,
-            "driver_fee": driver_fee,
-            "published_at": order.published_at.isoformat() if order.published_at else None,
-        }
-    })
+    driver_ids = list((await db.scalars(
+        select(Tenant.id).where(Tenant.role == TenantRole.driver, Tenant.is_active.is_(True))
+    )).all())
+    assignments = {
+        assignment.driver_id: assignment.group
+        for assignment in (await db.scalars(
+            select(DriverPaymentGroupAssignment).options(
+                joinedload(DriverPaymentGroupAssignment.group)
+            )
+        )).all()
+    }
+    for driver_id in driver_ids:
+        payout = calculate_driver_payout(
+            assignments.get(driver_id),
+            order.delivery_fees,
+            order.delivery_tips,
+        )
+        await manager.broadcast_to_tenant(str(driver_id), {
+            "type": "new_order",
+            "order": {
+                "id": str(order.id),
+                "order_number": order.order_number,
+                "pickup_address": order.pickup_address,
+                "delivery_address": order.delivery_address,
+                "driver_payout": float(payout.total),
+                "driver_fee_payout": float(payout.delivery_fee),
+                "driver_tip_payout": float(payout.tip),
+                "driver_payment_rule": payout.rule_type,
+                "published_at": order.published_at.isoformat() if order.published_at else None,
+            }
+        })
     # Also broadcast to platform/admin connections so they can update their UI
     await manager.broadcast_to_all({
         "type": "order_published",
@@ -1275,6 +1396,8 @@ async def accept_order(
 
     order.driver_id = current_user.tenant_id
     order.published = False  # Remove from broadcast queue
+    payment_group = await get_driver_payment_group(db, tenant.id)
+    apply_driver_payout_snapshot(order, payment_group)
     if order.activity_status == ActivityStatus.driver_not_assigned:
         _stamp_activity_status(order, ActivityStatus.pickup_initiated)
 
@@ -1295,4 +1418,4 @@ async def accept_order(
         "driver_name": tenant.contact_name or tenant.name,
     })
 
-    return order
+    return _driver_order_response(order, payment_group)
