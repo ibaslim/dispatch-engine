@@ -6,6 +6,8 @@ import { AddressInputComponent } from '../address-input/address-input.component'
 import { PhoneInputComponent } from '../phone-input/phone-input.component';
 import { TimePickerComponent } from '../time-picker/time-picker.component';
 import { DatePickerComponent } from '../date-picker/date-picker.component';
+import { SelectedGooglePlace } from '../../services/google-maps/google-maps.service';
+import { OperationalZone } from '../../services/delivery-configuration/delivery-configuration.service';
 
 @Component({
   selector: 'app-deliver-to',
@@ -19,11 +21,20 @@ export class DeliverToComponent {
   @Input() deliveryTimeError = '';
   @Input() showDeliveryTimeError = false;
   @Input() showSubmitValidation = false;
+  @Input() operationalZones: OperationalZone[] = [];
 
   @Output() valueChange = new EventEmitter<NewOrderFormValue['delivery']>();
   @Output() pinClick = new EventEmitter<void>();
 
   patch(p: Partial<NewOrderFormValue['delivery']>): void {
     this.valueChange.emit({ ...this.value, ...p });
+  }
+
+  onAddressInput(address: string): void {
+    this.patch({ address, location: null });
+  }
+
+  onPlaceSelected(location: SelectedGooglePlace | null): void {
+    this.patch(location ? { address: location.formattedAddress, location } : { location: null });
   }
 }

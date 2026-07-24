@@ -5,20 +5,40 @@
     <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">Configurations</h1>
 
     <!-- Sub-tabs -->
-    <nav class="flex gap-1" aria-label="Configurations tabs">
+    <nav class="configuration-tabs flex gap-1 overflow-x-auto" aria-label="Configurations tabs">
       <a
-        routerLink="pricing"
+        routerLink="operational-regions"
         routerLinkActive
-        #pricingTab="routerLinkActive"
+        #regionsTab="routerLinkActive"
         [routerLinkActiveOptions]="{ exact: true }"
-        [ngClass]="pricingTab.isActive
+        [ngClass]="regionsTab.isActive
           ? 'text-[#3ddc97] border-[#3ddc97]'
           : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white'"
         class="px-4 py-2.5 text-sm font-medium border-b-2
                transition-colors duration-150 -mb-px"
-        id="tab-pricing"
+        id="tab-operational-regions"
       >
-        Pricing
+        Operational Regions
+      </a>
+      <a routerLink="delivery-categories" routerLinkActive #categoriesTab="routerLinkActive"
+        [ngClass]="categoriesTab.isActive ? 'text-[#3ddc97] border-[#3ddc97]' : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white'"
+        class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors duration-150 -mb-px whitespace-nowrap">
+        Delivery Categories
+      </a>
+      <a routerLink="after-hours" routerLinkActive #afterHoursTab="routerLinkActive"
+        [ngClass]="afterHoursTab.isActive ? 'text-[#3ddc97] border-[#3ddc97]' : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white'"
+        class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors duration-150 -mb-px whitespace-nowrap">
+        After Hours
+      </a>
+      <a routerLink="base-prices" routerLinkActive #basePricesTab="routerLinkActive"
+        [ngClass]="basePricesTab.isActive ? 'text-[#3ddc97] border-[#3ddc97]' : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white'"
+        class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors duration-150 -mb-px whitespace-nowrap">
+        Base Prices
+      </a>
+      <a routerLink="surcharges" routerLinkActive #surchargesTab="routerLinkActive"
+        [ngClass]="surchargesTab.isActive ? 'text-[#3ddc97] border-[#3ddc97]' : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white'"
+        class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors duration-150 -mb-px whitespace-nowrap">
+        Surcharges
       </a>
       <a
         routerLink="driver-payroll"
@@ -32,7 +52,7 @@
                transition-colors duration-150 -mb-px"
         id="tab-driver-payroll"
       >
-        Driver Payroll
+        Driver Payments
       </a>
     </nav>
   </div>

@@ -1,37 +1,35 @@
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 
 import { PopupComponent } from '@components/popup/popup.component';
 import { SearchBarComponent } from '@components/search-bar/search-bar.component';
+import { ToastService } from '@core/toast/toast.service';
 import {
-  DriverPayrollCity,
-  DriverPayrollRates,
-  DriverPayrollState,
+  DriverPaymentGroup,
+  DriverProfile,
   DriversService,
-  PayrollDriver,
+  PaymentGroupPayload,
+  PaymentRuleType,
 } from '@services/drivers/drivers.service';
 
-interface DriverPayrollView {
-  driver: PayrollDriver;
-  defaultRates: DriverPayrollRates;
-  states: DriverPayrollState[];
-  expanded: boolean;
-  loading: boolean;
-  loaded: boolean;
-  expandedStateIds: Set<string>;
+interface PaymentGroupForm {
+  id: string | null;
+  name: string;
+  ruleType: PaymentRuleType | null;
+  fixedAmount: number | null;
+  deliveryFeePercentage: number | null;
+  platformTipPercentage: number | null;
+  driverIds: string[];
 }
 
-type PayrollTarget =
-  | { type: 'driver'; view: DriverPayrollView }
-  | { type: 'state'; view: DriverPayrollView; state: DriverPayrollState }
-  | {
-      type: 'city';
-      view: DriverPayrollView;
-      state: DriverPayrollState;
-      city: DriverPayrollCity;
-    };
+interface DriverMove {
+  driverName: string;
+  fromGroup: string;
+  toGroup: string;
+}
 
 @Component({
   selector: 'app-driver-payroll',
@@ -41,290 +39,240 @@ type PayrollTarget =
 })
 export class DriverPayrollComponent implements OnInit {
   private readonly driversService = inject(DriversService);
+  private readonly toast = inject(ToastService);
 
-  driverViews: DriverPayrollView[] = [];
-  savingIds = new Set<string>();
-  confirmationTarget: PayrollTarget | null = null;
-  isLoading = false;
-  errorMessage = '';
-  successMessage = '';
+  readonly exampleDeliveryFee = 20;
+  readonly exampleTip = 5;
+  groups: DriverPaymentGroup[] = [];
+  drivers: DriverProfile[] = [];
   searchQuery = '';
-
-  get filteredDriverViews(): DriverPayrollView[] {
-    const query = this.normalizedSearchQuery();
-    if (!query) return this.driverViews;
-    return this.driverViews.filter((view) => this.driverHasSearchMatch(view));
-  }
+  driverSearchQuery = '';
+  isLoading = false;
+  isSaving = false;
+  formOpen = false;
+  pendingMoves: DriverMove[] = [];
+  deleteTarget: DriverPaymentGroup | null = null;
+  form: PaymentGroupForm = this.emptyForm();
 
   async ngOnInit(): Promise<void> {
-    this.isLoading = true;
+    await this.loadData();
+  }
+
+  get filteredGroups(): DriverPaymentGroup[] {
+    const query = this.searchQuery.trim().toLowerCase();
+    if (!query) return this.groups;
+    return this.groups.filter((group) => [group.name, this.ruleLabel(group.rule_type), ...group.drivers.map((driver) => driver.name)]
+      .some((value) => value.toLowerCase().includes(query)));
+  }
+
+  get filteredDrivers(): DriverProfile[] {
+    const query = this.driverSearchQuery.trim().toLowerCase();
+    return this.drivers.filter((driver) => !query || [driver.name, driver.contact_email || '', driver.payment_group_name || '']
+      .some((value) => value.toLowerCase().includes(query)));
+  }
+
+  get driverFeePayout(): number {
+    if (this.form.ruleType === 'fixed') return Number(this.form.fixedAmount || 0);
+    return this.exampleDeliveryFee * Number(this.form.deliveryFeePercentage || 0) / 100;
+  }
+
+  get driverTipPayout(): number {
+    if (this.form.ruleType !== 'passthrough') return 0;
+    return this.exampleTip * (100 - Number(this.form.platformTipPercentage || 0)) / 100;
+  }
+
+  get totalPayout(): number {
+    return this.driverFeePayout + this.driverTipPayout;
+  }
+
+  openCreate(): void {
+    this.form = this.emptyForm();
+    this.driverSearchQuery = '';
+    this.formOpen = true;
+  }
+
+  openEdit(group: DriverPaymentGroup): void {
+    this.form = {
+      id: group.id,
+      name: group.name,
+      ruleType: group.rule_type,
+      fixedAmount: group.fixed_amount,
+      deliveryFeePercentage: group.delivery_fee_percentage,
+      platformTipPercentage: group.platform_tip_percentage,
+      driverIds: group.drivers.map((driver) => driver.id),
+    };
+    this.driverSearchQuery = '';
+    this.formOpen = true;
+  }
+
+  closeForm(): void {
+    if (!this.isSaving && this.pendingMoves.length === 0) this.formOpen = false;
+  }
+
+  selectRule(rule: PaymentRuleType): void {
+    this.form.ruleType = rule;
+  }
+
+  isDriverSelected(id: string): boolean {
+    return this.form.driverIds.includes(id);
+  }
+
+  toggleDriver(id: string, selected: boolean): void {
+    this.form.driverIds = selected
+      ? [...this.form.driverIds, id]
+      : this.form.driverIds.filter((driverId) => driverId !== id);
+  }
+
+  async saveGroup(): Promise<void> {
+    if (!this.validateForm()) return;
+    const moves = this.driverMoves();
+    if (moves.length) {
+      this.pendingMoves = moves;
+      return;
+    }
+    await this.persist(false);
+  }
+
+  async confirmMoves(): Promise<void> {
+    await this.persist(true);
+    this.pendingMoves = [];
+  }
+
+  closeMoveConfirmation(): void {
+    if (!this.isSaving) this.pendingMoves = [];
+  }
+
+  async confirmDelete(): Promise<void> {
+    if (!this.deleteTarget) return;
+    this.isSaving = true;
     try {
-      const drivers = await firstValueFrom(this.driversService.getPayrollDrivers());
-      this.driverViews = drivers.map((driver) => ({
-        driver,
-        defaultRates: this.emptyRates(),
-        states: [],
-        expanded: false,
-        loading: false,
-        loaded: false,
-        expandedStateIds: new Set<string>(),
-      }));
+      await firstValueFrom(this.driversService.deletePaymentGroup(this.deleteTarget.id));
+      this.toast.success(`${this.deleteTarget.name} was deleted.`);
+      this.deleteTarget = null;
+      await this.loadData(false);
     } catch {
-      this.errorMessage = 'Failed to load drivers.';
+      this.toast.error('Failed to delete the payment group.');
+    } finally {
+      this.isSaving = false;
+    }
+  }
+
+  ruleLabel(rule: PaymentRuleType): string {
+    return {
+      fixed: 'Fixed pay per delivery',
+      percentage: 'Order value percentage',
+      passthrough: 'Pass-through earnings',
+    }[rule];
+  }
+
+  groupSummary(group: DriverPaymentGroup): string {
+    if (group.rule_type === 'fixed') return `C$${this.money(group.fixed_amount)} per delivery`;
+    if (group.rule_type === 'percentage') return `${group.delivery_fee_percentage || 0}% of delivery fees`;
+    return `${group.delivery_fee_percentage || 0}% of fees + ${100 - Number(group.platform_tip_percentage || 0)}% of tips`;
+  }
+
+  samplePayout(group: DriverPaymentGroup): number {
+    if (group.rule_type === 'fixed') return Number(group.fixed_amount || 0);
+    const fee = this.exampleDeliveryFee * Number(group.delivery_fee_percentage || 0) / 100;
+    const tip = group.rule_type === 'passthrough'
+      ? this.exampleTip * (100 - Number(group.platform_tip_percentage || 0)) / 100
+      : 0;
+    return fee + tip;
+  }
+
+  money(value: number | null): string {
+    return Number(value || 0).toFixed(2);
+  }
+
+  private async loadData(showLoader = true): Promise<void> {
+    if (showLoader) this.isLoading = true;
+    try {
+      [this.groups, this.drivers] = await Promise.all([
+        firstValueFrom(this.driversService.getPaymentGroups()),
+        firstValueFrom(this.driversService.getDrivers()),
+      ]);
+    } catch {
+      this.toast.error('Failed to load driver payment groups.');
     } finally {
       this.isLoading = false;
     }
   }
 
-  async toggleDriver(view: DriverPayrollView): Promise<void> {
-    view.expanded = !view.expanded;
-    if (view.expanded && !view.loaded) {
-      await this.loadDriver(view);
+  private driverMoves(): DriverMove[] {
+    return this.drivers
+      .filter((driver) => this.form.driverIds.includes(driver.id)
+        && !!driver.payment_group_id
+        && driver.payment_group_id !== this.form.id)
+      .map((driver) => ({
+        driverName: driver.name,
+        fromGroup: driver.payment_group_name || 'another group',
+        toGroup: this.form.name.trim(),
+      }));
+  }
+
+  private validateForm(): boolean {
+    if (!this.form.name.trim()) {
+      this.toast.warning('Enter a payment group name.');
+      return false;
     }
-  }
-
-  async loadDriver(view: DriverPayrollView): Promise<void> {
-    view.loading = true;
-    this.errorMessage = '';
-    try {
-      [view.defaultRates, view.states] = await Promise.all([
-        firstValueFrom(this.driversService.getDriverDefaultRates(view.driver.id)),
-        firstValueFrom(this.driversService.getDriverCanadianRates(view.driver.id)),
-      ]);
-      view.loaded = true;
-    } catch {
-      this.errorMessage = `Failed to load payroll compensation for ${view.driver.name}.`;
-    } finally {
-      view.loading = false;
+    if (!this.form.ruleType) {
+      this.toast.warning('Choose a payment rule.');
+      return false;
     }
-  }
-
-  async onSearchChange(value: string): Promise<void> {
-    this.searchQuery = value;
-    if (this.normalizedSearchQuery()) {
-      await this.loadAllDrivers();
+    if (this.form.ruleType === 'fixed' && !this.isNonNegative(this.form.fixedAmount)) {
+      this.toast.warning('Enter a valid fixed payment amount.');
+      return false;
     }
-  }
-
-  toggleState(view: DriverPayrollView, stateId: string): void {
-    if (view.expandedStateIds.has(stateId)) {
-      view.expandedStateIds.delete(stateId);
-    } else {
-      view.expandedStateIds.add(stateId);
+    if (this.form.ruleType !== 'fixed' && !this.isPercentage(this.form.deliveryFeePercentage)) {
+      this.toast.warning('Enter a delivery fee percentage between 0 and 100.');
+      return false;
     }
-  }
-
-  isDriverExpanded(view: DriverPayrollView): boolean {
-    return view.expanded || this.driverHasSearchMatch(view);
-  }
-
-  isStateExpanded(view: DriverPayrollView, state: DriverPayrollState): boolean {
-    return view.expandedStateIds.has(state.state_id) || this.hasCityMatch(state);
-  }
-
-  visibleStates(view: DriverPayrollView): DriverPayrollState[] {
-    const query = this.normalizedSearchQuery();
-    if (query && view.driver.name.toLowerCase().includes(query)) {
-      return view.states;
+    if (this.form.ruleType === 'passthrough' && !this.isPercentage(this.form.platformTipPercentage)) {
+      this.toast.warning('Enter a platform tip percentage between 0 and 100.');
+      return false;
     }
-    if (!query) return view.states;
-    return view.states.filter(
-      (state) =>
-        state.state_name.toLowerCase().includes(query) ||
-        state.cities.some((city) => city.city_name.toLowerCase().includes(query))
-    );
+    return true;
   }
 
-  visibleCities(state: DriverPayrollState): DriverPayrollCity[] {
-    const query = this.normalizedSearchQuery();
-    if (!query || state.state_name.toLowerCase().includes(query)) {
-      return state.cities;
-    }
-    return state.cities.filter((city) => city.city_name.toLowerCase().includes(query));
-  }
-
-  requestDriverOverride(view: DriverPayrollView): void {
-    if (this.validateRates(view.defaultRates, view.driver.name)) {
-      this.confirmationTarget = { type: 'driver', view };
-    }
-  }
-
-  requestStateOverride(view: DriverPayrollView, state: DriverPayrollState): void {
-    if (this.validateRates(state, `${state.state_name} for ${view.driver.name}`)) {
-      this.confirmationTarget = { type: 'state', view, state };
-    }
-  }
-
-  requestCityOverride(
-    view: DriverPayrollView,
-    state: DriverPayrollState,
-    city: DriverPayrollCity
-  ): void {
-    if (this.validateRates(city, `${city.city_name} for ${view.driver.name}`)) {
-      this.confirmationTarget = { type: 'city', view, state, city };
-    }
-  }
-
-  closeConfirmation(): void {
-    if (!this.isConfirmationSaving()) {
-      this.confirmationTarget = null;
-    }
-  }
-
-  async confirmOverride(): Promise<void> {
-    const target = this.confirmationTarget;
-    if (!target) return;
-    const savingId = this.targetSavingId(target);
-    this.savingIds.add(savingId);
-    this.clearFeedback();
-    try {
-      await this.saveTarget(target);
-      this.confirmationTarget = null;
-    } catch {
-      this.errorMessage = `Failed to update payroll compensation for ${this.targetName()}.`;
-    } finally {
-      this.savingIds.delete(savingId);
-    }
-  }
-
-  confirmationMessage(): string {
-    const target = this.confirmationTarget;
-    if (!target) return '';
-    if (target.type === 'driver') {
-      return `Are you sure you want to update general payroll compensation for ${target.view.driver.name}? This will replace all province and city values for this driver.`;
-    }
-    if (target.type === 'state') {
-      return `Are you sure you want to update ${target.state.state_name} payroll compensation for ${target.view.driver.name}? This will replace all city values in the province for this driver.`;
-    }
-    return `Are you sure you want to update ${target.city.city_name} payroll compensation for ${target.view.driver.name}?`;
-  }
-
-  targetName(): string {
-    const target = this.confirmationTarget;
-    if (!target) return '';
-    if (target.type === 'driver') return target.view.driver.name;
-    if (target.type === 'state') return target.state.state_name;
-    return target.city.city_name;
-  }
-
-  isSaving(id: string): boolean {
-    return this.savingIds.has(id);
-  }
-
-  isConfirmationSaving(): boolean {
-    return this.confirmationTarget
-      ? this.isSaving(this.targetSavingId(this.confirmationTarget))
-      : false;
-  }
-
-  driverSavingId(view: DriverPayrollView): string {
-    return `driver:${view.driver.id}:default`;
-  }
-
-  stateSavingId(view: DriverPayrollView, state: DriverPayrollState): string {
-    return `driver:${view.driver.id}:state:${state.state_id}`;
-  }
-
-  citySavingId(view: DriverPayrollView, city: DriverPayrollCity): string {
-    return `driver:${view.driver.id}:city:${city.city_id}`;
-  }
-
-  private async saveTarget(target: PayrollTarget): Promise<void> {
-    if (target.type === 'driver') {
-      const rates = this.toRates(target.view.defaultRates);
-      await firstValueFrom(
-        this.driversService.updateDriverDefaultRates(target.view.driver.id, rates)
-      );
-      target.view.states.forEach((state) => {
-        Object.assign(state, rates);
-        state.cities.forEach((city) => Object.assign(city, rates));
-      });
-      this.successMessage = `${target.view.driver.name}'s general payroll compensation was updated.`;
-      return;
-    }
-    if (target.type === 'state') {
-      const rates = this.toRates(target.state);
-      await firstValueFrom(
-        this.driversService.updateDriverStateRates(
-          target.view.driver.id,
-          target.state.state_id,
-          rates
-        )
-      );
-      target.state.cities.forEach((city) => Object.assign(city, rates));
-      this.successMessage = `${target.state.state_name} payroll compensation for ${target.view.driver.name} was updated.`;
-      return;
-    }
-    await firstValueFrom(
-      this.driversService.updateDriverCityRates(
-        target.view.driver.id,
-        target.city.city_id,
-        this.toRates(target.city)
-      )
-    );
-    this.successMessage = `${target.city.city_name} payroll compensation for ${target.view.driver.name} was updated.`;
-  }
-
-  private async loadAllDrivers(): Promise<void> {
-    await Promise.all(
-      this.driverViews
-        .filter((view) => !view.loaded && !view.loading)
-        .map((view) => this.loadDriver(view))
-    );
-  }
-
-  private driverHasSearchMatch(view: DriverPayrollView): boolean {
-    const query = this.normalizedSearchQuery();
-    if (!query) return false;
-    return (
-      view.driver.name.toLowerCase().includes(query) ||
-      view.states.some(
-        (state) =>
-          state.state_name.toLowerCase().includes(query) ||
-          state.cities.some((city) => city.city_name.toLowerCase().includes(query))
-      )
-    );
-  }
-
-  private hasCityMatch(state: DriverPayrollState): boolean {
-    const query = this.normalizedSearchQuery();
-    return !!query && state.cities.some((city) => city.city_name.toLowerCase().includes(query));
-  }
-
-  private validateRates(rates: DriverPayrollRates, name: string): boolean {
-    this.clearFeedback();
-    const valid = [rates.base_salary, rates.commission_per_delivery].every(
-      (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0
-    );
-    if (!valid) {
-      this.errorMessage = `Enter valid non-negative payroll values for ${name}.`;
-    }
-    return valid;
-  }
-
-  private targetSavingId(target: PayrollTarget): string {
-    if (target.type === 'driver') return this.driverSavingId(target.view);
-    if (target.type === 'state') return this.stateSavingId(target.view, target.state);
-    return this.citySavingId(target.view, target.city);
-  }
-
-  private toRates(rates: DriverPayrollRates): DriverPayrollRates {
-    return {
-      base_salary: rates.base_salary,
-      commission_per_delivery: rates.commission_per_delivery,
+  private async persist(confirmReassignments: boolean): Promise<void> {
+    if (!this.form.ruleType) return;
+    this.isSaving = true;
+    const payload: PaymentGroupPayload = {
+      name: this.form.name.trim(),
+      rule_type: this.form.ruleType,
+      fixed_amount: this.form.ruleType === 'fixed' ? Number(this.form.fixedAmount) : null,
+      delivery_fee_percentage: this.form.ruleType === 'fixed' ? null : Number(this.form.deliveryFeePercentage),
+      platform_tip_percentage: this.form.ruleType === 'passthrough' ? Number(this.form.platformTipPercentage) : null,
+      driver_ids: this.form.driverIds,
+      confirm_reassignments: confirmReassignments,
     };
+    try {
+      if (this.form.id) {
+        await firstValueFrom(this.driversService.updatePaymentGroup(this.form.id, payload));
+      } else {
+        await firstValueFrom(this.driversService.createPaymentGroup(payload));
+      }
+      this.toast.success(`${payload.name} was ${this.form.id ? 'updated' : 'created'}.`);
+      this.formOpen = false;
+      this.pendingMoves = [];
+      await this.loadData(false);
+    } catch (error) {
+      const detail = (error as HttpErrorResponse)?.error?.detail;
+      this.toast.error(typeof detail === 'string' ? detail : detail?.message || 'Failed to save the payment group.');
+    } finally {
+      this.isSaving = false;
+    }
   }
 
-  private clearFeedback(): void {
-    this.errorMessage = '';
-    this.successMessage = '';
+  private emptyForm(): PaymentGroupForm {
+    return { id: null, name: '', ruleType: null, fixedAmount: null, deliveryFeePercentage: null, platformTipPercentage: null, driverIds: [] };
   }
 
-  private normalizedSearchQuery(): string {
-    return this.searchQuery.trim().toLowerCase();
+  private isPercentage(value: number | null): boolean {
+    return value !== null && Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 100;
   }
 
-  private emptyRates(): DriverPayrollRates {
-    return { base_salary: 200, commission_per_delivery: 0 };
+  private isNonNegative(value: number | null): boolean {
+    return value !== null && Number.isFinite(Number(value)) && Number(value) >= 0;
   }
 }

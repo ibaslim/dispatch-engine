@@ -1,121 +1,148 @@
+
 import { Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
 
-import { ActivatedRoute } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
-import type { TrackingResponse } from '@dispatch/shared/contracts';
+import { ActivatedRoute, Router } from '@angular/router';
+import { firstValueFrom, Subscription } from 'rxjs';
+import { form, required, FormField } from '@angular/forms/signals';
+import { OrderProgressComponent } from '@components/order-progress/order-progress.component';
+import {
+  DispatchStage,
+  DispatchTruckTrackerComponent,
+} from '@components/dispatch-truck-animation/dispatch-truck-tracker.component';
+import { TrackingService } from '@services/tracking.service';
+import { OrderTrackingDetails } from '@models/order-tracking.model';
+
+/** Maps an order's activity_status to a stage index in DISPATCH_STAGES (truck tracker only). */
+const ACTIVITY_TO_STAGE_INDEX: Record<string, number> = {
+  driver_not_assigned: 0,
+  pickup_initiated: 1,
+  picked_up: 2,
+  delivery_initiated: 2,
+  delivery_in_progress: 2,
+  delivered: 3,
+};
+
+const DISPATCH_STAGES: DispatchStage[] = [
+  {
+    key: 'DISPATCHED',
+    label: 'Dispatched',
+    name: 'Order dispatched',
+    sub: 'Your parcel has left the depot.',
+  },
+  {
+    key: 'PICKED_UP',
+    label: 'Picked up',
+    name: 'Parcel picked up',
+    sub: 'The driver has collected your parcel.',
+  },
+  {
+    key: 'OUT_FOR_DELIVERY',
+    label: 'Out for delivery',
+    name: 'Out for delivery',
+    sub: 'Your parcel is on the road and heading to your address.',
+  },
+  {
+    key: 'DELIVERED',
+    label: 'Delivered',
+    name: 'Delivered',
+    sub: 'Your parcel has arrived.',
+  },
+];
 
 @Component({
   selector: 'app-tracking',
   standalone: true,
-  imports: [],
-  template: `
-    <div class="min-h-screen bg-gray-50">
-      <header class="bg-white shadow-sm">
-        <div class="max-w-2xl mx-auto px-4 py-4">
-          <h1 class="text-xl font-semibold text-gray-900">Track Your Delivery</h1>
-        </div>
-      </header>
-
-      <main class="max-w-2xl mx-auto px-4 py-8">
-        @if (isLoading()) {
-          <div class="flex justify-center py-12">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-          </div>
-        } @else if (errorMessage()) {
-          <div class="rounded-md bg-red-50 p-6 text-center">
-            <p class="text-red-800 font-medium">{{ errorMessage() }}</p>
-            <p class="text-red-600 text-sm mt-2">
-              This tracking link may be invalid or expired.
-            </p>
-          </div>
-        } @else if (tracking()) {
-          <div class="bg-white rounded-xl shadow-md p-6 space-y-6">
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-500">Order status</span>
-              <span
-                class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
-                [class]="statusClass()"
-              >
-                {{ statusLabel() }}
-              </span>
-            </div>
-
-            @if (tracking()?.driver_name) {
-              <div>
-                <p class="text-sm text-gray-500">Driver</p>
-                <p class="font-medium text-gray-900">{{ tracking()?.driver_name }}</p>
-              </div>
-            }
-
-            @if (tracking()?.estimated_arrival) {
-              <div>
-                <p class="text-sm text-gray-500">Estimated arrival</p>
-                <p class="font-medium text-gray-900">{{ tracking()?.estimated_arrival }}</p>
-              </div>
-            }
-
-            <div class="border rounded-lg bg-gray-100 h-48 flex items-center justify-center text-gray-400">
-              <p class="text-sm">Map placeholder &ndash; integrate Google Maps</p>
-            </div>
-          </div>
-        }
-      </main>
-    </div>
-  `,
+  imports: [FormField, OrderProgressComponent, DispatchTruckTrackerComponent],
+  templateUrl: './tracking.component.html',
 })
 export class TrackingComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
-  private readonly http = inject(HttpClient);
+  private readonly router = inject(Router);
+  private readonly trackingService = inject(TrackingService);
 
-  isLoading = signal(true);
+  readonly searchModel = signal({ orderNumber: '' });
+  readonly searchForm = form(this.searchModel, (path) => {
+    required(path.orderNumber);
+  });
+
+  isLoading = signal(false);
   errorMessage = signal<string | null>(null);
-  tracking = signal<TrackingResponse | null>(null);
+  order = signal<OrderTrackingDetails | null>(null);
+
+  private routeSub: Subscription | null = null;
   private pollInterval: ReturnType<typeof setInterval> | null = null;
 
+  readonly dispatchStages = DISPATCH_STAGES;
+
   ngOnInit(): void {
-    const token = this.route.snapshot.paramMap.get('token');
-    if (!token) {
-      this.errorMessage.set('Invalid tracking link.');
-      this.isLoading.set(false);
-      return;
-    }
-    this.loadTracking(token);
-    this.pollInterval = setInterval(() => this.loadTracking(token), 30_000);
+    this.routeSub = this.route.paramMap.subscribe((params) => {
+      const token = params.get('token');
+      this.stopPolling();
+      if (!token) {
+        this.order.set(null);
+        this.errorMessage.set(null);
+        return;
+      }
+      this.searchModel.set({ orderNumber: token });
+      this.isLoading.set(true);
+      this.loadOrder(token);
+      this.pollInterval = setInterval(() => this.loadOrder(token), 30_000);
+    });
   }
 
   ngOnDestroy(): void {
-    if (this.pollInterval) clearInterval(this.pollInterval);
+    this.routeSub?.unsubscribe();
+    this.stopPolling();
   }
 
-  private async loadTracking(token: string): Promise<void> {
+  dispatchStageIndex(): number {
+    const status = this.order()?.activity_status ?? '';
+    return ACTIVITY_TO_STAGE_INDEX[status] ?? 0;
+  }
+
+  search(): void {
+    const value = this.searchModel().orderNumber.trim();
+    if (!value) return;
+    this.router.navigate(['/t', value]);
+  }
+
+  private stopPolling(): void {
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+    }
+  }
+
+  private async loadOrder(token: string): Promise<void> {
     try {
       const data = await firstValueFrom(
-        this.http.get<TrackingResponse>(`/api/v1/tracking/${token}`)
+        this.trackingService.getOrderDetails(token)
       );
-      this.tracking.set(data);
+      this.order.set(data);
+      this.errorMessage.set(null);
     } catch {
-      this.errorMessage.set('Could not load tracking information.');
+      this.order.set(null);
+      this.errorMessage.set('We could not find that order');
+      this.stopPolling();
     } finally {
       this.isLoading.set(false);
     }
   }
 
-  statusLabel(): string {
-    const s = this.tracking()?.status ?? '';
+  activityLabel(): string {
+    const s = this.order()?.activity_status ?? '';
     return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
-  statusClass(): string {
-    const s = this.tracking()?.status ?? '';
+  activityClass(): string {
+    const s = this.order()?.activity_status ?? '';
     switch (s) {
-      case 'delivered': return 'bg-green-100 text-green-800';
-      case 'in_transit': return 'bg-blue-100 text-blue-800';
-      case 'picked_up': return 'bg-indigo-100 text-indigo-800';
-      case 'assigned': return 'bg-yellow-100 text-yellow-800';
-      case 'failed':
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'delivered': return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+      case 'delivery_in_progress':
+      case 'delivery_initiated': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
+      case 'picked_up': return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300';
+      case 'pickup_initiated': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
     }
   }
 }

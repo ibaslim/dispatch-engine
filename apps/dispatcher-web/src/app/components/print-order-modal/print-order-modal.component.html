@@ -1,0 +1,96 @@
+<app-popup [open]="open" title="Print Order" widthClass="max-w-2xl" (close)="onClose()">
+
+    <ng-container *ngIf="order as order">
+        <div class="bg-gray-50 dark:bg-[#2a2d2a]/30 p-2 sm:p-4 rounded-lg overflow-y-auto max-h-[70vh]">
+            <div class="bg-white dark:bg-[#1E201E] p-4 sm:p-8 shadow-sm border border-gray-200 dark:border-[#5a5d5a] text-gray-900 dark:text-gray-100 font-sans text-sm">
+                <div class="flex flex-col sm:flex-row justify-between items-start mb-6 sm:mb-8 border-b border-gray-100 dark:border-[#5a5d5a] pb-4 gap-4 sm:gap-0">
+                    <div>
+                        <h2 class="text-xl sm:text-2xl font-bold">Order #{{ order.full.orderNumber }}</h2>
+                        <p class="text-gray-500 mt-1">Status: {{ formatStatusLabel(order.tab) }}</p>
+                    </div>
+                    <div class="text-left sm:text-right">
+                        <p class="font-bold">Dispatch Delivery</p>
+                        <p class="text-gray-500">Placed: {{ order.view.current.orderPlacedTime }}</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 mb-8">
+                    <div>
+                        <h3 class="font-bold text-xs uppercase tracking-wider text-gray-400 mb-2">Pickup Information</h3>
+                        <p class="font-semibold">{{ order.full.pickup.name }}</p>
+                        <p>{{ order.full.pickup.phone.countryCode }} {{ order.full.pickup.phone.number }}</p>
+                        <p class="mt-1 break-words">{{ order.full.pickup.email }}</p>
+                        <p class="mt-1 break-words">{{ order.full.pickup.address }}</p>
+                        <p class="mt-2 text-xs text-gray-500">Date: {{ order.full.pickup.pickupDate }} {{ order.full.pickup.pickupTime }}</p>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-xs uppercase tracking-wider text-gray-400 mb-2">Delivery Information</h3>
+                        <p class="font-semibold">{{ order.full.delivery.name }}</p>
+                        <p>{{ order.full.delivery.phone.countryCode }} {{ order.full.delivery.phone.number }}</p>
+                        <p class="break-words">{{ order.full.delivery.email }}</p>
+                        <p class="mt-1 break-words">{{ order.full.delivery.address }}</p>
+                        <p class="mt-2 text-xs text-gray-500">Date: {{ order.full.delivery.deliveryDate }} {{ order.full.delivery.deliveryTime }}</p>
+                    </div>
+                </div>
+
+                <div class="mb-8">
+                    <h3 class="font-bold text-xs uppercase tracking-wider text-gray-400 mb-3 border-b border-gray-50 dark:border-[#5a5d5a] pb-1">Items</h3>
+                    <div class="space-y-2">
+                        <div *ngFor="let item of order.full.details.items" class="flex justify-between">
+                            <span>{{ item.itemName }} <span class="text-gray-400">x {{ item.itemQty }}</span></span>
+                            <span class="font-medium">{{ money(toNumber(item.itemPrice)) }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-100 dark:border-[#5a5d5a] pt-4 space-y-2">
+                    <div class="flex justify-between text-gray-600 dark:text-gray-400">
+                        <span>Subtotal</span>
+                        <span>{{ money(order.full.details.subtotal) }}</span>
+                    </div>
+                    <div class="flex justify-between text-gray-600 dark:text-gray-400">
+                        <span>Tax ({{ order.full.details.taxRate }}%)</span>
+                        <span>{{ money(order.full.details.taxAmount) }}</span>
+                    </div>
+                    <div class="flex justify-between text-gray-600 dark:text-gray-400">
+                        <span>Delivery Fees</span>
+                        <span>{{ money(order.full.details.deliveryFees) }}</span>
+                    </div>
+                    <div class="flex justify-between text-gray-600 dark:text-gray-400">
+                        <span>Tips</span>
+                        <span>{{ money(order.full.details.deliveryTips) }}</span>
+                    </div>
+                    <div class="flex justify-between text-gray-600 dark:text-gray-400">
+                        <span>Discount</span>
+                        <span class="text-red-500">-{{ money(order.full.details.discount) }}</span>
+                    </div>
+                    <div class="flex justify-between font-bold text-lg pt-2 border-t border-gray-50 dark:border-[#5a5d5a]">
+                        <span>Total</span>
+                        <span>{{ money(order.full.details.total) }}</span>
+                    </div>
+                </div>
+
+                <div class="mt-8 text-xs text-gray-400 border-t border-gray-50 dark:border-[#5a5d5a] pt-4">
+                    <p>Payment Method: {{ formatPaymentMethod(order.full.details.payment.method) }}</p>
+                    <p *ngIf="order.full.details.payment.creditCard">Card: {{ maskCard(order.full.details.payment.creditCard.cardNumber) }}</p>
+                </div>
+            </div>
+        </div>
+    </ng-container>
+
+    <div modal-footer class="flex items-center justify-end gap-3">
+        <app-button variant="ghost" label="Cancel" (onClick)="onClose()"
+            [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm'">
+        </app-button>
+
+        <app-button variant="primary" label="Send by Email" (onClick)="sendSelectedOrderByEmail()"
+            [loading]="isSendingOrderEmail" [disabled]="!order?.full?.pickup?.email || isSendingOrderEmail"
+            [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-4 py-2 rounded-md text-sm'">
+        </app-button>
+
+        <app-button variant="primary" label="Print Order" (onClick)="printOrder()"
+            [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-4 py-2 rounded-md text-sm'">
+        </app-button>
+    </div>
+
+</app-popup>

@@ -6,6 +6,8 @@ import { BaseInputComponent } from '../base-input/base-input.component';
 import { PhoneInputComponent } from '../phone-input/phone-input.component';
 import { TimePickerComponent } from '../time-picker/time-picker.component';
 import { DatePickerComponent } from '../date-picker/date-picker.component';
+import { SelectedGooglePlace } from '../../services/google-maps/google-maps.service';
+import { OperationalZone } from '../../services/delivery-configuration/delivery-configuration.service';
 
 @Component({
   selector: 'app-pickup-from',
@@ -19,11 +21,20 @@ export class PickupFromComponent {
   @Input() pickupTimeError = '';
   @Input() showPickupTimeError = false;
   @Input() showSubmitValidation = false;
+  @Input() operationalZones: OperationalZone[] = [];
 
   @Output() valueChange = new EventEmitter<NewOrderFormValue['pickup']>();
   @Output() pinClick = new EventEmitter<void>();
 
   patch(p: Partial<NewOrderFormValue['pickup']>): void {
     this.valueChange.emit({ ...this.value, ...p });
+  }
+
+  onAddressInput(address: string): void {
+    this.patch({ address, location: null });
+  }
+
+  onPlaceSelected(location: SelectedGooglePlace | null): void {
+    this.patch(location ? { address: location.formattedAddress, location } : { location: null });
   }
 }

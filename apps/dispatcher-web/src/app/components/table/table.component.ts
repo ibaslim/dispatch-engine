@@ -32,6 +32,9 @@ export class TableComponent {
   @Output() assignClick = new EventEmitter<any>();
 
   @Output() readyForPickupChange = new EventEmitter<{ id: string; value: boolean }>();
+  @Output() activityStatusAction = new EventEmitter<{ id: string; next: string; type: string }>();
+  @Output() directionsClick = new EventEmitter<any>();
+  @Output() reportIncidentClick = new EventEmitter<any>();
 
   onActionClick(row: any, event?: MouseEvent): void {
     event?.stopPropagation(); // prevent bubbling
@@ -41,6 +44,26 @@ export class TableComponent {
   onAssignClick(row: any, event?: MouseEvent): void {
     event?.stopPropagation(); // prevent bubbling
     this.assignClick.emit(row);
+  }
+
+  onActivityStatusClick(row: any, event?: MouseEvent): void {
+    event?.stopPropagation(); // prevent bubbling
+    if (!row.activityStatusNext) return;
+    this.activityStatusAction.emit({
+      id: row.id,
+      next: row.activityStatusNext,
+      type: row.activityStatusActionType || 'direct'
+    });
+  }
+
+  onDirectionsIconClick(row: any, event?: MouseEvent): void {
+    event?.stopPropagation(); // prevent bubbling
+    this.directionsClick.emit(row);
+  }
+
+  onReportIncidentClick(row: any, event?: MouseEvent): void {
+    event?.stopPropagation(); // prevent bubbling
+    this.reportIncidentClick.emit(row);
   }
 
   getInitials(name: string): string {

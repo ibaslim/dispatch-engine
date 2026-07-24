@@ -25,10 +25,10 @@ export class NavbarComponent implements OnInit, OnDestroy {
   private readonly allNavItems: NavItem[] = [
     { label: 'Dispatch', route: '/dispatch' },
     { label: 'Orders', route: '/orders' },
-    // { label: 'Drivers', route: '/drivers' },
     { label: 'Map', route: '/map' },
     { label: 'Reviews', route: '/reviews' },
     { label: 'Reports', route: '/reports' },
+    { label: 'Drivers', route: '/drivers' },
     { label: 'Configurations', route: '/configurations' },
     { label: 'Tenant Management', route: '/tenants' },
   ];

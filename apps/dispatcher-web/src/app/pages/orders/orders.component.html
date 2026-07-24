@@ -9,7 +9,6 @@
             class="w-full xs:w-auto" containerClass="w-full xs:w-56"></app-search-bar>
 
         <app-button *ngIf="!isReadOnlyTenant" variant="primary" label="+ New order" (onClick)="openNewOrder()"
-            [disabled]="isSeedingDemoOrders"
             [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-3 py-2 rounded-md text-sm whitespace-nowrap flex-shrink-0 w-full xs:w-auto'">
         </app-button>
     </div>
@@ -38,74 +37,9 @@
     </div>
 
     <!-- NEW ORDERS TAB (Drivers only) -->
-    <div *ngIf="activeTab === 'New Orders'">
-        <div *ngIf="publishedOrders.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <div *ngFor="let card of publishedOrders"
-                class="relative overflow-hidden rounded-xl border-2 transition-all"
-                [class]="card.remainingSeconds <= 0
-                    ? 'border-gray-300 dark:border-[#3a3d3a] opacity-50'
-                    : 'border-[#3ddc97]/40 dark:border-[#3ddc97]/30 bg-white dark:bg-[#1a1d1a] shadow-md hover:shadow-lg'">
-                <!-- Countdown progress bar -->
-                <div class="h-1 w-full bg-gray-200 dark:bg-[#2a2d2a]">
-                    <div class="h-1 transition-all duration-1000 ease-linear rounded-full"
-                        [ngClass]="countdownColor(card)"
-                        [style.width]="countdownPercent(card) + '%'">
-                    </div>
-                </div>
-                <div class="p-4">
-                    <div class="flex items-start justify-between gap-2 mb-3">
-                        <div>
-                            <p class="text-xs font-bold text-[#3ddc97] tracking-wider uppercase">New Order</p>
-                            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">#{{ card.orderNumber }}</p>
-                        </div>
-                        <div class="flex flex-col items-end shrink-0">
-                            <span class="text-xl font-mono font-bold tabular-nums"
-                                [class]="card.remainingSeconds > 300 ? 'text-emerald-500' : card.remainingSeconds > 120 ? 'text-amber-400' : 'text-red-500'">
-                                {{ countdownLabel(card) }}
-                            </span>
-                            <span class="text-[10px] text-gray-400 mt-0.5">remaining</span>
-                        </div>
-                    </div>
-                    <div class="space-y-2 mb-3">
-                        <div class="flex items-start gap-2 text-xs">
-                            <span class="mt-0.5 shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 font-bold text-[10px]">P</span>
-                            <span class="text-gray-700 dark:text-gray-300 leading-snug">{{ card.pickupAddress }}</span>
-                        </div>
-                        <div class="flex items-start gap-2 text-xs">
-                            <span class="mt-0.5 shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 font-bold text-[10px]">D</span>
-                            <span class="text-gray-700 dark:text-gray-300 leading-snug">{{ card.deliveryAddress }}</span>
-                        </div>
-                    </div>
-                    <div class="mb-4 rounded-lg bg-gray-50 dark:bg-[#232623] px-3 py-2">
-                        <div>
-                            <p class="text-[10px] text-gray-400 uppercase tracking-wider">Your Earnings</p>
-                            <p class="text-base font-bold text-[#3ddc97]">C$ {{ card.driverFee.toFixed(2) }}</p>
-                        </div>
-                    </div>
-                    <button type="button"
-                        [disabled]="card.remainingSeconds <= 0 || card.accepting || card.accepted"
-                        (click)="acceptOrder(card)"
-                        class="w-full rounded-lg py-2.5 text-sm font-semibold transition-all focus:outline-none"
-                        [class]="card.remainingSeconds <= 0 || card.accepted
-                            ? 'bg-gray-200 dark:bg-[#2a2d2a] text-gray-400 cursor-not-allowed'
-                            : card.accepting
-                            ? 'bg-[#3ddc97]/70 text-black cursor-wait'
-                            : 'bg-[#3ddc97] text-black hover:bg-[#2fbf82] active:scale-[0.98]'">
-                        <span *ngIf="!card.accepting && !card.accepted && card.remainingSeconds > 0">Accept Order</span>
-                        <span *ngIf="card.accepting">Accepting...</span>
-                        <span *ngIf="card.accepted">Accepted ✓</span>
-                        <span *ngIf="card.remainingSeconds <= 0 && !card.accepted">Expired</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-        <div *ngIf="publishedOrders.length === 0"
-            class="rounded-xl border border-dashed border-gray-300 dark:border-[#3a3d3a] p-12 text-center text-sm text-gray-500 dark:text-gray-400 mt-4">
-            <p class="text-3xl mb-3">📭</p>
-            <p class="font-medium text-lg">No new orders right now</p>
-            <p class="mt-2">New orders published by the admin will appear here in real-time.</p>
-        </div>
-    </div>
+    <app-published-orders-feed *ngIf="isDriver" [hidden]="activeTab !== 'New Orders'"
+        (accepted)="onOrderAccepted($event)" (refresh)="loadOrders()">
+    </app-published-orders-feed>
 
     <!-- TABLE -->
     <app-table *ngIf="activeTab !== 'New Orders'" [columns]="columns" [rows]="rows" [emptyTitle]="emptyTitle" [emptySubtitle]="emptySubtitle"
@@ -113,7 +47,10 @@
         (actionClick)="toggleMenu($event)"
         (assignClick)="openAssignDriver($event)"
         (menuSelect)="handleMenuAction($event.item, $event.row)"
-        (readyForPickupChange)="updateReadyForPickupFromRow($event.id, $event.value)">
+        (readyForPickupChange)="updateReadyForPickupFromRow($event.id, $event.value)"
+        (activityStatusAction)="onActivityStatusAction($event)"
+        (directionsClick)="openDirections($event)"
+        (reportIncidentClick)="openReportModal($event)">
     </app-table>
 
 
@@ -132,7 +69,7 @@
 
         <div modal-footer class="flex flex-col items-stretch xs:flex-row flex-wrap xs:items-center justify-end gap-3">
             <app-button *ngIf="showLocalDemoButton" variant="ghost-success" label="Fill Demo Data"
-                [disabled]="isSavingOrder || isSeedingDemoOrders"
+                [disabled]="isSavingOrder"
                         [extraClasses]="'w-full xs:w-auto'"
                 (onClick)="fillNewOrderWithDummyData()">
             </app-button>
@@ -142,426 +79,52 @@
             </app-button>
 
             <app-button variant="ghost" label="Save Order" (onClick)="saveNewOrder()"
-                [loading]="isSavingOrder" [disabled]="isPublishingOrder || isSeedingDemoOrders"
+                [loading]="isSavingOrder" [disabled]="isPublishingOrder"
                 [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm w-full xs:w-auto'">
             </app-button>
 
             <app-button variant="primary" label="Publish Order" (onClick)="publishNewOrder()"
-                [loading]="isPublishingOrder" [disabled]="isSavingOrder || isSeedingDemoOrders"
+                [loading]="isPublishingOrder" [disabled]="isSavingOrder"
                 [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-6 py-2 rounded-md text-sm  gap-2 w-full xs:w-auto'">
             </app-button>
         </div>
     </app-popup>
 
+    <!-- ASSIGN DRIVER MODAL -->
+    <app-assign-driver-modal *ngIf="!isReadOnlyTenant" [open]="isAssignDriverOpen" [order]="selectedOrderForAssignment"
+        (close)="closeAssignDriver()" (assigned)="onDriverAssigned()" (unassigned)="onDriverUnassigned()">
+    </app-assign-driver-modal>
 
-    <!-- ───────────────────────────────────────────
-         ASSIGN DRIVER MODAL
-    ─────────────────────────────────────────── -->
-    <app-popup *ngIf="!isReadOnlyTenant" [open]="isAssignDriverOpen" title="Assign Driver"
-        widthClass="max-w-3xl" (close)="closeAssignDriver()">
+    <!-- DIRECTIONS MODAL -->
+    <app-directions-modal [open]="isDirectionsOpen" [row]="selectedRowForDirections" (close)="closeDirections()">
+    </app-directions-modal>
 
-        <ng-container *ngIf="selectedOrderForAssignment as order">
-            <div class="space-y-4">
-                <div class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
-                    <p class="text-sm text-gray-500 dark:text-gray-400">Assigning driver to</p>
-                    <p class="text-base font-semibold text-gray-900 dark:text-gray-100">
-                        {{ order.full.orderNumber }} · {{ order.full.delivery.name }}
-                    </p>
-                    <p class="text-sm text-gray-600 dark:text-gray-300">{{ order.full.delivery.address }}</p>
-                </div>
+    <!-- QR SCAN MODAL -->
+    <app-qr-scan-modal [open]="isQrScanOpen" [context]="qrScanContext"
+        (close)="closeQrScanModal()" (matched)="onQrMatched($event)">
+    </app-qr-scan-modal>
 
-                <div class="mt-2">
-    <app-search-bar [value]="assignDriverQuery" (valueChange)="assignDriverQuery = $event">
-    </app-search-bar>
-</div>
+    <!-- REPORT ISSUE MODAL -->
+    <app-report-incident-modal [open]="isReportOpen" [context]="reportContext" (close)="closeReportModal()">
+    </app-report-incident-modal>
 
-                <p *ngIf="isLoadingAssignableDrivers" class="text-sm text-gray-500 dark:text-gray-400">
-                    Loading drivers from tenants...
-                </p>
+    <!-- PROOF OF DELIVERY MODAL -->
+    <app-pod-capture-modal [open]="isPodOpen" [context]="podContext"
+        (close)="closePodModal()" (delivered)="onPodDelivered($event)">
+    </app-pod-capture-modal>
 
-                <p *ngIf="assignDriverLoadError" class="text-sm text-red-600 dark:text-red-400">
-                    {{ assignDriverLoadError }}
-                </p>
+    <!-- ORDER DETAILS MODAL -->
+    <app-order-details-modal [open]="isDetailsOpen" [order]="selectedOrderForDetails" [isReadOnlyTenant]="isReadOnlyTenant" [isDriver]="isDriver"
+        [readyForPickup]="selectedOrderReadyForPickup"
+        (close)="closeDetails()" (menuAction)="handleDetailsMenu($event)" (readyForPickupChange)="updateReadyForPickup($event)">
+    </app-order-details-modal>
 
-                <div class="space-y-3 max-h-[320px] overflow-y-auto pr-1">
-                    <button *ngFor="let driver of filteredAssignableDrivers" type="button"
-                        class="w-full rounded-lg border px-4 py-3 text-left transition"
-                        [class]="selectedDriverId === driver.id
-                            ? 'border-[#3ddc97] bg-[#3ddc97]/10'
-                            : 'border-gray-200 dark:border-[#5a5d5a] hover:bg-gray-50 dark:hover:bg-[#232623]'"
-                        (click)="selectedDriverId = driver.id">
-                        <div class="flex items-center justify-between gap-4">
-                            <div>
-                                <p class="font-medium text-gray-900 dark:text-gray-100">{{ driver.name }}</p>
-                                <p class="text-sm text-gray-600 dark:text-gray-300">
-                                    {{ driver.contactName || 'No contact name' }}
-                                </p>
-                                <p class="text-sm text-gray-500 dark:text-gray-400">
-                                    {{ driver.email }} · {{ driver.phone }}
-                                </p>
-                                <p class="text-sm text-gray-500 dark:text-gray-400">{{ driver.address || 'No address provided' }}</p>
-                            </div>
-                        </div>
-                    </button>
-                </div>
+    <!-- PRINT ORDER MODAL -->
+    <app-print-order-modal [open]="isPrintOpen" [order]="selectedOrderForPrint" (close)="closePrintOrder()">
+    </app-print-order-modal>
 
-                <p *ngIf="!isLoadingAssignableDrivers && filteredAssignableDrivers.length === 0" class="text-sm text-gray-500 dark:text-gray-400">
-                    No tenant drivers match this search.
-                </p>
-            </div>
-        </ng-container>
-
-        <div modal-footer class="flex items-center justify-end gap-3">
-            <app-button *ngIf="selectedOrderForAssignment?.view?.current?.driver" variant="ghost-danger"
-                label="Unassign" (onClick)="unassignSelectedDriver()">
-            </app-button>
-
-            <app-button variant="ghost" label="Cancel" (onClick)="closeAssignDriver()"
-                [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm'">
-            </app-button>
-
-            <app-button variant="primary" label="Assign Driver" (onClick)="assignSelectedDriver()"
-                [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-6 py-2 rounded-md text-sm'">
-            </app-button>
-        </div>
-    </app-popup>
-
-
-    <!-- ───────────────────────────────────────────
-         ORDER DETAILS MODAL
-    ─────────────────────────────────────────── -->
-    <app-popup [open]="isDetailsOpen" (close)="closeDetails()">
-
-        <div popup-actions class="relative flex items-center gap-2">
-            <div class="relative">
-                <button class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-[#2a2d2a]"
-                    (click)="isDetailsMenuOpen = !isDetailsMenuOpen">
-                    <i class="ph ph-dots-three text-xl text-gray-900 dark:text-gray-300"></i>
-                </button>
-
-                <div *ngIf="isDetailsMenuOpen"
-                    class="absolute right-0 top-full mt-2 w-48 rounded-md border border-gray-200 dark:border-[#2a2d2a] bg-white dark:bg-[#1E201E] shadow-lg z-50">
-                    <ng-container *ngFor="let item of detailsMenuItems">
-                        <div *ngIf="item.danger && !detailsMenuItems[detailsMenuItems.indexOf(item) - 1]?.danger"
-                            class="border-t border-gray-200 dark:border-[#5a5d5a]"></div>
-                        <button
-                            [class]="'w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-[#2a2d2a] ' +
-                                (item.danger ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300')"
-                            (click)="handleDetailsMenu(item.action); isDetailsMenuOpen = false">
-                            <i [class]="item.icon"></i>
-                            {{ item.label }}
-                        </button>
-                    </ng-container>
-                </div>
-            </div>
-        </div>
-
-        <ng-container *ngIf="selectedOrderForDetails as order">
-            <div class="space-y-4 text-sm text-gray-600 dark:text-gray-300">
-
-                <div class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
-                    <h3 class="text-sm font-semibold mb-3 text-gray-900 dark:text-gray-100">Order Summary</h3>
-                    <div class="grid grid-cols-2 gap-3">
-                        <p>Order No</p>
-                        <p class="font-medium">{{ order.full.orderNumber }}</p>
-                        <p>Status</p>
-                        <p class="font-medium capitalize">{{ order.tab }}</p>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
-                        <h3 class="text-sm font-semibold mb-3 text-gray-900 dark:text-gray-100">Pickup Information</h3>
-                        <div class="space-y-1">
-                            <p class="font-medium">{{ order.full.pickup.name }}</p>
-                            <p>{{ order.full.pickup.phone.countryCode }} {{ order.full.pickup.phone.number }}</p>
-                            <p>{{ order.full.pickup.address }}</p>
-                            <p>Time: {{ order.full.pickup.pickupTime }}</p>
-                        </div>
-                    </div>
-                    <div class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
-                        <h3 class="text-sm font-semibold mb-3 text-gray-900 dark:text-gray-100">Delivery Information</h3>
-                        <div class="space-y-1">
-                            <p class="font-medium">{{ order.full.delivery.name }}</p>
-                            <p>{{ order.full.delivery.phone.countryCode }} {{ order.full.delivery.phone.number }}</p>
-                            <p>{{ order.full.delivery.email }}</p>
-                            <p>{{ order.full.delivery.address }}</p>
-                            <p>{{ order.full.delivery.deliveryDate }} · {{ order.full.delivery.deliveryTime }}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
-                    <h3 class="text-sm font-semibold mb-3 text-gray-900 dark:text-gray-100">Items & Pricing</h3>
-                    <div class="space-y-2 mb-3">
-                        <div *ngFor="let item of order.full.details.items" class="flex justify-between">
-                            <span>{{ item.itemName }} × {{ item.itemQty }}</span>
-                            <span *ngIf="!isReadOnlyTenant">{{ item.itemPrice }}</span>
-                        </div>
-                    </div>
-                    <div class="border-t border-gray-200 dark:border-[#5a5d5a] pt-3 space-y-1">
-                        <ng-container *ngIf="!isReadOnlyTenant">
-                            <div class="flex justify-between"><span>Subtotal</span><span>{{ order.full.details.subtotal }}</span></div>
-                            <div class="flex justify-between"><span>Tax ({{ order.full.details.taxRate }}%)</span><span>{{ order.full.details.taxAmount }}</span></div>
-                            <div class="flex justify-between"><span>Delivery Fees</span><span>{{ order.full.details.deliveryFees }}</span></div>
-                            <div class="flex justify-between"><span>Tips</span><span>{{ order.full.details.deliveryTips }}</span></div>
-                            <div class="flex justify-between"><span>Discount</span><span>{{ order.full.details.discount }}</span></div>
-                            <div class="flex justify-between font-semibold text-gray-900 dark:text-white pt-2">
-                                <span>Total</span><span>{{ order.full.details.total }}</span>
-                            </div>
-                        </ng-container>
-                        <ng-container *ngIf="isReadOnlyTenant">
-                            <div class="flex justify-between font-semibold text-[#3ddc97] pt-2">
-                                <span>Driver Earnings</span>
-                                <span>{{ driverEarningsLabel(order.full.details.total) }}</span>
-                            </div>
-                        </ng-container>
-                    </div>
-                </div>
-
-                <div class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
-                    <h3 class="text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">Delivery Instructions</h3>
-                    <p>{{ order.full.details.instructions || 'No instructions provided' }}</p>
-                </div>
-
-                <div class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
-                    <h3 class="text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">Order Meta</h3>
-                    <div class="grid grid-cols-2 gap-2">
-                        <p>Placed</p><p>{{ order.view.current?.orderPlacedTime }}</p>
-                        <p>Driver</p><p>{{ order.view.current?.driver || '—' }}</p>
-                        <p>Status</p><p>{{ order.view.current?.orderStatus }}</p>
-                    </div>
-                </div>
-
-                <div *ngIf="!isReadOnlyTenant" class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Ready for Pickup</h3>
-                        <app-toggle-button [value]="getReadyForPickupStatus(order.id)"
-                            (valueChange)="updateReadyForPickup($event)">
-                        </app-toggle-button>
-                    </div>
-                </div>
-
-                <div class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
-                    <h3 class="text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">Payment Details</h3>
-                    <p class="font-medium mb-2">{{ formatPaymentMethod(order.full.details.payment.method) }}</p>
-                    <ng-container *ngIf="order.full.details.payment.method === 'credit_card'">
-                        <div *ngIf="order.full.details.payment.creditCard as creditCard" class="space-y-1">
-                            <p>Cardholder: {{ creditCard.cardholderName }}</p>
-                            <p>Card: {{ maskCard(creditCard.cardNumber) }}</p>
-                            <p>Expiry: {{ creditCard.expiryMonth }}/{{ creditCard.expiryYear }}</p>
-                            <p>CVC: ***</p>
-                        </div>
-                    </ng-container>
-                </div>
-
-                <div class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
-    <h3 class="text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">Proof of Delivery</h3>
-    <div class="grid grid-cols-2 gap-2">
-        <p>Signature</p>
-        <p class="font-medium">
-            {{ order.full.details.proofOfDelivery?.signature ? '✓ Required' : '✗ Not required' }}
-        </p>
-        <p>Picture</p>
-        <p class="font-medium">
-            {{ order.full.details.proofOfDelivery?.picture ? '✓ Required' : '✗ Not required' }}
-        </p>
-    </div>
-</div>
-
-            </div>
-        </ng-container>
-
-    </app-popup>
-    
-    
-    <!-- ───────────────────────────────────────────
-         PRINT ORDER MODAL
-    ─────────────────────────────────────────── -->
-    <app-popup [open]="isPrintOpen" title="Print Order" widthClass="max-w-2xl" (close)="closePrintOrder()">
-    
-        <ng-container *ngIf="selectedOrderForPrint as order">
-            <div class="bg-gray-50 dark:bg-[#2a2d2a]/30 p-2 sm:p-4 rounded-lg overflow-y-auto max-h-[70vh]">
-                <div class="bg-white dark:bg-[#1E201E] p-4 sm:p-8 shadow-sm border border-gray-200 dark:border-[#5a5d5a] text-gray-900 dark:text-gray-100 font-sans text-sm">
-                    <div class="flex flex-col sm:flex-row justify-between items-start mb-6 sm:mb-8 border-b border-gray-100 dark:border-[#5a5d5a] pb-4 gap-4 sm:gap-0">
-                        <div>
-                            <h2 class="text-xl sm:text-2xl font-bold">Order #{{ order.full.orderNumber }}</h2>
-                            <p class="text-gray-500 mt-1">Status: {{ formatStatusLabel(order.tab) }}</p>
-                        </div>
-                        <div class="text-left sm:text-right">
-                            <p class="font-bold">Dispatch Delivery</p>
-                            <p class="text-gray-500">Placed: {{ order.view.current.orderPlacedTime }}</p>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 mb-8">
-                        <div>
-                            <h3 class="font-bold text-xs uppercase tracking-wider text-gray-400 mb-2">Pickup Information</h3>
-                            <p class="font-semibold">{{ order.full.pickup.name }}</p>
-                            <p>{{ order.full.pickup.phone.countryCode }} {{ order.full.pickup.phone.number }}</p>
-                            <p class="mt-1 break-words">{{ order.full.pickup.email }}</p>
-                            <p class="mt-1 break-words">{{ order.full.pickup.address }}</p>
-                            <p class="mt-2 text-xs text-gray-500">Date: {{ order.full.pickup.pickupDate }} {{ order.full.pickup.pickupTime }}</p>
-                        </div>
-                        <div>
-                            <h3 class="font-bold text-xs uppercase tracking-wider text-gray-400 mb-2">Delivery Information</h3>
-                            <p class="font-semibold">{{ order.full.delivery.name }}</p>
-                            <p>{{ order.full.delivery.phone.countryCode }} {{ order.full.delivery.phone.number }}</p>
-                            <p class="break-words">{{ order.full.delivery.email }}</p>
-                            <p class="mt-1 break-words">{{ order.full.delivery.address }}</p>
-                            <p class="mt-2 text-xs text-gray-500">Date: {{ order.full.delivery.deliveryDate }} {{ order.full.delivery.deliveryTime }}</p>
-                        </div>
-                    </div>
-
-                    <div class="mb-8">
-                        <h3 class="font-bold text-xs uppercase tracking-wider text-gray-400 mb-3 border-b border-gray-50 dark:border-[#5a5d5a] pb-1">Items</h3>
-                        <div class="space-y-2">
-                            <div *ngFor="let item of order.full.details.items" class="flex justify-between">
-                                <span>{{ item.itemName }} <span class="text-gray-400">x {{ item.itemQty }}</span></span>
-                                <span class="font-medium">{{ money(toNumber(item.itemPrice)) }}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="border-t border-gray-100 dark:border-[#5a5d5a] pt-4 space-y-2">
-                        <div class="flex justify-between text-gray-600 dark:text-gray-400">
-                            <span>Subtotal</span>
-                            <span>{{ money(order.full.details.subtotal) }}</span>
-                        </div>
-                        <div class="flex justify-between text-gray-600 dark:text-gray-400">
-                            <span>Tax ({{ order.full.details.taxRate }}%)</span>
-                            <span>{{ money(order.full.details.taxAmount) }}</span>
-                        </div>
-                        <div class="flex justify-between text-gray-600 dark:text-gray-400">
-                            <span>Delivery Fees</span>
-                            <span>{{ money(order.full.details.deliveryFees) }}</span>
-                        </div>
-                        <div class="flex justify-between text-gray-600 dark:text-gray-400">
-                            <span>Tips</span>
-                            <span>{{ money(order.full.details.deliveryTips) }}</span>
-                        </div>
-                        <div class="flex justify-between text-gray-600 dark:text-gray-400">
-                            <span>Discount</span>
-                            <span class="text-red-500">-{{ money(order.full.details.discount) }}</span>
-                        </div>
-                        <div class="flex justify-between font-bold text-lg pt-2 border-t border-gray-50 dark:border-[#5a5d5a]">
-                            <span>Total</span>
-                            <span>{{ money(order.full.details.total) }}</span>
-                        </div>
-                    </div>
-                    
-                    <div class="mt-8 text-xs text-gray-400 border-t border-gray-50 dark:border-[#5a5d5a] pt-4">
-                        <p>Payment Method: {{ formatPaymentMethod(order.full.details.payment.method) }}</p>
-                        <p *ngIf="order.full.details.payment.creditCard">Card: {{ maskCard(order.full.details.payment.creditCard.cardNumber) }}</p>
-                    </div>
-                </div>
-            </div>
-        </ng-container>
-
-        <div modal-footer class="flex items-center justify-end gap-3">
-            <app-button variant="ghost" label="Cancel" (onClick)="closePrintOrder()"
-                [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm'">
-            </app-button>
-
-            <app-button variant="primary" label="Send by Email" (onClick)="sendSelectedOrderByEmail()"
-                [loading]="isSendingOrderEmail" [disabled]="!selectedOrderForPrint?.full?.pickup?.email || isSendingOrderEmail"
-                [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-4 py-2 rounded-md text-sm'">
-            </app-button>
-
-            <app-button variant="primary" label="Print Order" (onClick)="openPrintWindow(selectedOrderForPrint!)"
-                [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-4 py-2 rounded-md text-sm'">
-            </app-button>
-        </div>
-
-    </app-popup>
-
-
-    <!-- ───────────────────────────────────────────
-         SHIPPING LABEL MODAL
-    ─────────────────────────────────────────── -->
-    <app-popup [open]="isLabelOpen" title="Shipping Label" widthClass="max-w-lg" (close)="closePrintLabel()">
-
-        <ng-container *ngIf="selectedOrderForLabel as order">
-            <div class="flex justify-center py-2">
-
-                <!-- Label card — always white + black regardless of dark mode -->
-                <div id="label-preview"
-                    class="w-96 border-2 border-black bg-white text-black font-sans text-xs select-none">
-
-                    <!-- TOP: letter + postage info + QR -->
-                    <div class="flex border-b-2 border-black p-2 gap-2 items-start">
-
-                        <div class="text-6xl font-black leading-none w-14 text-center flex-shrink-0">D</div>
-
-                        <div class="flex-1 text-[9px] leading-relaxed">
-                            <div class="font-bold text-[10px]">DISPATCH DELIVERY</div>
-                            <div>Order: {{ order.full.orderNumber }}</div>
-                            <div>Placed: {{ order.view.current.orderPlacedTime }}</div>
-                            <div>Est. Delivery: {{ order.view.current.estDeliveryTime }}</div>
-                            <div class="mt-1 text-[8px] text-gray-400">CommercialBasePrice</div>
-                        </div>
-
-                        <div class="flex items-center gap-1 flex-shrink-0">
-                            <span class="text-[8px] text-gray-400 tracking-widest"
-                                style="writing-mode:vertical-rl; transform:rotate(180deg);">
-                                dispatch.local
-                            </span>
-                            <canvas id="qrcode" class="w-[70px] h-[70px] block"></canvas>
-                        </div>
-
-                    </div>
-
-                    <!-- SERVICE BANNER -->
-                    <div class="text-center font-black text-sm tracking-widest py-1 border-b-2 border-black uppercase">
-                        Dispatch First-Class PKG
-                    </div>
-
-                    <!-- SENDER -->
-                    <div class="flex justify-between items-start p-2 border-b-2 border-black gap-3">
-                        <div class="text-[9px] leading-relaxed">
-                            <div class="font-bold text-[8px] uppercase text-gray-400 mb-0.5">From</div>
-                            <div class="font-medium">{{ order.full.pickup.name }}</div>
-                            <div>{{ order.full.pickup.address }}</div>
-                        </div>
-                        <div class="text-[9px] text-gray-500 flex-shrink-0 whitespace-nowrap">
-                            Order: {{ order.full.orderNumber }}
-                        </div>
-                    </div>
-
-                    <!-- RECIPIENT -->
-                    <div class="px-2 pt-3 pb-4 border-b-2 border-black">
-                        <div class="font-bold text-[8px] uppercase text-gray-400 mb-0.5">To</div>
-                        <div class="font-bold text-sm mb-0.5">{{ order.full.delivery.name }}</div>
-                        <div class="text-[11px] leading-relaxed">{{ order.full.delivery.address }}</div>
-                    </div>
-
-                    <!-- BARCODE -->
-                    <div class="p-2 text-center">
-                        <div class="font-black text-[13px] tracking-widest mb-1.5">TRACKING #</div>
-                        <svg id="barcode" class="w-full h-14 block"></svg>
-                        <div class="text-[10px] tracking-[0.2em] mt-1">{{ order.full.orderNumber }}</div>
-                    </div>
-
-                </div>
-            </div>
-        </ng-container>
-
-        <!-- FOOTER -->
-        <div modal-footer class="flex items-center justify-end gap-3">
-            <app-button variant="ghost" label="Cancel" (onClick)="closePrintLabel()"
-                [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm'">
-            </app-button>
-
-            <app-button variant="ghost" label="Download PDF" (onClick)="downloadLabelPdf()"
-                [extraClasses]="'border border-gray-300 dark:border-[#5a5d5a] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2d2a] px-4 py-2 rounded-md text-sm'">
-            </app-button>
-
-            <app-button variant="primary" label="Print Label" (onClick)="printLabel()"
-                [extraClasses]="'bg-[#3ddc97] text-black hover:bg-[#2fbf82] px-4 py-2 rounded-md text-sm'">
-            </app-button>
-        </div>
-
-    </app-popup>
+    <!-- SHIPPING LABEL MODAL -->
+    <app-shipping-label-modal [open]="isLabelOpen" [order]="selectedOrderForLabel" (close)="closePrintLabel()">
+    </app-shipping-label-modal>
 
 </app-page>
-

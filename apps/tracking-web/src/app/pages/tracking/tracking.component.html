@@ -1,0 +1,170 @@
+<div class="min-h-full bg-gray-50 dark:bg-gray-950">
+    <main class="container mx-auto px-4 pb-16">
+        <!-- Search bar, floating up over the hero banner -->
+        <form
+                class="relative max-w-sm z-10 -mt-9 mx-auto flex gap-2 rounded-full bg-white p-2 pl-3 shadow-lg ring-1 ring-gray-900/5 dark:bg-gray-900 dark:ring-white/10"
+                (submit)="$event.preventDefault(); search()"
+        >
+            <label class="sr-only" for="order-number">Order number</label>
+            <input
+                    id="order-number"
+                    type="text"
+                    [formField]="searchForm.orderNumber"
+                    placeholder="ORDXXXXXXXX"
+                    class="min-w-0 flex-1 rounded-full bg-transparent px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none dark:text-gray-100 dark:placeholder-gray-500"
+                    autocomplete="off"
+            />
+            <button
+                    type="submit"
+                    class="shrink-0 rounded-full bg-courier-yellow px-7 py-2.5 font-extrabold text-courier-ink transition hover:bg-amber-300 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-courier-ink"
+                    [disabled]="!searchForm().valid() || isLoading()"
+            >
+                Track
+            </button>
+        </form>
+
+        <div class="mt-10">
+            @if (isLoading()) {
+                <div class="flex justify-center py-16" role="status" aria-label="Loading tracking details">
+                    <div class="h-10 w-10 animate-spin rounded-full border-2 border-gray-200 border-t-courier-yellow dark:border-gray-700"></div>
+                </div>
+            } @else if (errorMessage()) {
+                <div class="card">
+                    <div class="card-body text-center py-12">
+                        <p class="font-display text-2xl text-courier-ink dark:text-courier-yellow">{{ errorMessage() }}</p>
+                        <p class="mx-auto mt-2 max-w-xs text-sm text-gray-500 dark:text-gray-400">
+                            Check the order number or tracking link and try again.
+                        </p>
+                    </div>
+                </div>
+            } @else if (order()) {
+                @if (order()?.activity_status!='delivered'){
+                    <div class="mb-6">
+                        <app-dispatch-truck-tracker
+                                [stages]="dispatchStages"
+                                [currentStage]="dispatchStageIndex()"
+                                [orderId]="order()?.order_number ?? ''"
+                                [driverName]="order()?.driver_name ?? ''"
+                        ></app-dispatch-truck-tracker>
+                    </div>
+                }
+
+                <article class="card !mb-0">
+                    <!-- Order header -->
+                    <div class="card-header !border-b-0 flex items-end justify-between flex-wrap gap-4 sm:px-9 ">
+                        <div class="min-w-0">
+                            <p class="mt-1.5 truncate font-display text-2xl leading-none text-courier-ink dark:text-courier-yellow">
+                                {{ order()?.order_number }}
+                            </p>
+                        </div>
+                        <span
+                                class="mb-0.5 inline-flex shrink-0 items-center rounded-full px-3.5 py-1.5 text-sm font-bold"
+                                [class]="activityClass()"
+                        >
+              {{ activityLabel() }}
+            </span>
+                    </div>
+
+
+                    <div class="border-t border-gray-100 dark:border-gray-800"></div>
+
+                    <!-- Route: from → to -->
+                    <div class="card-body sm:px-9 sm:py-7">
+                        <div class="grid items-stretch gap-3 sm:grid-cols-[1fr_auto_1fr] sm:gap-4">
+                            <div class="rounded-xl bg-gray-50 p-4 dark:bg-gray-800/60">
+                                <p class="text-[11px] font-extrabold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500">
+                                    From
+                                </p>
+                                @if (order()?.pickup_name) {
+                                    <p class="mt-1.5 font-bold text-gray-900 dark:text-gray-100">{{ order()?.pickup_name }}</p>
+                                }
+                                @if (order()?.pickup_address) {
+                                    <p class="mt-0.5 text-sm leading-relaxed text-gray-600 dark:text-gray-400">{{ order()?.pickup_address }}</p>
+                                }
+                                @if (order()?.pickup_date) {
+                                    <p class="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                                        {{ order()?.pickup_date }} &middot; {{ order()?.pickup_time }}
+                                    </p>
+                                }
+                            </div>
+
+                            <!-- Route arrow -->
+                            <div class="flex items-center justify-center" aria-hidden="true">
+                                <div class="flex h-9 w-9 rotate-90 items-center justify-center rounded-full bg-courier-yellow text-courier-ink shadow-sm sm:rotate-0">
+                                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                         stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M4 12h16m-6-6 6 6-6 6"/>
+                                    </svg>
+                                </div>
+                            </div>
+
+                            <div class="rounded-xl bg-gray-50 p-4 dark:bg-gray-800/60">
+                                <p class="text-[11px] font-extrabold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500">
+                                    To
+                                </p>
+                                @if (order()?.delivery_name) {
+                                    <p class="mt-1.5 font-bold text-gray-900 dark:text-gray-100">{{ order()?.delivery_name }}</p>
+                                }
+                                @if (order()?.delivery_address) {
+                                    <p class="mt-0.5 text-sm leading-relaxed text-gray-600 dark:text-gray-400">{{ order()?.delivery_address }}</p>
+                                }
+                                @if (order()?.delivery_date) {
+                                    <p class="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                                        {{ order()?.delivery_date }} &middot; {{ order()?.delivery_time }}
+                                    </p>
+                                }
+                            </div>
+                        </div>
+
+                        @if (order()?.driver_name || order()?.items_count) {
+                            <dl class="mt-6 flex flex-wrap gap-x-10 gap-y-4 border-t border-gray-100 pt-5 dark:border-gray-800">
+                                @if (order()?.driver_name) {
+                                    <div>
+                                        <dt class="text-[11px] font-extrabold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500">
+                                            Your driver
+                                        </dt>
+                                        <dd class="mt-1 font-bold text-gray-900 dark:text-gray-100">{{ order()?.driver_name }}</dd>
+                                    </div>
+                                }
+                                @if (order()?.items_count) {
+                                    <div>
+                                        <dt class="text-[11px] font-extrabold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500">
+                                            Items
+                                        </dt>
+                                        <dd class="mt-1 font-bold text-gray-900 dark:text-gray-100">{{ order()?.items_count }}</dd>
+                                    </div>
+                                }
+                            </dl>
+                        }
+                    </div>
+                    <div class="border-t border-gray-100 dark:border-gray-800"></div>
+
+                    <!-- Journey -->
+                    <div class="card-footer !rounded-b-2xl sm:px-9 sm:py-8">
+                        <app-order-progress
+                                [activityStatus]="order()?.activity_status ?? ''"
+                                [timestamps]="order()"
+                        ></app-order-progress>
+                    </div>
+                </article>
+            } @else {
+                <!-- No order yet: invite the search -->
+                <div class="px-6 py-14 text-center">
+                    <div class="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-courier-yellow text-courier-ink shadow-sm">
+                        <svg class="h-7 w-7" viewBox="0 0 24 18" fill="currentColor" aria-hidden="true">
+                            <rect x="0.5" y="2" width="13" height="9.5" rx="1.2"/>
+                            <path d="M14.5 5h4.2l3.3 3.4V11.5h-7.5z"/>
+                            <circle cx="5" cy="13.5" r="2.3"/>
+                            <circle cx="17.5" cy="13.5" r="2.3"/>
+                        </svg>
+                    </div>
+                    <p class="font-display text-2xl text-courier-ink dark:text-courier-yellow">Follow your parcel</p>
+                    <p class="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+                        Enter the order number from your confirmation email above, and we'll
+                        show you where your delivery is on its route.
+                    </p>
+                </div>
+            }
+        </div>
+    </main>
+</div>

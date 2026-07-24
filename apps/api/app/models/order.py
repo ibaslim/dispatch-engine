@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, DateTime, Boolean, JSON, Enum, ForeignKey
+from sqlalchemy import Column, String, Integer, Float, Numeric, DateTime, Boolean, JSON, Enum, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -49,6 +49,28 @@ class Order(Base):
     delivery_date = Column(String)
     delivery_time = Column(String)
 
+    delivery_category_id = Column(
+        UUID(as_uuid=True), ForeignKey("delivery_categories.id", ondelete="SET NULL"), nullable=True
+    )
+    pickup_place_id = Column(String, nullable=True)
+    pickup_latitude = Column(Float, nullable=True)
+    pickup_longitude = Column(Float, nullable=True)
+    pickup_city_id = Column(UUID(as_uuid=True), ForeignKey("cities.id", ondelete="SET NULL"), nullable=True)
+    pickup_zone_id = Column(
+        UUID(as_uuid=True), ForeignKey("operational_zones.id", ondelete="SET NULL"), nullable=True
+    )
+    delivery_place_id = Column(String, nullable=True)
+    delivery_latitude = Column(Float, nullable=True)
+    delivery_longitude = Column(Float, nullable=True)
+    delivery_city_id = Column(UUID(as_uuid=True), ForeignKey("cities.id", ondelete="SET NULL"), nullable=True)
+    delivery_zone_id = Column(
+        UUID(as_uuid=True), ForeignKey("operational_zones.id", ondelete="SET NULL"), nullable=True
+    )
+    route_distance_meters = Column(Integer, nullable=True)
+    route_duration_seconds = Column(Integer, nullable=True)
+    surcharge_ids = Column(JSON, nullable=False, default=list)
+    applied_charges = Column(JSON, nullable=False, default=list)
+
     items = Column(JSON)
 
     subtotal = Column(Float, default=0)
@@ -59,10 +81,25 @@ class Order(Base):
     discount = Column(Float, default=0)
     total = Column(Float, default=0)
 
+    # Immutable payout agreed when a driver is assigned/accepts the delivery.
+    driver_payout = Column(Numeric(10, 2), nullable=True)
+    driver_fee_payout = Column(Numeric(10, 2), nullable=True)
+    driver_tip_payout = Column(Numeric(10, 2), nullable=True)
+    driver_payment_rule = Column(String(24), nullable=True)
+    driver_payment_group_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("driver_payment_groups.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    driver_payment_group_name = Column(String(100), nullable=True)
+    driver_payment_rule_snapshot = Column(JSON, nullable=True)
+    driver_payout_locked_at = Column(DateTime(timezone=True), nullable=True)
+
     instructions = Column(String)
     payment_method = Column(String)
     payment_details = Column(JSON)
     proof_of_delivery = Column(JSON, nullable=True)
+    incident_report = Column(JSON, nullable=True)
 
     status = Column(Enum(OrderStatus, name="orderstatus_enum"), default=OrderStatus.current)
     activity_status = Column(
@@ -70,6 +107,13 @@ class Order(Base):
         default=ActivityStatus.driver_not_assigned,
     )
     ready_for_pickup = Column(Boolean, default=False)
+
+    # Activity status checkpoint timestamps
+    pickup_initiated_at = Column(DateTime(timezone=True), nullable=True)
+    picked_up_at = Column(DateTime(timezone=True), nullable=True)
+    delivery_initiated_at = Column(DateTime(timezone=True), nullable=True)
+    delivery_in_progress_at = Column(DateTime(timezone=True), nullable=True)
+    delivered_at = Column(DateTime(timezone=True), nullable=True)
 
     # Broadcast / publish state
     published = Column(Boolean, default=False, nullable=False)

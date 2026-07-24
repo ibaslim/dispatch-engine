@@ -1,9 +1,33 @@
+import enum
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from app.models.order import OrderStatus, ActivityStatus
 from uuid import UUID
+
+
+class IncidentStage(str, enum.Enum):
+    pickup = "pickup"
+    delivery = "delivery"
+
+
+class IncidentReason(str, enum.Enum):
+    no_answer = "no_answer"
+    wrong_address = "wrong_address"
+    business_closed = "business_closed"
+    parcel_issue = "parcel_issue"
+    refused = "refused"
+    other = "other"
+
+
+# Reasons that always require a description, regardless of stage.
+INCIDENT_REASONS_REQUIRING_DESCRIPTION = {IncidentReason.other, IncidentReason.parcel_issue}
+
+class IncidentReportCreate(BaseModel):
+    stage: IncidentStage
+    reason: IncidentReason
+    description: Optional[str] = None
 
 
 class DriverInfo(BaseModel):
@@ -22,6 +46,34 @@ class OrderItem(BaseModel):
     itemName: str
     itemPrice: float
     itemQty: int
+
+
+class PublicOrderTracking(BaseModel):
+    """Order details exposed on the public tracking page. No contact,
+    payment or internal info — only what the recipient needs to see."""
+    order_number: str
+    status: OrderStatus
+    activity_status: ActivityStatus
+    driver_name: Optional[str] = None
+
+    pickup_name: Optional[str] = None
+    pickup_address: Optional[str] = None
+    pickup_date: Optional[str] = None
+    pickup_time: Optional[str] = None
+
+    delivery_name: Optional[str] = None
+    delivery_address: Optional[str] = None
+    delivery_date: Optional[str] = None
+    delivery_time: Optional[str] = None
+
+    items_count: int = 0
+    created_at: Optional[datetime] = None
+
+    pickup_initiated_at: Optional[datetime] = None
+    picked_up_at: Optional[datetime] = None
+    delivery_initiated_at: Optional[datetime] = None
+    delivery_in_progress_at: Optional[datetime] = None
+    delivered_at: Optional[datetime] = None
 
 
 # -------------------------
@@ -45,6 +97,22 @@ class OrderCreate(BaseModel):
     delivery_address: str
     delivery_date: str
     delivery_time: str
+
+    delivery_category_id: Optional[UUID] = None
+    pickup_place_id: Optional[str] = None
+    pickup_latitude: Optional[float] = None
+    pickup_longitude: Optional[float] = None
+    pickup_city_id: Optional[UUID] = None
+    pickup_zone_id: Optional[UUID] = None
+    delivery_place_id: Optional[str] = None
+    delivery_latitude: Optional[float] = None
+    delivery_longitude: Optional[float] = None
+    delivery_city_id: Optional[UUID] = None
+    delivery_zone_id: Optional[UUID] = None
+    route_distance_meters: Optional[int] = None
+    route_duration_seconds: Optional[int] = None
+    surcharge_ids: List[UUID] = Field(default_factory=list)
+    applied_charges: List[Dict[str, Any]] = Field(default_factory=list)
 
     items: List[OrderItem]
 
@@ -87,6 +155,22 @@ class OrderUpdate(BaseModel):
     delivery_date: Optional[str] = None
     delivery_time: Optional[str] = None
 
+    delivery_category_id: Optional[UUID] = None
+    pickup_place_id: Optional[str] = None
+    pickup_latitude: Optional[float] = None
+    pickup_longitude: Optional[float] = None
+    pickup_city_id: Optional[UUID] = None
+    pickup_zone_id: Optional[UUID] = None
+    delivery_place_id: Optional[str] = None
+    delivery_latitude: Optional[float] = None
+    delivery_longitude: Optional[float] = None
+    delivery_city_id: Optional[UUID] = None
+    delivery_zone_id: Optional[UUID] = None
+    route_distance_meters: Optional[int] = None
+    route_duration_seconds: Optional[int] = None
+    surcharge_ids: Optional[List[UUID]] = None
+    applied_charges: Optional[List[Dict[str, Any]]] = None
+
     items: Optional[List[OrderItem]] = None
 
     subtotal: Optional[float] = None
@@ -108,6 +192,12 @@ class OrderUpdate(BaseModel):
     status: Optional[OrderStatus] = None
     ready_for_pickup: Optional[bool] = None
 
+    # -------------------------
+    # UPDATE ACTIVITY_STATUS
+    # -------------------------
+class ActivityStatusUpdate(BaseModel):
+    activity_status: ActivityStatus
+
 
 # -------------------------
 # RESPONSE
@@ -121,8 +211,16 @@ class OrderResponse(OrderCreate):
     published_at: Optional[datetime] = None
     order_placed_time: Optional[str] = None
     proof_of_delivery: Optional[Dict[str, Any]] = None
+    incident_report: Optional[Dict[str, Any]] = None
     driver: Optional[DriverInfo] = None
     created_at: Optional[datetime] = None
+    driver_payout: Optional[float] = None
+    driver_fee_payout: Optional[float] = None
+    driver_tip_payout: Optional[float] = None
+    driver_payment_rule: Optional[str] = None
+    driver_payment_group_id: Optional[UUID] = None
+    driver_payment_group_name: Optional[str] = None
+    driver_payout_locked_at: Optional[datetime] = None
 
 
     class Config:

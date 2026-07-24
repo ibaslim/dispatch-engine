@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { PopupComponent } from '@components/popup/popup.component';
 import { SearchBarComponent } from '@components/search-bar/search-bar.component';
+import { ToastService } from '@core/toast/toast.service';
 import {
   CanadianCityPricing,
   CanadianStatePricing,
@@ -47,6 +48,7 @@ type PricingTarget =
 })
 export class PricingComponent implements OnInit {
   private readonly locationsSvc = inject(LocationsService);
+  private readonly toast = inject(ToastService);
 
   scope: PricingScope = 'general';
   states: CanadianStatePricing[] = [];
@@ -57,7 +59,6 @@ export class PricingComponent implements OnInit {
   confirmationTarget: PricingTarget | null = null;
   isLoading = false;
   errorMessage = '';
-  successMessage = '';
   searchQuery = '';
 
   get filteredStates(): CanadianStatePricing[] {
@@ -76,6 +77,18 @@ export class PricingComponent implements OnInit {
             state.cities.some((city) => city.city_name.toLowerCase().includes(query))
         )
     );
+  }
+
+  trackByState(_: number, state: CanadianStatePricing): string {
+    return state.state_id;
+  }
+
+  trackByCity(_: number, city: CanadianCityPricing): string {
+    return city.city_id;
+  }
+
+  trackByPartnerView(_: number, view: PartnerPricingView): string {
+    return view.partner.id;
   }
 
   async ngOnInit(): Promise<void> {
@@ -329,7 +342,7 @@ export class PricingComponent implements OnInit {
           Object.assign(state, rates);
           state.cities.forEach((city) => Object.assign(city, rates));
         });
-        this.successMessage = 'General Canadian pricing was updated.';
+        this.toast.success('General Canadian pricing was updated.');
         return;
       }
       case 'general-state': {
@@ -338,7 +351,7 @@ export class PricingComponent implements OnInit {
           this.locationsSvc.updateStatePricing(target.state.state_id, rates)
         );
         target.state.cities.forEach((city) => Object.assign(city, rates));
-        this.successMessage = `${target.state.state_name} pricing was updated.`;
+        this.toast.success(`${target.state.state_name} pricing was updated.`);
         return;
       }
       case 'general-city':
@@ -348,7 +361,7 @@ export class PricingComponent implements OnInit {
             this.toRates(target.city)
           )
         );
-        this.successMessage = `${target.city.city_name} pricing was updated.`;
+        this.toast.success(`${target.city.city_name} pricing was updated.`);
         return;
       case 'partner-default': {
         const rates = this.toPartnerRates(target.view.defaultRates);
@@ -359,7 +372,7 @@ export class PricingComponent implements OnInit {
           this.assignPartnerRates(state, rates);
           state.cities.forEach((city) => this.assignPartnerRates(city, rates));
         });
-        this.successMessage = `${target.view.partner.name}'s general pricing was updated.`;
+        this.toast.success(`${target.view.partner.name}'s general pricing was updated.`);
         return;
       }
       case 'partner-state': {
@@ -372,7 +385,7 @@ export class PricingComponent implements OnInit {
           )
         );
         target.state.cities.forEach((city) => this.assignPartnerRates(city, rates));
-        this.successMessage = `${target.state.state_name} pricing for ${target.view.partner.name} was updated.`;
+        this.toast.success(`${target.state.state_name} pricing for ${target.view.partner.name} was updated.`);
         return;
       }
       case 'partner-city':
@@ -383,7 +396,7 @@ export class PricingComponent implements OnInit {
             this.toPartnerRates(target.city)
           )
         );
-        this.successMessage = `${target.city.city_name} pricing for ${target.view.partner.name} was updated.`;
+        this.toast.success(`${target.city.city_name} pricing for ${target.view.partner.name} was updated.`);
     }
   }
 
@@ -485,7 +498,6 @@ export class PricingComponent implements OnInit {
 
   private clearFeedback(): void {
     this.errorMessage = '';
-    this.successMessage = '';
   }
 
   private normalizedSearchQuery(): string {

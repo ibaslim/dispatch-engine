@@ -1,97 +1,115 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-import QRCode from 'qrcode';
-import JsBarcode from 'jsbarcode';
 import { PageComponent } from '@components/page/page.component';
 import { TableComponent } from '@components/table/table.component';
 import { SearchBarComponent } from '@components/search-bar/search-bar.component';
 import { ButtonComponent } from '@components/button/button.component';
-import { PopupComponent } from '@components/popup/popup.component';
 import { NewOrderFormComponent } from '@components/new-order-form/new-order-form.component';
-import { ToggleButtonComponent } from '@components/toggle-button/toggle-button.component';
+import { PopupComponent } from '@components/popup/popup.component';
+import { DirectionsModalComponent } from '@components/directions-modal/directions-modal.component';
+import { ReportIncidentModalComponent, ReportIncidentContext } from '@components/report-incident-modal/report-incident-modal.component';
+import { AssignDriverModalComponent } from '@components/assign-driver-modal/assign-driver-modal.component';
+import { QrScanModalComponent, QrScanContext } from '@components/qr-scan-modal/qr-scan-modal.component';
+import { PodCaptureModalComponent, PodCaptureContext } from '@components/pod-capture-modal/pod-capture-modal.component';
+import { OrderDetailsModalComponent } from '@components/order-details-modal/order-details-modal.component';
+import { PrintOrderModalComponent } from '@components/print-order-modal/print-order-modal.component';
+import { ShippingLabelModalComponent } from '@components/shipping-label-modal/shipping-label-modal.component';
+import { PublishedOrdersFeedComponent } from '@components/published-orders-feed/published-orders-feed.component';
 import { TableColumn } from '@models/table.model';
-import { NewOrderFormValue, PaymentMethodType } from '@models/new-order-form/new-order-form.model';
-import { TenantDriverEntity } from '@models/drivers/tenant-driver.model';
-import { OrderEntity, OrderTab } from '@models/orders/order-entity.model';
-import { OrderView } from '@models/orders/order-tabs.model';
+import { NewOrderFormValue } from '@models/new-order-form/new-order-form.model';
+import {OrderActivityStatus, OrderEntity, OrderTab} from '@models/orders/order-entity.model';
 import { OrdersService } from '@services/orders/orders.service';
+import { OrderDocumentService } from '@services/orders/order-document.service';
+import { ScheduledOrderPromotionService } from '@services/orders/scheduled-order-promotion.service';
 import { AuthService } from '@core/auth/auth.service';
+import { ToastService } from '@core/toast/toast.service';
+import {
+  BackendOrder,
+  buildDemoDraftValue,
+  createDefaultNewOrder,
+  mapBackendOrder,
+  toOrderPayload
+} from './orders-mapping.util';
+import {
+  formatStatusLabel,
+  parseDateTime,
+  toNumber,
+  truncateWords
+} from './orders-formatting.util';
 
-type BackendOrderItem = {
-  itemName: string;
-  itemPrice: number;
-  itemQty: number;
+// Action type controls what happens on click: 'direct' updates the status immediately,
+// other types route through a handler in activityActionHandlers (e.g. a modal flow)
+// before the status update is applied. Add new entries here to add new checkpoint behaviors.
+type ActivityActionType = 'direct' | 'qr-scan' | 'proof-of-delivery';
+
+interface ActivityFlowEntry {
+  label: string;
+  next: OrderActivityStatus | null;
+  actionLabel: string | null;
+  actionType: ActivityActionType;
+}
+
+const ACTIVITY_STATUS_FLOW: Record<OrderActivityStatus, ActivityFlowEntry> = {
+  driver_not_assigned: { label: 'Driver Not Assigned', next: null, actionLabel: null, actionType: 'direct' },
+  pickup_initiated: { label: 'Pickup Initiated', next: 'picked_up', actionLabel: 'Mark Picked Up', actionType: 'qr-scan' },
+  picked_up: { label: 'Picked Up', next: 'delivery_initiated', actionLabel: 'Start Delivery', actionType: 'direct' },
+  delivery_initiated: { label: 'Delivery Initiated', next: 'delivery_in_progress', actionLabel: 'In Transit', actionType: 'direct' },
+  delivery_in_progress: { label: 'Delivery In Progress', next: 'delivered', actionLabel: 'Mark Delivered', actionType: 'proof-of-delivery' },
+  delivered: { label: 'Delivered', next: null, actionLabel: null, actionType: 'direct' },
 };
 
-type BackendOrder = {
-  id: string;
-  created_at: string;
-  order_number: string;
-  pickup_name: string;
-  pickup_phone: string;
-  pickup_email: string;
-  pickup_address: string;
-  pickup_date: string;
-  pickup_time: string;
-  delivery_name: string;
-  delivery_phone: string;
-  delivery_email: string;
-  delivery_address: string;
-  delivery_date: string;
-  delivery_time: string;
-  items: BackendOrderItem[];
-  subtotal: number;
-  tax_rate: number;
-  tax_amount: number;
-  delivery_fees: number;
-  delivery_tips: number;
-  discount: number;
-  total: number;
-  instructions?: string | null;
-  payment_method: PaymentMethodType;
-  payment_details?: Record<string, unknown> | null;
-  proof_of_delivery?: Record<string, unknown> | null;
-  status: OrderTab;
-  published?: boolean;
-  published_at?: string | null;
-  ready_for_pickup: boolean;
-  order_placed_time?: string | null;
-  driver?: {
-    id: string;
-    name: string;
-    contact_name?: string | null;
-    contact_phone_country_code?: string | null;
-    contact_phone_number?: string | null;
-  } | null;
+// Which checkpoint an incident report belongs to, based on the order's current activity status.
+const INCIDENT_STAGE_BY_ACTIVITY_STATUS: Partial<Record<OrderActivityStatus, 'pickup' | 'delivery'>> = {
+  pickup_initiated: 'pickup',
+  picked_up: 'delivery',
+  delivery_initiated: 'delivery',
+  delivery_in_progress: 'delivery',
 };
 
-type AssignableDriver = {
-  id: string;
-  name: string;
-  contactName: string;
-  email: string;
-  phone: string;
-  address: string;
+const INCIDENT_REASONS_BY_STAGE: Record<'pickup' | 'delivery', { value: string; label: string }[]> = {
+  pickup: [
+    { value: 'no_answer', label: 'No answer' },
+    { value: 'wrong_address', label: 'Wrong address' },
+    { value: 'business_closed', label: 'Business closed' },
+    { value: 'parcel_issue', label: 'Parcel issue' },
+    { value: 'other', label: 'Other' },
+  ],
+  delivery: [
+    { value: 'no_answer', label: 'No answer' },
+    { value: 'wrong_address', label: 'Wrong address' },
+    { value: 'refused', label: 'Refused' },
+    { value: 'other', label: 'Other' },
+  ],
 };
 
-const PUBLISH_WINDOW_MS = 15 * 60 * 1000;
+// Flat reason -> label lookup for display (stage-agnostic; a reason like 'other' is shared).
+const INCIDENT_REASON_LABELS: Record<string, string> = Object.fromEntries(
+  [...INCIDENT_REASONS_BY_STAGE.pickup, ...INCIDENT_REASONS_BY_STAGE.delivery].map((r) => [r.value, r.label])
+);
 
 @Component({
   selector: 'app-orders',
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     PageComponent,
     TableComponent,
     SearchBarComponent,
     ButtonComponent,
     PopupComponent,
     NewOrderFormComponent,
-    ToggleButtonComponent
+    DirectionsModalComponent,
+    ReportIncidentModalComponent,
+    AssignDriverModalComponent,
+    QrScanModalComponent,
+    PodCaptureModalComponent,
+    OrderDetailsModalComponent,
+    PrintOrderModalComponent,
+    ShippingLabelModalComponent,
+    PublishedOrdersFeedComponent
   ],
   templateUrl: './orders.component.html'
 })
@@ -100,10 +118,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
   // ─── Tabs ──────────────────────────────────────────────────────────────────
   get tabs(): string[] {
     if (this.auth.isDriver()) {
-      return ['New Orders', 'Current', 'Scheduled', 'Completed', 'Incomplete', 'History'];
+      return ['New Orders', 'Current', 'Scheduled', 'Completed', 'Incomplete', 'History','Disputed'];
     }
 
-    return ['Current', 'Scheduled', 'Completed', 'Incomplete', 'History', 'Unassigned'];
+    return ['Current', 'Scheduled', 'Completed', 'Incomplete', 'History', 'Unassigned','Disputed'];
   }
   activeTab = 'Current';
 
@@ -124,24 +142,26 @@ export class OrdersComponent implements OnInit, OnDestroy {
   isNewOrderOpen = false;
   isSavingOrder = false;
   isPublishingOrder = false;
-  newOrderValue: NewOrderFormValue = this.createDefaultNewOrder();
+  newOrderValue: NewOrderFormValue = createDefaultNewOrder();
 
   // ─── Table menu ────────────────────────────────────────────────────────────
   activeMenuRow: { id: string } | null = null;
 
+  // ─── Directions modal ──────────────────────────────────────────────────────
+  isDirectionsOpen = false;
+  selectedRowForDirections: any = null;
+
+  // ─── Report incident modal ─────────────────────────────────────────────────
+  isReportOpen = false;
+  reportContext: ReportIncidentContext | null = null;
+
   // ─── Details modal ─────────────────────────────────────────────────────────
   isDetailsOpen = false;
   selectedOrderForDetails: OrderEntity | null = null;
-  isDetailsMenuOpen = false;
 
   // ─── Assign driver modal ───────────────────────────────────────────────────
   isAssignDriverOpen = false;
   selectedOrderForAssignment: OrderEntity | null = null;
-  assignDriverQuery = '';
-  selectedDriverId = '';
-  availableAssignableDrivers: AssignableDriver[] = [];
-  isLoadingAssignableDrivers = false;
-  assignDriverLoadError = '';
 
   // ─── Label modal ───────────────────────────────────────────────────────────
   isLabelOpen = false;
@@ -150,7 +170,12 @@ export class OrdersComponent implements OnInit, OnDestroy {
   // ─── Print order modal ─────────────────────────────────────────────────────
   isPrintOpen = false;
   selectedOrderForPrint: OrderEntity | null = null;
-  isSendingOrderEmail = false;
+
+  // ─── QR scan / proof-of-delivery modals ────────────────────────────────────
+  isQrScanOpen = false;
+  qrScanContext: QrScanContext | null = null;
+  isPodOpen = false;
+  podContext: PodCaptureContext | null = null;
 
   // ─── Search & feedback ─────────────────────────────────────────────────────
   searchQuery = '';
@@ -162,37 +187,21 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   // ─── Private ───────────────────────────────────────────────────────────────
   private scheduledRefreshHandle: ReturnType<typeof setInterval> | null = null;
-  private scheduledPromotionInFlight = false;
-
-  private ws: WebSocket | null = null;
-  private countdownHandle: ReturnType<typeof setInterval> | null = null;
-
-  publishedOrders: any[] = [];
-  
-  // ─── Details menu items ────────────────────────────────────────────────────
-  get detailsMenuItems(): Array<{ label: string; action: string; icon: string; danger?: boolean }> {
-    const items: Array<{ label: string; action: string; icon: string; danger?: boolean }> = [
-      { label: 'Mark as Done', action: 'done', icon: 'ph ph-check-circle' },
-      { label: 'Mark as Failed', action: 'failed', icon: 'ph ph-x-circle' },
-      { label: 'Move to History', action: 'history', icon: 'ph ph-archive' },
-      { label: 'Download PDF', action: 'pdf', icon: 'ph ph-download' },
-    ];
-    
-    if (!this.isReadOnlyTenant) {
-      items.push({ label: 'Delete Order', action: 'delete', icon: 'ph ph-trash', danger: true });
-    }
-    
-    return items;
-  }
 
   constructor(
     private readonly ordersService: OrdersService,
-    private readonly http: HttpClient,
-    private readonly auth: AuthService
+    private readonly orderDocumentService: OrderDocumentService,
+    private readonly scheduledOrderPromotionService: ScheduledOrderPromotionService,
+    private readonly auth: AuthService,
+    private readonly toast: ToastService
   ) { }
 
   get isReadOnlyTenant(): boolean {
     return !this.auth.isPlatformAdmin();
+  }
+
+  get isDriver(): boolean {
+    return this.auth.isDriver();
   }
 
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
@@ -201,27 +210,17 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (this.auth.isDriver()) {
       this.activeTab = 'New Orders';
     }
-    
+
     this.loadOrders();
     this.scheduledRefreshHandle = setInterval(() => {
       void this.checkAndUpdateScheduledOrders();
     }, 6000);
-
-    if (this.auth.isDriver()) {
-      this.loadPublishedOrders();
-      this.connectWebSocket();
-      this.countdownHandle = setInterval(() => this.tickCountdowns(), 1000);
-    }
   }
 
   ngOnDestroy(): void {
     if (this.scheduledRefreshHandle) {
       clearInterval(this.scheduledRefreshHandle);
     }
-    if (this.countdownHandle) {
-      clearInterval(this.countdownHandle);
-    }
-    this.ws?.close();
   }
 
   // ─── Tab ───────────────────────────────────────────────────────────────────
@@ -235,7 +234,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   loadOrders(): void {
     this.ordersService.getOrders().subscribe({
       next: (res: BackendOrder[]) => {
-        this.orders = res.map((order) => this.mapBackendOrder(order));
+        this.orders = res.map((order) => mapBackendOrder(order, this.auth.isDriver()));
         this.notifyNewUnassignedOrders();
         this.readyForPickupMap.clear();
         for (const order of this.orders) {
@@ -269,142 +268,39 @@ export class OrdersComponent implements OnInit, OnDestroy {
     { key: 'driver', label: 'Driver', sortable: true },
     { key: 'orderStatus', label: 'Order Status', sortable: true },
     { key: 'trackingStatus', label: 'Tracking Status', sortable: true },
+    {key : 'activityStatus', label: 'Activity Status', sortable: false },
+    { key: 'directions', label: 'Directions', sortable: false },
+    { key: 'incidentReport', label: 'Reported Issue', sortable: false },
     { key: 'actions', label: '', sortable: false }
   ];
 
   get columns(): TableColumn[] {
     const showPickupAndDriver = this.activeTab === 'Current' || this.activeTab === 'Scheduled';
 
+    let base = this.auth.isDriver()
+      ? this.unifiedColumns
+      : this.unifiedColumns.filter((c) => c.key !== 'directions');
+
+    if (this.activeTab !== 'Disputed') {
+      base = base.filter((c) => c.key !== 'incidentReport');
+    }
+
     if (showPickupAndDriver) {
       return this.isReadOnlyTenant
-        ? this.unifiedColumns.filter((c) => c.key !== 'readyForPickup')
-        : this.unifiedColumns;
+        ? base.filter((c) => c.key !== 'readyForPickup')
+        : base;
     }
 
-    const filtered = this.unifiedColumns.filter((c) => c.key !== 'readyForPickup' && c.key !== 'driver');
-    return this.isReadOnlyTenant
-      ? filtered
-      : filtered;
+    return base.filter((c) => c.key !== 'readyForPickup' && c.key !== 'driver');
   }
 
-  // ─── Driver Broadcast ──────────────────────────────────────────────────────
+  // ─── Driver "New Orders" feed (app-published-orders-feed) ─────────────────
 
-  private connectWebSocket(): void {
-    const token = this.auth.getAccessToken();
-    if (!token) return;
-
-    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${proto}://${window.location.host}/api/v1/ws?token=${encodeURIComponent(token)}`;
-
-    try {
-      this.ws = new WebSocket(wsUrl);
-      this.ws.onmessage = (evt) => {
-        try {
-          const msg = JSON.parse(evt.data as string);
-          if (msg.type === 'new_order') {
-            const o = msg.order;
-            if (!o || this.publishedOrders.some(p => p.id === String(o.id))) return;
-
-            const publishedAt = o.published_at ? new Date(o.published_at) : new Date();
-            const elapsed = Math.floor((Date.now() - publishedAt.getTime()) / 1000);
-            const remaining = Math.max(0, 900 - elapsed); // 15 mins
-
-            this.publishedOrders = [{
-              id: String(o.id),
-              orderNumber: String(o.order_number ?? ''),
-              pickupAddress: String(o.pickup_address ?? ''),
-              deliveryAddress: String(o.delivery_address ?? ''),
-              total: Number(o.total ?? 0),
-              driverFee: Number(o.driver_fee ?? 0),
-              publishedAt,
-              remainingSeconds: remaining,
-              accepting: false,
-              accepted: false,
-            }, ...this.publishedOrders];
-          } else if (msg.type === 'order_accepted') {
-            this.publishedOrders = this.publishedOrders.filter(p => p.id !== String(msg.order_id));
-            this.loadOrders();
-          }
-        } catch { /* ignore */ }
-      };
-      this.ws.onclose = () => setTimeout(() => this.connectWebSocket(), 5000);
-    } catch { /* ignore */ }
-  }
-
-  private loadPublishedOrders(): void {
-    this.ordersService.getPublishedOrders().subscribe({
-      next: (orders) => {
-        const now = Date.now();
-        this.publishedOrders = orders.map(o => {
-          const publishedAt = o.published_at ? new Date(o.published_at) : new Date();
-          const elapsed = Math.floor((now - publishedAt.getTime()) / 1000);
-          return {
-            id: String(o.id),
-            orderNumber: String(o.order_number ?? ''),
-            pickupAddress: String(o.pickup_address ?? ''),
-            deliveryAddress: String(o.delivery_address ?? ''),
-            total: Number(o.total ?? 0),
-            driverFee: Math.round(Number(o.total ?? 0) * 0.05 * 100) / 100,
-            publishedAt,
-            remainingSeconds: Math.max(0, 900 - elapsed),
-            accepting: false,
-            accepted: false,
-          };
-        }).filter(o => o.remainingSeconds > 0);
-      }
-    });
-  }
-
-  private tickCountdowns(): void {
-    let changed = false;
-    for (const card of this.publishedOrders) {
-      if (card.remainingSeconds > 0) {
-        card.remainingSeconds--;
-        changed = true;
-      }
-    }
-    const before = this.publishedOrders.length;
-    this.publishedOrders = this.publishedOrders.filter(p => p.remainingSeconds > 0 || p.accepting);
-    if (changed || this.publishedOrders.length !== before) {
-      this.publishedOrders = [...this.publishedOrders];
-    }
-  }
-
-  async acceptOrder(card: any): Promise<void> {
-    if (card.accepting || card.accepted || card.remainingSeconds <= 0) return;
-    card.accepting = true;
-    try {
-      const acceptedOrder = await firstValueFrom(this.ordersService.acceptOrder(card.id));
-      const mappedOrder = this.mapBackendOrder(acceptedOrder as BackendOrder);
-      card.accepted = true;
-      this.publishedOrders = this.publishedOrders.filter(p => p.id !== card.id);
-      this.loadOrders();
-      this.setActiveTab(this.toTabLabel(mappedOrder.tab));
-      this.selectedOrderForDetails = mappedOrder;
-      this.isDetailsOpen = true;
-    } catch (err: any) {
-      this.setFeedback(err?.error?.detail || 'Failed to accept order.', 'error');
-      if (err?.status === 409 || err?.status === 410) {
-        this.publishedOrders = this.publishedOrders.filter(p => p.id !== card.id);
-      }
-    } finally {
-      card.accepting = false;
-    }
-  }
-
-  countdownPercent(card: any): number { return Math.round((card.remainingSeconds / 900) * 100); }
-  
-  countdownLabel(card: any): string {
-    const m = Math.floor(card.remainingSeconds / 60);
-    const s = card.remainingSeconds % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  }
-  
-  countdownColor(card: any): string {
-    const pct = this.countdownPercent(card);
-    if (pct > 50) return 'bg-emerald-500';
-    if (pct > 20) return 'bg-amber-400';
-    return 'bg-red-500';
+  onOrderAccepted(order: OrderEntity): void {
+    this.loadOrders();
+    this.setActiveTab(this.toTabLabel(order.tab));
+    this.selectedOrderForDetails = order;
+    this.isDetailsOpen = true;
   }
 
   // ─── Table rows ────────────────────────────────────────────────────────────
@@ -417,6 +313,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
   .filter((order) =>
     this.activeTab === 'Unassigned'
       ? this.isExpiredUnassignedOrder(order)
+      : this.activeTab === 'Disputed'
+      ? this.hasIncidentReport(order)
       : order.tab === tabKey && !this.isExpiredUnassignedOrder(order)
   )
   .filter((order) => {
@@ -451,20 +349,53 @@ export class OrdersComponent implements OnInit, OnDestroy {
       row['driver'] = '?';
     }
 
+    const activityStatus = order.view.current.activityStatus as OrderActivityStatus;
+    const flow = ACTIVITY_STATUS_FLOW[activityStatus];
+    row['activityStatusLabel'] = flow?.label ?? activityStatus;
+
+    if (this.auth.isDriver() && this.activeTab === 'Current' && flow?.next) {
+      row['activityStatusAction'] = flow.actionLabel;
+      row['activityStatusNext'] = flow.next;
+      row['activityStatusActionType'] = flow.actionType;
+    }
+
+    const incidentStage = INCIDENT_STAGE_BY_ACTIVITY_STATUS[activityStatus];
+    if (this.auth.isDriver() && this.activeTab === 'Current' && incidentStage) {
+      row['canReportIncident'] = true;
+      row['incidentStage'] = incidentStage;
+      row['incidentAlreadyReported'] = this.hasIncidentReport(order);
+    }
+
+    if (this.auth.isDriver()) {
+      row['showDirections'] = true;
+      row['pickupAddress'] = order.full.pickup.address;
+      row['deliveryAddress'] = order.full.delivery.address;
+    }
+
+    if (this.activeTab === 'Disputed') {
+      const report = order.full.details.incidentReport;
+      if (report) {
+        const reasonLabel = this.incidentReasonLabel(report.reason);
+        const summary = report.description ? `${reasonLabel} — ${report.description}` : reasonLabel;
+        row['incidentReportSummary'] = truncateWords(summary, 7);
+        row['incidentReportStage'] = report.stage === 'pickup' ? 'Pickup' : 'Delivery';
+      }
+    }
+
     return row;
   });
   }
 
   get emptyTitle(): string {
-    return this.activeTab === 'Unassigned'
-      ? 'No unassigned orders'
-      : 'No data available';
+    if (this.activeTab === 'Unassigned') return 'No unassigned orders';
+    if (this.activeTab === 'Disputed') return 'No disputed orders';
+    return 'No data available';
   }
 
   get emptySubtitle(): string {
-    return this.activeTab === 'Unassigned'
-      ? 'Expired published orders that no driver accepted will appear here.'
-      : '';
+    if (this.activeTab === 'Unassigned') return 'Expired published orders that no driver accepted will appear here.';
+    if (this.activeTab === 'Disputed') return 'Orders with a driver-reported issue (e.g. sender/recipient absent) will appear here.';
+    return '';
   }
 
   // ─── Context menu ──────────────────────────────────────────────────────────
@@ -601,7 +532,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
   closeDetails(): void {
     this.isDetailsOpen = false;
     this.selectedOrderForDetails = null;
-    this.isDetailsMenuOpen = false;
+  }
+
+  get selectedOrderReadyForPickup(): boolean {
+    return this.selectedOrderForDetails ? this.getReadyForPickupStatus(this.selectedOrderForDetails.id) : false;
   }
 
   async handleDetailsMenu(action: string): Promise<void> {
@@ -611,7 +545,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const id = selectedOrder.id;
 
     if (action === 'pdf') {
-      await this.downloadOrderPdf(selectedOrder);
+      await this.orderDocumentService.downloadOrderPdf(selectedOrder);
       return;
     }
 
@@ -623,7 +557,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
       this.ordersService.updateStatus(id, nextStatus).subscribe({
         next: () => {
-          this.setFeedback(`Order ${selectedOrder.full.orderNumber ?? ''} updated to ${this.formatStatusLabel(nextStatus)}.`, 'success');
+          this.setFeedback(`Order ${selectedOrder.full.orderNumber ?? ''} updated to ${formatStatusLabel(nextStatus)}.`, 'success');
           this.closeDetails();
           this.loadOrders();
         },
@@ -682,6 +616,104 @@ export class OrdersComponent implements OnInit, OnDestroy {
     });
   }
 
+  openDirections(row: any): void {
+    this.selectedRowForDirections = row;
+    this.isDirectionsOpen = true;
+  }
+
+  closeDirections(): void {
+    this.isDirectionsOpen = false;
+    this.selectedRowForDirections = null;
+  }
+
+  openReportModal(row: any): void {
+    const stage = row.incidentStage as 'pickup' | 'delivery' | undefined;
+    if (!stage) return;
+
+    const order = this.orders.find((o) => o.id === row.id);
+    if (order && this.hasIncidentReport(order)) {
+      this.toast.warning('Issue already reported.');
+      return;
+    }
+
+    this.reportContext = { id: row.id, stage, orderNo: row.orderNo ?? null };
+    this.isReportOpen = true;
+  }
+
+  closeReportModal(): void {
+    this.isReportOpen = false;
+    this.reportContext = null;
+  }
+
+  // Registry of handlers keyed by ActivityFlowEntry.actionType. To add a new checkpoint
+  // behavior (photo capture, signature, OTP, etc.), add a case to ActivityActionType and
+  // a handler here — the click plumbing in the table component doesn't need to change.
+  private activityActionHandlers: Record<ActivityActionType, (event: { id: string; next: string }) => void> = {
+    direct: (event) => this.applyActivityStatus(event.id, event.next),
+    'qr-scan': (event) => this.openQrScanModal(event.id, event.next as OrderActivityStatus),
+    'proof-of-delivery': (event) => this.openPodModal(event.id, event.next as OrderActivityStatus),
+  };
+
+  onActivityStatusAction(event: { id: string; next: string; type?: string }): void {
+    const handler = this.activityActionHandlers[(event.type as ActivityActionType) ?? 'direct']
+      ?? this.activityActionHandlers.direct;
+    handler(event);
+  }
+
+  private applyActivityStatus(id: string, next: string): void {
+    this.ordersService.updateActivityStatus(id, next).subscribe({
+      next: () => {
+        this.setFeedback('Activity status updated.', 'success');
+        this.loadOrders();
+
+        if (next === 'delivery_initiated') {
+          this.ordersService.sendRecipientNotification(id).subscribe({
+            error: () => this.setFeedback('Unable to notify the recipient by email.', 'error')
+          });
+        }
+      },
+      error: () => this.setFeedback('Unable to update activity status.', 'error')
+    });
+  }
+
+  // ─── QR scan modal ─────────────────────────────────────────────────────────
+
+  private openQrScanModal(id: string, next: OrderActivityStatus): void {
+    const orderNo = this.orders.find((o) => o.id === id)?.view.current.orderNo ?? null;
+    this.qrScanContext = { id, next, orderNo };
+    this.isQrScanOpen = true;
+  }
+
+  closeQrScanModal(): void {
+    this.isQrScanOpen = false;
+    this.qrScanContext = null;
+  }
+
+  onQrMatched(event: { id: string; next: OrderActivityStatus }): void {
+    this.closeQrScanModal();
+    this.applyActivityStatus(event.id, event.next);
+  }
+
+  // ─── Proof-of-delivery modal ────────────────────────────────────────────────
+
+  private openPodModal(id: string, next: OrderActivityStatus): void {
+    const order = this.orders.find((o) => o.id === id);
+    const signatureRequired = !!order?.full.details.proofOfDelivery?.signature;
+
+    this.podContext = { id, next, orderNo: order?.view.current.orderNo ?? null, signatureRequired };
+    this.isPodOpen = true;
+  }
+
+  closePodModal(): void {
+    this.isPodOpen = false;
+    this.podContext = null;
+  }
+
+  onPodDelivered(event: { id: string; next: OrderActivityStatus }): void {
+    this.closePodModal();
+    this.applyActivityStatus(event.id, event.next);
+  }
+
   getReadyForPickupStatus(orderId: string): boolean {
     if (this.readyForPickupMap.has(orderId)) {
       return this.readyForPickupMap.get(orderId) ?? false;
@@ -691,56 +723,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   // ─── Scheduled order promotion ─────────────────────────────────────────────
 
-
-// ??? Scheduled order promotion ?????????????????????????????????????????????
-
-async checkAndUpdateScheduledOrders(): Promise<void> {
-  if (this.scheduledPromotionInFlight) return;
-
-  this.scheduledPromotionInFlight = true;
-
-  try {
-    const now = new Date();
-    const twentyFourHoursLater = now.getTime() + (24 * 60 * 60 * 1000); // 24 hours from now
-
-    const candidateIds: string[] = [];
-
-    for (const order of this.orders) {
-      if (order.tab !== 'scheduled') continue;
-
-      const pickupDateTime = this.parseDateTime(
-        order.full.pickup.pickupDate,
-        order.full.pickup.pickupTime
-      );
-
-      if (pickupDateTime && pickupDateTime.getTime() <= twentyFourHoursLater) {
-        candidateIds.push(order.id);
-      }
-    }
-
-    if (candidateIds.length === 0) {
-      console.log('No scheduled orders ready to move to Current yet.');
-      return;
-    }
-
-    console.log(`Promoting ${candidateIds.length} order(s) to Current (within 24 hours of pickup)`);
-
-    // Move them to Current tab
-    await Promise.all(
-      candidateIds.map(id =>
-        firstValueFrom(this.ordersService.updateStatus(id, 'current'))
-      )
+  async checkAndUpdateScheduledOrders(): Promise<void> {
+    await this.scheduledOrderPromotionService.checkAndUpdateScheduledOrders(
+      this.orders,
+      () => this.loadOrders(),
+      (message) => this.setFeedback(message, 'error')
     );
-
-    this.loadOrders();
-
-  } catch (error) {
-    console.error('Failed to promote scheduled orders:', error);
-    this.setFeedback('Unable to auto-update scheduled orders.', 'error');
-  } finally {
-    this.scheduledPromotionInFlight = false;
   }
-}
 
   // ─── New order modal ───────────────────────────────────────────────────────
 
@@ -749,7 +738,7 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
       this.setFeedback('Read-only access for tenant users.', 'info');
       return;
     }
-    this.newOrderValue = this.createDefaultNewOrder();
+    this.newOrderValue = createDefaultNewOrder();
     this.editingOrderId = null;
     this.formSubmitted.set(false);
     this.isNewOrderOpen = true;
@@ -769,7 +758,7 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
     if (this.checkFormErrors() || this.isSavingOrder || this.isPublishingOrder) return;
 
     this.isSavingOrder = true;
-    const payload = this.toOrderPayload(this.newOrderValue);
+    const payload = toOrderPayload(this.newOrderValue);
     const mode = this.editingOrderId ? 'updated' : 'created';
 
     try {
@@ -800,7 +789,7 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
     if (this.checkFormErrors() || this.isSavingOrder || this.isPublishingOrder) return;
 
     this.isPublishingOrder = true;
-    const payload = this.toOrderPayload(this.newOrderValue);
+    const payload = toOrderPayload(this.newOrderValue);
 
     try {
       let orderId: string;
@@ -840,7 +829,7 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
   }
 
   fillNewOrderWithDummyData(): void {
-    this.newOrderValue = this.buildDemoDraftValue();
+    this.newOrderValue = buildDemoDraftValue();
     this.formSubmitted.set(false);
     this.setFeedback('Demo data filled in the order form.', 'success');
   }
@@ -856,68 +845,22 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
     if (!order) return;
 
     this.selectedOrderForAssignment = structuredClone(order);
-    this.assignDriverQuery = '';
     this.isAssignDriverOpen = true;
-    void this.loadAssignableDrivers(order.id);
   }
 
   closeAssignDriver(): void {
     this.isAssignDriverOpen = false;
     this.selectedOrderForAssignment = null;
-    this.assignDriverQuery = '';
-    this.selectedDriverId = '';
   }
 
-  async assignSelectedDriver(): Promise<void> {
-    if (this.isReadOnlyTenant) {
-      this.setFeedback('Read-only access for tenant users.', 'info');
-      return;
-    }
-    if (!this.selectedOrderForAssignment || !this.selectedDriverId) {
-      this.setFeedback('Select a driver to assign.', 'error');
-      return;
-    }
-    try {
-      await firstValueFrom(
-        this.ordersService.assignDriver(this.selectedOrderForAssignment.id, this.selectedDriverId)
-      );
-      this.loadOrders();
-      const selectedDriver = this.availableAssignableDrivers.find((driver) => driver.id === this.selectedDriverId);
-      const driverLabel = selectedDriver ? selectedDriver.contactName || selectedDriver.name : 'Driver';
-      this.setFeedback(
-        `${driverLabel} assigned to order ${this.selectedOrderForAssignment.full.orderNumber ?? ''}.`,
-        'success'
-      );
-      this.closeAssignDriver();
-    } catch {
-      this.setFeedback('Unable to assign driver.', 'error');
-    }
+  onDriverAssigned(): void {
+    this.loadOrders();
+    this.closeAssignDriver();
   }
 
-  async unassignSelectedDriver(): Promise<void> {
-    if (this.isReadOnlyTenant) {
-      this.setFeedback('Read-only access for tenant users.', 'info');
-      return;
-    }
-    if (!this.selectedOrderForAssignment) return;
-    try {
-      await firstValueFrom(this.ordersService.unassignDriver(this.selectedOrderForAssignment.id));
-      this.loadOrders();
-      this.setFeedback(`Driver removed from order ${this.selectedOrderForAssignment.full.orderNumber ?? ''}.`, 'success');
-      this.closeAssignDriver();
-    } catch {
-      this.setFeedback('Unable to remove driver.', 'error');
-    }
-  }
-
-  get filteredAssignableDrivers(): AssignableDriver[] {
-    const query = this.assignDriverQuery.trim().toLowerCase();
-    const drivers = this.availableAssignableDrivers;
-    if (!query) return drivers;
-    return drivers.filter((driver) =>
-      [driver.name, driver.contactName, driver.email, driver.phone, driver.address]
-        .some((value) => String(value ?? '').toLowerCase().includes(query))
-    );
+  onDriverUnassigned(): void {
+    this.loadOrders();
+    this.closeAssignDriver();
   }
 
   // ─── Label modal ───────────────────────────────────────────────────────────
@@ -925,96 +868,11 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
   openPrintLabel(order: OrderEntity): void {
     this.selectedOrderForLabel = structuredClone(order);
     this.isLabelOpen = true;
-    queueMicrotask(() => {
-      this.renderLabelGraphics();
-    });
   }
 
   closePrintLabel(): void {
     this.isLabelOpen = false;
     this.selectedOrderForLabel = null;
-  }
-
-  printLabel(): void {
-    if (!this.selectedOrderForLabel) return;
-    const order = this.selectedOrderForLabel;
-    const orderNumber = order.full.orderNumber ?? '';
-
-    const win = window.open('', '', 'height=750,width=520');
-    if (!win) {
-      this.setFeedback('Popup blocked. Allow popups to print the label.', 'error');
-      return;
-    }
-
-    win.document.write(`<!DOCTYPE html>
-<html><head>
-<title>Label - ${this.escapeHtml(orderNumber)}</title>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"><\/script>
-<style>${this.labelCSS()}</style>
-</head><body>
-<div class="label-wrapper">
-  <div class="top">
-    <div class="big-letter">D</div>
-    <div class="postage">
-      <div class="postage-title">DISPATCH DELIVERY</div>
-      <div>Order: ${this.escapeHtml(orderNumber)}</div>
-      <div>Placed: ${this.escapeHtml(order.view.current.orderPlacedTime || '')}</div>
-      <div>Est. Delivery: ${this.escapeHtml(order.view.current.estDeliveryTime || '')}</div>
-      <div class="postage-sub">CommercialBasePrice</div>
-    </div>
-    <div class="qr-side">
-      <span class="rotate">dispatch.local</span>
-      <canvas id="qrcode"></canvas>
-    </div>
-  </div>
-  <div class="banner">DISPATCH FIRST-CLASS PKG</div>
-  <div class="sender">
-    <div class="sender-info">
-      <div class="from-label">From</div>
-      <div>${this.escapeHtml(order.full.pickup.name)}</div>
-      <div>${this.escapeHtml(order.full.pickup.address)}</div>
-    </div>
-    <div class="order-ref">Order: ${this.escapeHtml(orderNumber)}</div>
-  </div>
-  <div class="recipient">
-    <div class="recipient-name">${this.escapeHtml(order.full.delivery.name)}</div>
-    <div class="recipient-addr">${this.escapeHtml(order.full.delivery.address)}</div>
-  </div>
-  <div class="barcode-section">
-    <div class="tracking-title">TRACKING #</div>
-    <svg id="barcode"></svg>
-    <div class="tracking-num">${this.escapeHtml(orderNumber)}</div>
-  </div>
-</div>
-<script>
-  QRCode.toCanvas(document.getElementById('qrcode'), ${JSON.stringify(orderNumber)}, { width: 70, margin: 1 }, function(e){ if(e) console.error(e); });
-  JsBarcode('#barcode', ${JSON.stringify(orderNumber)}, { format: 'CODE128', displayValue: false, margin: 0, width: 2, height: 60 });
-  window.onload = function() { setTimeout(function() { window.print(); }, 700); };
-<\/script>
-</body></html>`);
-    win.document.close();
-  }
-
-  async downloadLabelPdf(): Promise<void> {
-    const el = document.getElementById('label-preview');
-    if (!el) return;
-
-    try {
-      const canvas = await html2canvas(el, {
-        scale: 3,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        allowTaint: true
-      });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [101.6, 152.4] });
-      const imgHeight = (canvas.height * 101.6) / canvas.width;
-      pdf.addImage(imgData, 'PNG', 0, 0, 101.6, imgHeight);
-      pdf.save(`label-${this.selectedOrderForLabel!.full.orderNumber ?? ''}.pdf`);
-    } catch {
-      this.setFeedback('Failed to download label PDF.', 'error');
-    }
   }
 
   // ─── Print order modal ─────────────────────────────────────────────────────
@@ -1027,287 +885,12 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
   closePrintOrder(): void {
     this.isPrintOpen = false;
     this.selectedOrderForPrint = null;
-    this.isSendingOrderEmail = false;
-  }
-
-  async sendSelectedOrderByEmail(): Promise<void> {
-    const order = this.selectedOrderForPrint;
-    if (!order || this.isSendingOrderEmail) return;
-
-    const pickupEmail = order.full.pickup.email.trim();
-    if (!pickupEmail) {
-      this.setFeedback('This order does not have a sender email address.', 'error');
-      return;
-    }
-
-    this.isSendingOrderEmail = true;
-    try {
-      await firstValueFrom(this.ordersService.sendSenderInvoice(order.id));
-      this.setFeedback(`Invoice emailed to ${pickupEmail}.`, 'success');
-    } catch (error: any) {
-      this.setFeedback(error?.error?.detail || 'Unable to send invoice email.', 'error');
-    } finally {
-      this.isSendingOrderEmail = false;
-    }
   }
 
   // ─── Misc public ───────────────────────────────────────────────────────────
 
-  maskCard(card: string = ''): string {
-    if (!card) return '';
-    return card.replace(/\d(?=\d{4})/g, '*');
-  }
-
-  formatPaymentMethod(method: PaymentMethodType): string {
-    return method === 'credit_card' ? 'Credit card' : 'Cash on delivery';
-  }
-
   onPickupPin(): void { this.openMapModule(); }
   onDeliveryPin(): void { this.openMapModule(); }
-
-  // ─── PDF download (order) ──────────────────────────────────────────────────
-
-  async downloadOrderPdf(order: OrderEntity): Promise<void> {
-    const element = document.createElement('div');
-    element.innerHTML = this.generatePrintHTML(order);
-    element.style.cssText = 'position:absolute;left:-9999px;width:210mm;height:auto;padding:0;margin:0;';
-    document.body.appendChild(element);
-
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const canvas = await html2canvas(element, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff' });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-      const imgWidth = 210;
-      const pageHeight = 297;
-      let imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      while (heightLeft >= pageHeight) {
-        position = heightLeft - pageHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, -position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-      pdf.save(`order-${order.full.orderNumber ?? ''}.pdf`);
-    } finally {
-      document.body.removeChild(element);
-    }
-  }
-
-  // ─── Private: rendering ────────────────────────────────────────────────────
-
-  private async renderLabelGraphics(): Promise<void> {
-    if (!this.selectedOrderForLabel) return;
-
-    const orderNumber = this.selectedOrderForLabel.full.orderNumber ?? '';
-
-    await new Promise(resolve => requestAnimationFrame(resolve));
-
-    const canvas = document.getElementById('qrcode') as HTMLCanvasElement | null;
-    if (canvas) {
-      await QRCode.toCanvas(canvas, orderNumber, { width: 70, margin: 1 });
-    }
-
-    const barcodeElement = document.getElementById('barcode');
-    if (barcodeElement) {
-      JsBarcode('#barcode', orderNumber, {
-        format: 'CODE128',
-        displayValue: false,
-        margin: 0,
-        width: 2,
-        height: 60
-      });
-    }
-  }
-
-  private labelCSS(): string {
-    return `
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { font-family: Arial, sans-serif; background: #fff; display: flex; justify-content: center; padding: 16px; }
-      .label-wrapper { width: 384px; border: 2px solid #000; font-size: 11px; background: #fff; color: #000; }
-      .top { display: flex; border-bottom: 2px solid #000; padding: 8px; gap: 8px; align-items: flex-start; }
-      .big-letter { font-size: 52px; font-weight: 900; line-height: 1; width: 56px; text-align: center; flex-shrink: 0; }
-      .postage { flex: 1; font-size: 9px; line-height: 1.6; }
-      .postage-title { font-weight: bold; font-size: 10px; }
-      .postage-sub { margin-top: 4px; font-size: 8px; color: #777; }
-      .qr-side { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-      .rotate { font-size: 8px; writing-mode: vertical-rl; transform: rotate(180deg); letter-spacing: 2px; color: #666; }
-      canvas { width: 70px !important; height: 70px !important; display: block; }
-      .banner { text-align: center; font-size: 15px; font-weight: 900; padding: 5px 8px; border-bottom: 2px solid #000; letter-spacing: 2px; }
-      .sender { display: flex; justify-content: space-between; align-items: flex-start; padding: 8px; border-bottom: 2px solid #000; gap: 12px; }
-      .sender-info { font-size: 9px; line-height: 1.6; }
-      .from-label { font-weight: bold; font-size: 8px; text-transform: uppercase; color: #666; margin-bottom: 2px; }
-      .order-ref { font-size: 9px; color: #555; white-space: nowrap; flex-shrink: 0; }
-      .recipient { padding: 10px 8px 12px; border-bottom: 2px solid #000; }
-      .recipient-name { font-weight: bold; font-size: 14px; margin-bottom: 2px; }
-      .recipient-addr { font-size: 11px; line-height: 1.6; }
-      .barcode-section { padding: 8px; text-align: center; }
-      .tracking-title { font-weight: 900; font-size: 13px; letter-spacing: 2px; margin-bottom: 6px; }
-      svg { width: 100%; height: 60px; display: block; }
-      .tracking-num { font-size: 10px; letter-spacing: 3px; margin-top: 4px; }
-      @media print { @page { margin: 0; size: 4in auto; } body { padding: 0; } }
-    `;
-  }
-
-  // ─── Private: order mapping ────────────────────────────────────────────────
-
-  private mapBackendOrder(order: BackendOrder): OrderEntity {
-    const pickupPhone = this.splitPhoneNumber(order.pickup_phone);
-    const deliveryPhone = this.splitPhoneNumber(order.delivery_phone);
-    const payment = this.mapPaymentDetails(order.payment_method, order.payment_details);
-    const isExpiredUnassigned = this.isExpiredUnassignedBackendOrder(order);
-
-    const view: OrderView = {
-      orderNo: order.order_number,
-      customerName: order.delivery_name,
-      vendorName: order.pickup_name,
-      amount: this.auth.isDriver()
-        ? this.driverEarningsLabel(order.total)
-        : this.money(order.total),
-      distance: '?',
-      orderPlacedTime: order.order_placed_time || '',
-      pickupTime: this.formatTime(order.pickup_time),
-      estDeliveryTime: this.formatDateTime(order.delivery_date, order.delivery_time),
-      readyForPickup: order.ready_for_pickup ?? false,
-      driver: order.driver?.contact_name || order.driver?.name || '',
-      orderStatus: isExpiredUnassigned ? 'Unassigned' : this.formatStatusLabel(order.status),
-      trackingStatus: 'Inactive'
-    };
-
-    return {
-      id: order.id,
-      createdAt: order.created_at,
-      isExpiredUnassigned,
-      full: {
-        orderNumber: order.order_number,
-        pickup: {
-          name: order.pickup_name,
-          phone: pickupPhone,
-          email:order.pickup_email,
-          address: order.pickup_address,
-          pickupDate: order.pickup_date,
-          pickupTime: order.pickup_time
-        },
-        delivery: {
-          name: order.delivery_name,
-          phone: deliveryPhone,
-          email: order.delivery_email,
-          address: order.delivery_address,
-          deliveryDate: order.delivery_date,
-          deliveryTime: order.delivery_time
-        },
-        details: {
-          items: (order.items || []).map((item) => ({
-            itemName: item.itemName,
-            itemPrice: String(item.itemPrice),
-            itemQty: String(item.itemQty)
-          })),
-          subtotal: order.subtotal,
-          taxRate: order.tax_rate,
-          taxAmount: order.tax_amount,
-          deliveryFees: order.delivery_fees,
-          deliveryTips: order.delivery_tips,
-          discount: order.discount,
-          total: order.total,
-          instructions: order.instructions || '',
-          payment,
-          proofOfDelivery: this.normalizeProofOfDelivery(order.proof_of_delivery)
-        }
-      },
-      tab: order.status,
-      view: {
-        current: { ...view },
-        scheduled: { ...view },
-        completed: { ...view },
-        incomplete: { ...view },
-        history: { ...view }
-      }
-    };
-  }
-
-  private async loadAssignableDrivers(selectedOrderId?: string): Promise<void> {
-    this.isLoadingAssignableDrivers = true;
-    this.assignDriverLoadError = '';
-
-    try {
-      const drivers = await firstValueFrom(this.http.get<TenantDriverEntity[]>('/api/v1/drivers/available'));
-     console.log('RAW DRIVERS FROM API', drivers);
-      this.availableAssignableDrivers = drivers.map((driver: any) => ({
-  id: String(driver.id),
-  name: String(driver.name ?? '').trim(),
-  contactName: String(driver.contact_name ?? '').trim(),
-  email: String(driver.contact_email ?? '').trim(),
-  phone: this.formatTenantPhone(
-    driver.contact_phone_country_code,
-    driver.contact_phone_number
-  ),
-  address: String(driver.address ?? '').trim()
-}));
-
-      if (selectedOrderId && this.selectedOrderForAssignment?.id === selectedOrderId) {
-        const currentDriverName = this.selectedOrderForAssignment.view.current.driver.trim();
-        this.selectedDriverId = this.availableAssignableDrivers.find((driver) =>
-          driver.id === currentDriverName || driver.name === currentDriverName || driver.contactName === currentDriverName
-        )?.id ?? '';
-      }
-    } catch {
-      this.availableAssignableDrivers = [];
-      this.assignDriverLoadError = 'Unable to load drivers.';
-      this.setFeedback('Unable to load drivers from tenants.', 'error');
-    } finally {
-      this.isLoadingAssignableDrivers = false;
-    }
-  }
-
-  private formatTenantPhone(countryCode: string | null | undefined, number: string | null | undefined): string {
-    const code = String(countryCode ?? '').trim();
-    const phoneNumber = String(number ?? '').trim();
-    if (!code && !phoneNumber) return '';
-    if (!code) return phoneNumber;
-    if (!phoneNumber) return code;
-    return `${code} ${phoneNumber}`;
-  }
-
-  private mapPaymentDetails(
-    method: PaymentMethodType,
-    paymentDetails?: Record<string, unknown> | null
-  ): NewOrderFormValue['details']['payment'] {
-    if (method !== 'credit_card') return { method };
-
-    const details = paymentDetails ?? {};
-    const src = (
-      typeof details['creditCard'] === 'object' && details['creditCard'] !== null
-        ? details['creditCard'] as Record<string, unknown>
-        : details
-    );
-
-    return {
-      method,
-      creditCard: {
-        cardholderName: String(src['cardholderName'] ?? ''),
-        cardNumber: String(src['cardNumber'] ?? ''),
-        expiryMonth: String(src['expiryMonth'] ?? ''),
-        expiryYear: String(src['expiryYear'] ?? ''),
-        cvc: String(src['cvc'] ?? '')
-      }
-    };
-  }
-
-  private splitPhoneNumber(phone: string): { countryCode: string; number: string } {
-    const trimmed = String(phone || '').trim();
-    const digits = trimmed.replace(/\D/g, '');
-    if (digits.length > 10) {
-      return {
-        countryCode: `+${digits.slice(0, digits.length - 10)}`,
-        number: digits.slice(-10)
-      };
-    }
-    return { countryCode: '+1', number: digits };
-  }
 
   private setReadyForPickupLocal(orderId: string, isReady: boolean): void {
     this.readyForPickupMap.set(orderId, isReady);
@@ -1327,6 +910,14 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
     return this.orders.find((o) => o.view.current.orderNo === orderNo);
   }
 
+  private hasIncidentReport(order: OrderEntity): boolean {
+    return order.full.details.incidentReport !== null;
+  }
+
+  incidentReasonLabel(reason: string): string {
+    return INCIDENT_REASON_LABELS[reason] ?? reason;
+  }
+
   private getTabKey(tab: string): OrderTab {
     switch (tab) {
       case 'Scheduled': return 'scheduled';
@@ -1337,168 +928,27 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
     }
   }
 
-  // ─── Private: print ────────────────────────────────────────────────────────
-
-  openPrintWindow(order: OrderEntity): void {
-    const printContent = this.generatePrintHTML(order);
-    const printWindow = window.open('', '', 'height=600,width=800');
-    if (!printWindow) {
-      this.setFeedback('Popup blocked. Allow popups to print the order.', 'error');
-      return;
-    }
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-  }
-
-  private generatePrintHTML(order: OrderEntity): string {
-    const paymentMethod = this.formatPaymentMethod(order.full.details.payment.method);
-    const creditCard = order.full.details.payment.creditCard;
-
-    return `<!DOCTYPE html><html><head>
-      <title>Order #${this.escapeHtml(order.full.orderNumber ?? '')}</title>
-      <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h2 { text-align: center; margin-bottom: 30px; }
-        .section { margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 15px; }
-        .section h3 { font-weight: bold; margin-bottom: 10px; }
-        .row { display: flex; justify-content: space-between; margin: 5px 0; }
-        .total { font-weight: bold; font-size: 16px; margin-top: 20px; }
-        @media print { body { margin: 0; } }
-      </style>
-    </head><body>
-      <h2>Order #${this.escapeHtml(order.full.orderNumber ?? '')}</h2>
-      <div class="section">
-        <h3>Pickup Information</h3>
-        <p><strong>${this.escapeHtml(order.full.pickup.name)}</strong></p>
-        <p>${this.escapeHtml(order.full.pickup.phone.countryCode)} ${this.escapeHtml(order.full.pickup.phone.number)}</p>
-        <p>${this.escapeHtml(order.full.pickup.email)}</p>
-        <p>${this.escapeHtml(order.full.pickup.address)}</p>
-        <p>Time: ${this.escapeHtml(order.full.pickup.pickupDate)} ${this.escapeHtml(order.full.pickup.pickupTime)}</p>
-      </div>
-      <div class="section">
-        <h3>Delivery Information</h3>
-        <p><strong>${this.escapeHtml(order.full.delivery.name)}</strong></p>
-        <p>${this.escapeHtml(order.full.delivery.phone.countryCode)} ${this.escapeHtml(order.full.delivery.phone.number)}</p>
-        <p>${this.escapeHtml(order.full.delivery.email)}</p>
-        <p>${this.escapeHtml(order.full.delivery.address)}</p>
-        <p>${this.escapeHtml(order.full.delivery.deliveryDate)} ${this.escapeHtml(order.full.delivery.deliveryTime)}</p>
-      </div>
-      <div class="section">
-        <h3>Items</h3>
-        ${order.full.details.items.map((item) => `
-          <div class="row">
-            <span>${this.escapeHtml(item.itemName)} x ${this.escapeHtml(item.itemQty)}</span>
-            <span>${this.escapeHtml(this.money(this.toNumber(item.itemPrice)))}</span>
-          </div>`).join('')}
-      </div>
-      <div class="section">
-        <div class="row"><span>Subtotal</span><span>${this.escapeHtml(this.money(order.full.details.subtotal))}</span></div>
-        <div class="row"><span>Tax (${this.escapeHtml(String(order.full.details.taxRate))}%)</span><span>${this.escapeHtml(this.money(order.full.details.taxAmount))}</span></div>
-        <div class="row"><span>Delivery Fees</span><span>${this.escapeHtml(this.money(order.full.details.deliveryFees))}</span></div>
-        <div class="row"><span>Tips</span><span>${this.escapeHtml(this.money(order.full.details.deliveryTips))}</span></div>
-        <div class="row"><span>Discount</span><span>${this.escapeHtml(this.money(order.full.details.discount))}</span></div>
-        <div class="row"><span>Status</span><span>${this.escapeHtml(this.formatStatusLabel(order.tab))}</span></div>
-        <div class="row"><span>Payment</span><span>${this.escapeHtml(paymentMethod)}</span></div>
-        ${creditCard ? `<div class="row"><span>Card</span><span>${this.escapeHtml(this.maskCard(creditCard.cardNumber))}</span></div>` : ''}
-      </div>
-      <div class="total">
-        <div class="row"><span>Total</span><span>${this.escapeHtml(this.money(order.full.details.total))}</span></div>
-      </div>
-    </body></html>`;
-  }
-
   // ─── Private: helpers ──────────────────────────────────────────────────────
-
-  private toOrderPayload(value: NewOrderFormValue): Record<string, unknown> {
-    return {
-      pickup_name: value.pickup.name.trim(),
-      pickup_phone: `${value.pickup.phone.countryCode}${value.pickup.phone.number}`,
-      pickup_email:value.pickup.email.trim(),
-      pickup_address: value.pickup.address.trim(),
-      pickup_date: value.pickup.pickupDate,
-      pickup_time: value.pickup.pickupTime,
-      delivery_name: value.delivery.name.trim(),
-      delivery_phone: `${value.delivery.phone.countryCode}${value.delivery.phone.number}`,
-      delivery_email: value.delivery.email.trim(),
-      delivery_address: value.delivery.address.trim(),
-      delivery_date: value.delivery.deliveryDate,
-      delivery_time: value.delivery.deliveryTime,
-      items: value.details.items
-        .filter((item) => item.itemName.trim() && this.toNumber(item.itemPrice) > 0 && this.toNumber(item.itemQty) > 0)
-        .map((item) => ({
-          itemName: item.itemName.trim(),
-          itemPrice: this.toNumber(item.itemPrice),
-          itemQty: Math.round(this.toNumber(item.itemQty))
-        })),
-      subtotal: value.details.subtotal,
-      tax_rate: value.details.taxRate,
-      tax_amount: value.details.taxAmount,
-      delivery_fees: value.details.deliveryFees,
-      delivery_tips: value.details.deliveryTips,
-      discount: value.details.discount,
-      total: value.details.total,
-      instructions: value.details.instructions.trim(),
-      payment_method: value.details.payment.method,
-      proof_of_delivery: value.details.proofOfDelivery,
-      payment_details: value.details.payment.method === 'credit_card'
-        ? { creditCard: value.details.payment.creditCard }
-        : null
-    };
-  }
-
-  private formatStatusLabel(status: OrderTab): string {
-    return status.charAt(0).toUpperCase() + status.slice(1);
-  }
-
-  private formatTime(time: string): string {
-    if (!time) return '';
-    const [hours, minutes] = time.split(':').map(Number);
-    if (Number.isNaN(hours) || Number.isNaN(minutes)) return time;
-    const period = hours >= 12 ? 'pm' : 'am';
-    return `${hours % 12 || 12}:${String(minutes).padStart(2, '0')}${period}`;
-  }
-
-  private formatDateTime(dateStr: string, time: string): string {
-    const parsed = this.parseDateTime(dateStr, time);
-    if (!parsed) return this.formatTime(time);
-    return `${parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${this.formatTime(time)}`;
-  }
-
-  private parseDateTime(dateStr: string, time: string): Date | null {
-    if (!dateStr || !time) return null;
-    const value = new Date(`${dateStr}T${time}`);
-    return Number.isNaN(value.getTime()) ? null : value;
-  }
-
-  private normalizeProofOfDelivery(value: unknown): NewOrderFormValue['details']['proofOfDelivery'] {
-    if (!value || typeof value !== 'object') {
-      return { signature: false, picture: false };
-    }
-    const record = value as Record<string, unknown>;
-    return {
-      signature: Boolean(record['signature']),
-      picture: Boolean(record['picture'])
-    };
-  }
 
   private checkFormErrors(): boolean {
     const value = this.newOrderValue;
     if (!value.pickup.name.trim()) return true;
     if (!value.pickup.address.trim()) return true;
+    if (!value.pickup.location) return true;
     if (!value.pickup.email.trim()) return true;
     if (!value.pickup.pickupDate || !value.pickup.pickupTime) return true;
     if (!this.isValidPhone(value.pickup.phone.number)) return true;
     if (!value.delivery.name.trim()) return true;
     if (!value.delivery.email.trim() || !this.isValidEmail(value.delivery.email)) return true;
     if (!value.delivery.address.trim()) return true;
+    if (!value.delivery.location) return true;
     if (!value.delivery.deliveryDate || !value.delivery.deliveryTime) return true;
     if (!this.isValidPhone(value.delivery.phone.number)) return true;
     if (this.isDeliveryBeforeOrEqualPickup(value)) return true;
+    if (!value.deliveryCategoryId || !value.routeQuote) return true;
 
     const hasValidItem = (value.details.items || []).some((item) =>
-      item.itemName.trim() && this.toNumber(item.itemPrice) > 0 && this.toNumber(item.itemQty) > 0
+      item.itemName.trim() && toNumber(item.itemPrice) > 0 && toNumber(item.itemQty) > 0
     );
     if (!hasValidItem) return true;
 
@@ -1524,31 +974,14 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
 
   private isDeliveryBeforeOrEqualPickup(value: NewOrderFormValue): boolean {
     if (value.pickup.pickupDate !== value.delivery.deliveryDate) return false;
-    const pickupDT = this.parseDateTime(value.pickup.pickupDate, value.pickup.pickupTime);
-    const deliveryDT = this.parseDateTime(value.delivery.deliveryDate, value.delivery.deliveryTime);
+    const pickupDT = parseDateTime(value.pickup.pickupDate, value.pickup.pickupTime);
+    const deliveryDT = parseDateTime(value.delivery.deliveryDate, value.delivery.deliveryTime);
     if (!pickupDT || !deliveryDT) return false;
     return deliveryDT.getTime() <= pickupDT.getTime();
   }
 
-  private toNumber(value: unknown): number {
-    const parsed = typeof value === 'number' ? value : parseFloat(String(value ?? '').trim());
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-
-  driverEarningsLabel(total: unknown): string {
-    return this.money(Math.round(this.toNumber(total) * 0.05 * 100) / 100);
-  }
-
   private isExpiredUnassignedOrder(order: OrderEntity): boolean {
     return order.isExpiredUnassigned === true;
-  }
-
-  private isExpiredUnassignedBackendOrder(order: BackendOrder): boolean {
-    if (!order.published || order.driver?.id) return false;
-    if (!order.published_at) return false;
-
-    const publishedAt = new Date(order.published_at).getTime();
-    return Number.isFinite(publishedAt) && Date.now() - publishedAt >= PUBLISH_WINDOW_MS;
   }
 
   private notifyNewUnassignedOrders(): void {
@@ -1577,31 +1010,15 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
       completed: 'Completed',
       incomplete: 'Incomplete',
       history: 'History',
+      disputed: 'Disputed',
     };
     return labels[tab];
-  }
-
-  private todayYYYYMMDD(): string {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  }
-
-  private money(amount: number): string {
-    return `C$ ${this.toNumber(amount).toFixed(2)}`;
-  }
-
-  private escapeHtml(value: string): string {
-    return String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
   }
 
   private setFeedback(message: string, tone: 'success' | 'error' | 'info'): void {
     this.feedbackMessage = message;
     this.feedbackTone = tone;
+    this.toast.show(tone === 'info' ? 'warning' : tone, message);
   }
 
   private isLocalhost(): boolean {
@@ -1613,69 +1030,4 @@ async checkAndUpdateScheduledOrders(): Promise<void> {
     if (typeof window === 'undefined') return;
     window.open('/map', '_blank', 'noopener');
   }
-
-  private createDefaultNewOrder(): NewOrderFormValue {
-    return {
-      orderNumber: '',
-      pickup: { name: '', phone: { countryCode: '+1', number: '' },email:'', address: '', pickupDate: this.todayYYYYMMDD(), pickupTime: '' },
-      delivery: { name: '', phone: { countryCode: '+1', number: '' }, email: '', address: '', deliveryDate: this.todayYYYYMMDD(), deliveryTime: '' },
-      details: {
-        items: [{ itemName: '', itemPrice: '', itemQty: '' }],
-        taxRate: 0, deliveryFees: 0, deliveryTips: 0, discount: 0,
-        subtotal: 0, taxAmount: 0, total: 0,
-        instructions: '', payment: { method: 'cash_on_delivery' },
-        proofOfDelivery: { signature: false, picture: false }
-      }
-    };
-  }
-
-  // ─── Demo fill data (form only, no table seeding) ──────────────────────────
-
-  private buildDemoDraftValue(): NewOrderFormValue {
-    const now = new Date();
-    const pickupAt = new Date(now.getTime() + 1 * 3600000);
-    const deliveryAt = new Date(now.getTime() + 2 * 3600000);
-
-    return {
-      orderNumber: `DEMO-${Date.now()}`,
-      pickup: {
-        name: 'North Fork Kitchen',
-        phone: { countryCode: '+1', number: '4161234567' },
-        email:'sender@dispatch.com',
-        address: '110 King St, Toronto',
-        pickupDate: this.formatDateForInput(pickupAt),
-        pickupTime: this.formatTimeForInput(pickupAt)
-      },
-      delivery: {
-        name: 'Maya Chen',
-        phone: { countryCode: '+1', number: '4169876543' },
-        email: `demo+${Date.now()}@dispatch.local`,
-        address: '480 Queen Ave, Toronto',
-        deliveryDate: this.formatDateForInput(deliveryAt),
-        deliveryTime: this.formatTimeForInput(deliveryAt)
-      },
-      details: {
-        items: [{ itemName: 'Burger Combo', itemPrice: '14', itemQty: '2' }],
-        taxRate: 13,
-        deliveryFees: 4,
-        deliveryTips: 1.5,
-        discount: 0,
-        subtotal: 28,
-        taxAmount: 3.64,
-        total: 37.14,
-        instructions: 'Call on arrival.',
-        payment: { method: 'cash_on_delivery' },
-        proofOfDelivery: { signature: false, picture: false }
-      }
-    };
-  }
-
-  private formatDateForInput(value: Date): string {
-    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
-  }
-
-  private formatTimeForInput(value: Date): string {
-    return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
-  }
 }
-
