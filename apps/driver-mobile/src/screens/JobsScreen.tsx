@@ -10,9 +10,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { PostResponse } from '@dispatch/shared/contracts';
-import { fetchPublic, fetchWithAuth, logout } from '@services/api';
+import { fetchPublic, fetchWithAuth } from '@services/api';
 import { subscribeForegroundMessages } from '@services/notifications';
 import { useTheme } from '@theme';
+import { Card, CardBody, Badge, Ref } from '@components/ui';
 
 interface Job {
   id: string;
@@ -25,9 +26,10 @@ interface Job {
 interface Props {
   onLogout: () => void;
   onOpenSettings: () => void;
+  onJobPress: (id: string) => void;
 }
 
-export function JobsScreen({ onLogout, onOpenSettings }: Props) {
+export function JobsScreen({ onLogout, onOpenSettings, onJobPress }: Props) {
   const { palette } = useTheme();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [posts, setPosts] = useState<PostResponse[]>([]);
@@ -70,11 +72,6 @@ export function JobsScreen({ onLogout, onOpenSettings }: Props) {
     return unsubscribe;
   }, [loadJobs, loadPosts]);
 
-  async function handleLogout() {
-    await logout();
-    onLogout();
-  }
-
   if (isLoading) {
     return (
       <View className="flex-1 justify-center items-center bg-background">
@@ -84,14 +81,14 @@ export function JobsScreen({ onLogout, onOpenSettings }: Props) {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
+    <SafeAreaView edges={['top']} className="flex-1 bg-background">
       <View className="bg-surface border-b border-border px-4 py-3 flex-row justify-between items-center">
         <Text className="text-xl font-bold text-foreground">My Jobs</Text>
         <View className="flex-row items-center gap-4">
           <TouchableOpacity onPress={onOpenSettings} hitSlop={8}>
             <Text className="text-sm font-medium text-primary">Appearance</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleLogout} hitSlop={8}>
+          <TouchableOpacity onPress={() => onLogout()} hitSlop={8}>
             <Text className="text-sm text-muted">Sign out</Text>
           </TouchableOpacity>
         </View>
@@ -120,13 +117,12 @@ export function JobsScreen({ onLogout, onOpenSettings }: Props) {
             ) : (
               <View className="mt-2 gap-2">
                 {posts.map((post) => (
-                  <View
-                    key={post.id}
-                    className="bg-card border border-border rounded-xl p-4"
-                  >
-                    <Text className="font-semibold text-foreground">{post.title}</Text>
-                    <Text className="text-xs text-muted mt-1">{post.summary}</Text>
-                  </View>
+                  <Card key={post.id}>
+                    <CardBody className="gap-1">
+                      <Text className="font-semibold text-foreground">{post.title}</Text>
+                      <Text className="text-xs text-muted">{post.summary}</Text>
+                    </CardBody>
+                  </Card>
                 ))}
               </View>
             )}
@@ -139,22 +135,25 @@ export function JobsScreen({ onLogout, onOpenSettings }: Props) {
           </View>
         }
         renderItem={({ item }) => (
-          <View className="bg-card border border-border mx-4 my-2 rounded-xl p-4">
-            <View className="flex-row justify-between items-start mb-2">
-              <Text className="font-semibold text-foreground">#{item.order_ref}</Text>
-              <View className="bg-primary-muted rounded-full px-3 py-1">
-                <Text className="text-xs font-medium text-primary-muted-foreground">
-                  {item.status.replace(/_/g, ' ')}
-                </Text>
-              </View>
-            </View>
-            <Text className="text-sm text-muted mb-1">
-              📦 {item.pickup_address}
-            </Text>
-            <Text className="text-sm text-muted">
-              📍 {item.delivery_address}
-            </Text>
-          </View>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => onJobPress(item.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`Job ${item.order_ref}`}
+          >
+            <Card accent className="mx-4 my-2">
+              <CardBody className="gap-3">
+                <View className="flex-row justify-between items-start">
+                  <Ref>{item.order_ref}</Ref>
+                  <Badge label={item.status.replace(/_/g, ' ')} />
+                </View>
+                <View className="gap-1">
+                  <Text className="text-sm text-muted">📦 {item.pickup_address}</Text>
+                  <Text className="text-sm text-muted">📍 {item.delivery_address}</Text>
+                </View>
+              </CardBody>
+            </Card>
+          </TouchableOpacity>
         )}
         contentContainerStyle={{ paddingBottom: 16 }}
       />

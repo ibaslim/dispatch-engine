@@ -7,19 +7,21 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { login } from '@services/api';
 import { registerFcmToken } from '@services/notifications';
 import { useTheme } from '@theme';
+import { Button } from '@components/ui';
 
 interface Props {
+  /** Performs the sign-in (wired to the auth context by the route). */
+  onSubmit: (email: string, password: string) => Promise<void>;
+  /** Called after a successful sign-in (navigate into the app). */
   onLoginSuccess: () => void;
   onOpenSettings: () => void;
 }
 
-export function LoginScreen({ onLoginSuccess, onOpenSettings }: Props) {
+export function LoginScreen({ onSubmit, onLoginSuccess, onOpenSettings }: Props) {
   const { palette } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,8 +34,8 @@ export function LoginScreen({ onLoginSuccess, onOpenSettings }: Props) {
     }
     setIsLoading(true);
     try {
-      await login(email.trim(), password);
-      // Register FCM token after successful login (fire-and-forget)
+      await onSubmit(email.trim(), password);
+      // Register FCM token after successful login (fire-and-forget).
       registerFcmToken().catch(console.error);
       onLoginSuccess();
     } catch (err: unknown) {
@@ -98,20 +100,13 @@ export function LoginScreen({ onLoginSuccess, onOpenSettings }: Props) {
             </View>
           </View>
 
-          <TouchableOpacity
+          <Button
+              variant={"primary"}
+            title="Sign in"
+            loading={isLoading}
             onPress={handleLogin}
-            disabled={isLoading}
-            className="mt-8 bg-primary rounded-lg py-4 items-center"
-            style={{ opacity: isLoading ? 0.6 : 1 }}
-          >
-            {isLoading ? (
-              <ActivityIndicator color={palette['primary-foreground']} />
-            ) : (
-              <Text className="text-primary-foreground text-base font-semibold">
-                Sign in
-              </Text>
-            )}
-          </TouchableOpacity>
+            className="mt-8"
+          />
         </View>
       </SafeAreaView>
     </KeyboardAvoidingView>

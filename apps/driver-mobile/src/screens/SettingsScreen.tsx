@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme, THEME_LIST, type ThemeMode } from '@theme';
+import { Card, CardBody, CardSubtitle, Badge, Button, Ref } from '@components/ui';
 
 interface Props {
   onClose: () => void;
@@ -107,26 +108,24 @@ export function SettingsScreen({ onClose }: Props) {
           <Text className="text-xs font-semibold uppercase tracking-wider text-muted">
             Preview
           </Text>
-          <View className="rounded-2xl border border-border bg-card p-5">
-            <View className="mb-3 flex-row items-center justify-between">
-              <Text className="text-base font-semibold text-foreground">
-                Order #A-1029
-              </Text>
-              <View className="rounded-full bg-primary-muted px-3 py-1">
-                <Text className="text-xs font-medium text-primary-muted-foreground">
-                  in transit
-                </Text>
+          <Card accent>
+            <CardBody className="gap-3">
+              <View className="flex-row items-center justify-between">
+                <Ref>A-1029</Ref>
+                <Badge label="in transit" />
               </View>
-            </View>
-            <Text className="text-sm text-muted">
-              Pickup and delivery details appear here.
-            </Text>
-            <View className="mt-4 items-center rounded-xl bg-primary py-3">
-              <Text className="text-sm font-semibold text-primary-foreground">
-                Primary action
-              </Text>
-            </View>
-          </View>
+              <CardSubtitle>128 King St → 40 Harbour Esplanade</CardSubtitle>
+              <View className="mt-1 flex-row gap-3">
+                <Button title="Accept" className="flex-1" onPress={() => {}} />
+                <Button
+                  title="Details"
+                  variant="outline"
+                  className="flex-1"
+                  onPress={() => {}}
+                />
+              </View>
+            </CardBody>
+          </Card>
         </View>
       </ScrollView>
     </SafeAreaView>

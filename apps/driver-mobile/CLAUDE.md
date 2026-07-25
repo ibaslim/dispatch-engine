@@ -20,8 +20,20 @@ The **driver-facing mobile app** for the dispatch engine. Drivers log in, view t
 
 Layer-based structure — group by technical role. Each `src/` folder has a matching path alias (see below).
 
+Routing is **Expo Router** (file-based) under `app/`; presentational screens/components live in
+`src/` (layer-based, each folder has a matching path alias). Route files stay thin — they wire
+router/auth handlers into `src/screens/*` components.
+
 ```
-App.tsx                       # Root: checks stored token, shows Login or Jobs
+app/                          # Expo Router routes (see "Navigation")
+  _layout.tsx                 # Providers + themed StatusBar + root Stack
+  login.tsx                   # Public auth screen
+  settings.tsx                # Modal route
+  (app)/                      # Authenticated area (auth guard)
+    _layout.tsx               #   redirect to /login when signed out
+    (tabs)/                   #   bottom-tab group (BottomNav custom tabBar)
+      _layout.tsx, index.tsx, route.tsx, pay.tsx, activity.tsx, profile.tsx
+    job/[id].tsx              #   job detail, pushed over the tabs
 src/
   components/ui/              # Reusable presentational components (primitives)
   screens/
@@ -41,7 +53,30 @@ src/
 
 Each `services/*` subfolder has an `index.ts` barrel, so import from the folder (`@services/api`) rather than the file (`@services/api/client`).
 
-Auth is token-based: access/refresh tokens live in `expo-secure-store` under `dispatch.access_token` / `dispatch.refresh_token`. `App.tsx` gates on the presence of an access token.
+Auth is token-based: access/refresh tokens live in `expo-secure-store` under `dispatch.access_token` / `dispatch.refresh_token`. `AuthProvider` (`@contexts`) exposes `{ session, isLoading, signIn, signOut }`; the `app/(app)/_layout.tsx` guard redirects to `/login` when there's no session.
+
+## Navigation
+
+**The app uses Expo Router (file-based routing). Do NOT hand-roll navigation** with `useState` +
+conditional rendering, or present screens as manual boolean overlays. (That was the original
+mistake — tabs unmounted on switch, Android back was broken, no deep linking, settings was a fake
+overlay. This is exactly what the Expo Router migration fixed; don't reintroduce it.)
+
+Conventions:
+- **Entry** is `expo-router/entry` (`package.json` `main`). There is no `App.tsx`; app-wide
+  providers live in `app/_layout.tsx`.
+- **Routes** live in `app/`. `(app)` is the authenticated group (one auth guard covers all
+  children); `(tabs)` is the bottom-tab group; **detail screens are pushed routes** (e.g.
+  `app/(app)/job/[id].tsx`) so they cover the tab bar; **Settings is a modal route** (`app/settings.tsx`).
+- **Tabs** use our `BottomNav` design via the custom `tabBar` adapter `@navigation/AppTabBar` —
+  do not replace it with the default tab bar. Tab icon/label config lives in `AppTabBar`'s `TAB_META`.
+- **Screens stay presentational** (`src/screens/*`): they take callback props; the thin route files
+  inject `router.push(...)` / `useAuth()` handlers. Navigate with typed hrefs
+  (`router.push({ pathname: '/job/[id]', params: { id } })`); typed routes are enabled
+  (`app.json` → `experiments.typedRoutes`).
+- **Deep links**: scheme is `driver-mobile://` (`app.json`); FCM taps route via
+  `setupNotificationRouting()` (wired in `app/_layout.tsx`). Cold-start deep links need the native
+  manifest's scheme intent-filter — regenerate with `expo prebuild` if it's missing.
 
 ## Path aliases
 
@@ -53,7 +88,8 @@ Import via per-folder aliases, not relative paths. Defined in **both** `babel.co
 | `@screens` | `src/screens` | | `@constants` | `src/constants` |
 | `@services` | `src/services` | | `@types` | `src/types` |
 | `@hooks` | `src/hooks` | | `@utils` | `src/utils` |
-| `@contexts` | `src/contexts` | | `@dispatch/shared/*` | monorepo `libs/shared/*` |
+| `@contexts` | `src/contexts` | | `@theme` | `src/theme` |
+| `@dispatch/shared/*` | monorepo `libs/shared/*` | | | |
 
 Example: `import { login } from '@services/api';`
 

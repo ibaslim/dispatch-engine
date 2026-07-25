@@ -12,6 +12,7 @@
 
 import messaging from '@react-native-firebase/messaging';
 import { Platform } from 'react-native';
+import { router } from 'expo-router';
 import { postWithAuth } from '@services/api';
 
 function getMessagingInstance() {
@@ -94,6 +95,37 @@ export function setupBackgroundHandler(): void {
   messagingInstance.setBackgroundMessageHandler(async (remoteMessage) => {
     console.log('[FCM] Background message:', remoteMessage);
   });
+}
+
+/**
+ * Deep-link to the relevant screen when a notification is tapped — both when the
+ * app is opened from the background and from a cold start. Call once at the app
+ * root. Job-assignment pushes are expected to carry `data.jobId`.
+ * Returns an unsubscribe function.
+ */
+export function setupNotificationRouting(): () => void {
+  const messagingInstance = getMessagingInstance();
+  if (!messagingInstance) {
+    return () => {
+      // No-op when messaging is unavailable.
+    };
+  }
+
+  const navigateFromMessage = (
+    remoteMessage: { data?: Record<string, unknown> } | null
+  ) => {
+    const jobId = remoteMessage?.data?.jobId;
+    if (typeof jobId === 'string' && jobId.length > 0) {
+      router.push({ pathname: '/job/[id]', params: { id: jobId } });
+    }
+  };
+
+  // Opened from background by tapping the notification.
+  const unsubscribe = messagingInstance.onNotificationOpenedApp(navigateFromMessage);
+  // Opened from a quit state by tapping the notification (cold start).
+  messagingInstance.getInitialNotification().then(navigateFromMessage);
+
+  return unsubscribe;
 }
 
 function getPlatform(): 'android' | 'ios' {
