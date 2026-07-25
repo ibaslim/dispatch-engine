@@ -3,13 +3,17 @@ import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { LoginScreen } from './src/screens/LoginScreen';
-import { JobsScreen } from './src/screens/JobsScreen';
-import { getAccessToken } from './src/services/tokenStorage';
+import { ThemeProvider, useTheme } from '@theme';
+import { LoginScreen } from '@screens/LoginScreen';
+import { JobsScreen } from '@screens/JobsScreen';
+import { SettingsScreen } from '@screens/SettingsScreen';
+import { getAccessToken } from '@services/storage';
 
-export default function App() {
+function Root() {
+  const { scheme, palette } = useTheme();
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     getAccessToken().then((token) => {
@@ -18,22 +22,36 @@ export default function App() {
     });
   }, []);
 
-  if (isLoading) {
-    return (
-      <View className="flex-1 justify-center items-center bg-white">
-        <ActivityIndicator size="large" color="#2563eb" />
-      </View>
-    );
-  }
+  return (
+    <>
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      {isLoading ? (
+        <View className="flex-1 items-center justify-center bg-background">
+          <ActivityIndicator size="large" color={palette.primary} />
+        </View>
+      ) : showSettings ? (
+        <SettingsScreen onClose={() => setShowSettings(false)} />
+      ) : isLoggedIn ? (
+        <JobsScreen
+          onLogout={() => setIsLoggedIn(false)}
+          onOpenSettings={() => setShowSettings(true)}
+        />
+      ) : (
+        <LoginScreen
+          onLoginSuccess={() => setIsLoggedIn(true)}
+          onOpenSettings={() => setShowSettings(true)}
+        />
+      )}
+    </>
+  );
+}
 
+export default function App() {
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
-      {isLoggedIn ? (
-        <JobsScreen onLogout={() => setIsLoggedIn(false)} />
-      ) : (
-        <LoginScreen onLoginSuccess={() => setIsLoggedIn(true)} />
-      )}
+      <ThemeProvider>
+        <Root />
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

@@ -12,7 +12,7 @@
 
 import messaging from '@react-native-firebase/messaging';
 import { Platform } from 'react-native';
-import { postWithAuth } from './api';
+import { postWithAuth } from '@services/api';
 
 function getMessagingInstance() {
   try {

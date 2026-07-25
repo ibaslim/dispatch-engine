@@ -1,6 +1,6 @@
 import type { LoginResponse } from '@dispatch/shared/contracts';
 import { DispatchApiClient } from '@dispatch/shared/api-client';
-import { SecureTokenStorage } from './secureTokenStorage';
+import { SecureTokenStorage } from '@services/storage';
 
 const apiBaseUrl = process.env['EXPO_PUBLIC_API_BASE_URL'] ?? 'http://localhost:8000';
 

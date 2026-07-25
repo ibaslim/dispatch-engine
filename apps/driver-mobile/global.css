@@ -1,3 +1,22 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * Default theme variables (Blue / Light). These are the fallback values; the
+ * ThemeProvider overrides them at runtime with the selected theme + mode via
+ * NativeWind's vars(). Keep the token set in sync with src/theme/themes.ts.
+ */
+:root {
+  --color-background: 248 250 252;
+  --color-surface: 255 255 255;
+  --color-card: 255 255 255;
+  --color-foreground: 15 23 42;
+  --color-muted: 100 116 139;
+  --color-border: 226 232 240;
+  --color-input: 241 245 249;
+  --color-primary: 37 99 235;
+  --color-primary-foreground: 255 255 255;
+  --color-primary-muted: 219 234 254;
+  --color-primary-muted-foreground: 30 64 175;
+}

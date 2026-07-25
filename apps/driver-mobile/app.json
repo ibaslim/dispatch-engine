@@ -11,14 +11,20 @@
       "resizeMode": "contain",
       "backgroundColor": "#1d4ed8"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.dispatch.drivermobile",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Required for job tracking.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Required for background job tracking.",
-        "UIBackgroundModes": ["location", "fetch", "remote-notification"]
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -27,6 +33,7 @@
         "backgroundColor": "#1d4ed8"
       },
       "package": "com.dispatch.drivermobile",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
@@ -41,7 +48,8 @@
     "plugins": [
       "expo-router",
       "@react-native-firebase/app",
-      "@react-native-firebase/messaging"
+      "@react-native-firebase/messaging",
+      "expo-asset"
     ],
     "scheme": "driver-mobile"
   }
