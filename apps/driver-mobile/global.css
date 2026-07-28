@@ -38,10 +38,6 @@
   .card {
     @apply rounded-2xl border border-border bg-card;
   }
-  /* Shipping-label status edge (the signature). */
-  .card-accent {
-    @apply border-l-4 border-l-primary;
-  }
   .card-header {
     @apply flex-row items-center justify-between px-5 pt-5 pb-4 border-b border-border;
   }

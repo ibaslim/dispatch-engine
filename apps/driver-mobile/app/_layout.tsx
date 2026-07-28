@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from '@theme';
 import { AuthProvider } from '@contexts';
+import { ToastProvider } from '@components/ui';
 import { setupNotificationRouting } from '@services/notifications';
 
 /** StatusBar bar-style follows the resolved light/dark scheme. */
@@ -24,14 +25,16 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <AuthProvider>
-          <ThemedStatusBar />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(app)" />
-            <Stack.Screen name="login" />
-            <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
-          </Stack>
-        </AuthProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <ThemedStatusBar />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(app)" />
+              <Stack.Screen name="login" />
+              <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+            </Stack>
+          </AuthProvider>
+        </ToastProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

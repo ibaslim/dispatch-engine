@@ -1,16 +1,60 @@
-import type { LoginResponse } from '@dispatch/shared/contracts';
+import type { LoginResponse, MeResponse } from '@dispatch/shared/contracts';
 import { DispatchApiClient } from '@dispatch/shared/api-client';
 import { SecureTokenStorage } from '@services/storage';
+import { NativeModules } from 'react-native';
 
-const apiBaseUrl = process.env['EXPO_PUBLIC_API_BASE_URL'] ?? 'http://localhost:8000';
+export type { MeResponse } from '@dispatch/shared/contracts';
+
+/**
+ * The `/auth/login` endpoint returns a union: a token pair on success, or a
+ * status-carrying body when the account can't sign in yet (onboarding pending
+ * or suspended). The shared `LoginResponse` only models the happy path, so we
+ * widen it here to let callers branch on `status`.
+ */
+export type LoginOutcome = LoginResponse & {
+  status?: 'pending' | 'pre_pending' | 'suspended';
+  message?: string;
+};
+
+const getApiBaseUrl = (): string => {
+  const envUrl = process.env['EXPO_PUBLIC_API_BASE_URL'];
+
+  // Respect explicitly set remote servers in development/production
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1') && !envUrl.includes('10.0.2.2')) {
+    return envUrl;
+  }
+
+  // In development, try to dynamically resolve the Metro packager host IP
+  if (__DEV__) {
+    const scriptURL = NativeModules?.SourceCode?.scriptURL;
+    if (scriptURL) {
+      const match = scriptURL.match(/^https?:\/\/([^:/]+)(:\d+)?/);
+      if (match && match[1]) {
+        const host = match[1];
+        if (host !== 'localhost' && host !== '127.0.0.1') {
+          return `http://${host}:8000`;
+        }
+      }
+    }
+  }
+
+  return envUrl ?? 'http://localhost:8000';
+};
+
+const apiBaseUrl = getApiBaseUrl();
 
 const apiClient = new DispatchApiClient({
   baseUrl: apiBaseUrl,
   tokenStorage: new SecureTokenStorage(),
 });
 
-export function login(email: string, password: string): Promise<LoginResponse> {
-  return apiClient.login({ email, password });
+export function login(email: string, password: string): Promise<LoginOutcome> {
+  return apiClient.login({ email, password }) as Promise<LoginOutcome>;
+}
+
+/** Fetch the signed-in user's identity, roles, and tenant role. */
+export function me(): Promise<MeResponse> {
+  return apiClient.me();
 }
 
 export function logout(): Promise<void> {
@@ -23,6 +67,14 @@ export function fetchWithAuth<T>(path: string): Promise<T> {
 
 export function postWithAuth<T = void>(path: string, body: unknown): Promise<T> {
   return apiClient.postPath<T>(path, body);
+}
+
+export function patchWithAuth<T = void>(path: string, body: unknown): Promise<T> {
+  return apiClient.patchPath<T>(path, body);
+}
+
+export function uploadWithAuth<T = void>(path: string, form: FormData): Promise<T> {
+  return apiClient.postMultipart<T>(path, form);
 }
 
 export function fetchPublic<T>(path: string): Promise<T> {

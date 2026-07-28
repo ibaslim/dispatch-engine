@@ -1,14 +1,15 @@
 import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import { useOrders } from '@contexts';
 import { BottomNav, type TabItem } from './BottomNav';
 
-/** Icon + label per tab route name (route files: index, route, pay, ...). */
+/** Icon + label per tab route name (route files: index, orders, pay, ...). */
 const TAB_META: Record<
   string,
   { label: string; icon: keyof typeof Ionicons.glyphMap; iconOutline: keyof typeof Ionicons.glyphMap }
 > = {
-  index: { label: 'Jobs', icon: 'cube', iconOutline: 'cube-outline' },
-  route: { label: 'Route', icon: 'navigate', iconOutline: 'navigate-outline' },
+  index: { label: 'Home', icon: 'home', iconOutline: 'home-outline' },
+  orders: { label: 'Orders', icon: 'receipt', iconOutline: 'receipt-outline' },
   pay: { label: 'Pay', icon: 'wallet', iconOutline: 'wallet-outline' },
   activity: { label: 'Activity', icon: 'time', iconOutline: 'time-outline' },
   profile: { label: 'Profile', icon: 'person', iconOutline: 'person-outline' },
@@ -34,9 +35,17 @@ interface TabBarProps {
  * listener prevented default, e.g. pop-to-top on re-press).
  */
 export function AppTabBar({ state, navigation }: TabBarProps) {
+  // Orders carries a count of jobs still needing work, so the driver can see
+  // outstanding work without opening the tab.
+  const { inProgress } = useOrders();
+
   const tabs: TabItem[] = state.routes
     .filter((r) => TAB_META[r.name])
-    .map((r) => ({ key: r.name, ...TAB_META[r.name] }));
+    .map((r) => ({
+      key: r.name,
+      ...TAB_META[r.name],
+      badge: r.name === 'orders' ? inProgress.length : undefined,
+    }));
 
   const activeKey = state.routes[state.index]?.name ?? 'index';
 

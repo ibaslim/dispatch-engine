@@ -7,13 +7,23 @@ import {
   RefreshControl,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import type { PostResponse } from '@dispatch/shared/contracts';
 import { fetchPublic, fetchWithAuth } from '@services/api';
 import { subscribeForegroundMessages } from '@services/notifications';
 import { useTheme } from '@theme';
-import { Card, CardBody, Badge, Ref } from '@components/ui';
+import {
+  Card,
+  CardBody,
+  Badge,
+  Ref,
+  BottomSheet,
+  BottomSheetTitle,
+  BottomSheetItem,
+} from '@components/ui';
 
 interface Job {
   id: string;
@@ -35,13 +45,21 @@ export function JobsScreen({ onLogout, onOpenSettings, onJobPress }: Props) {
   const [posts, setPosts] = useState<PostResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
+
+  const call = (number: string) => {
+    setContactOpen(false);
+    Linking.openURL(`tel:${number}`).catch(() => {
+      // No dialer available (e.g. emulator) — ignore.
+    });
+  };
 
   const loadJobs = useCallback(async () => {
     try {
       const data = await fetchWithAuth<Job[]>('/api/v1/drivers/me/jobs');
       setJobs(data);
     } catch (err: unknown) {
-      if (err instanceof Error && err.message === 'Session expired') {
+      if (err instanceof Error && err.message === 'Session expired. Please log in again.') {
         onLogout();
         return;
       }
@@ -85,6 +103,14 @@ export function JobsScreen({ onLogout, onOpenSettings, onJobPress }: Props) {
       <View className="bg-surface border-b border-border px-4 py-3 flex-row justify-between items-center">
         <Text className="text-xl font-bold text-foreground">My Jobs</Text>
         <View className="flex-row items-center gap-4">
+          <TouchableOpacity
+            onPress={() => setContactOpen(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Contact"
+          >
+            <Ionicons name="call-outline" size={20} color={palette.primary} />
+          </TouchableOpacity>
           <TouchableOpacity onPress={onOpenSettings} hitSlop={8}>
             <Text className="text-sm font-medium text-primary">Appearance</Text>
           </TouchableOpacity>
@@ -141,7 +167,7 @@ export function JobsScreen({ onLogout, onOpenSettings, onJobPress }: Props) {
             accessibilityRole="button"
             accessibilityLabel={`Job ${item.order_ref}`}
           >
-            <Card accent className="mx-4 my-2">
+            <Card className="mx-4 my-2">
               <CardBody className="gap-3">
                 <View className="flex-row justify-between items-start">
                   <Ref>{item.order_ref}</Ref>
@@ -157,6 +183,30 @@ export function JobsScreen({ onLogout, onOpenSettings, onJobPress }: Props) {
         )}
         contentContainerStyle={{ paddingBottom: 16 }}
       />
+
+      <BottomSheet visible={contactOpen} onClose={() => setContactOpen(false)}>
+        <BottomSheetTitle>Contact</BottomSheetTitle>
+        <BottomSheetItem
+          icon="call"
+          title="Call Pickup Contact"
+          subtitle="Dana (Cafe Umbra)"
+          onPress={() => call('+15035550148')}
+        />
+        <BottomSheetItem
+          icon="call"
+          title="Call Recipient"
+          subtitle="Alex Kim"
+          onPress={() => call('+15035550172')}
+        />
+        <BottomSheetItem
+          icon="help-buoy"
+          title="Contact Support"
+          subtitle="Dispatch help desk"
+          tint="rose"
+          onPress={() => call('+18005550100')}
+          last
+        />
+      </BottomSheet>
     </SafeAreaView>
   );
 }
