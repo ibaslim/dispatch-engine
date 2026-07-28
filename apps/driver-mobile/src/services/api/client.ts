@@ -1,7 +1,6 @@
 import type { LoginResponse, MeResponse } from '@dispatch/shared/contracts';
 import { DispatchApiClient } from '@dispatch/shared/api-client';
 import { SecureTokenStorage } from '@services/storage';
-import { NativeModules } from 'react-native';
 
 export type { MeResponse } from '@dispatch/shared/contracts';
 
@@ -16,32 +15,7 @@ export type LoginOutcome = LoginResponse & {
   message?: string;
 };
 
-const getApiBaseUrl = (): string => {
-  const envUrl = process.env['EXPO_PUBLIC_API_BASE_URL'];
-
-  // Respect explicitly set remote servers in development/production
-  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1') && !envUrl.includes('10.0.2.2')) {
-    return envUrl;
-  }
-
-  // In development, try to dynamically resolve the Metro packager host IP
-  if (__DEV__) {
-    const scriptURL = NativeModules?.SourceCode?.scriptURL;
-    if (scriptURL) {
-      const match = scriptURL.match(/^https?:\/\/([^:/]+)(:\d+)?/);
-      if (match && match[1]) {
-        const host = match[1];
-        if (host !== 'localhost' && host !== '127.0.0.1') {
-          return `http://${host}:8000`;
-        }
-      }
-    }
-  }
-
-  return envUrl ?? 'http://localhost:8000';
-};
-
-const apiBaseUrl = getApiBaseUrl();
+const apiBaseUrl = process.env['EXPO_PUBLIC_API_BASE_URL'] ?? 'http://localhost:8000';
 
 const apiClient = new DispatchApiClient({
   baseUrl: apiBaseUrl,
