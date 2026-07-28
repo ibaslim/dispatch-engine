@@ -11,6 +11,8 @@ export interface TabItem {
   icon: keyof typeof Ionicons.glyphMap;
   /** Outline glyph, shown when inactive. */
   iconOutline: keyof typeof Ionicons.glyphMap;
+  /** Outstanding-item count. Hidden when undefined or 0. */
+  badge?: number;
 }
 
 interface Props {
@@ -61,6 +63,13 @@ export function BottomNav({ tabs, activeKey, onTabPress }: Props) {
                 size={22}
                 color={active ? palette['primary-muted-foreground'] : palette.muted}
               />
+              {!!tab.badge && (
+                <View className="absolute -right-0.5 -top-1 min-w-[18px] items-center justify-center rounded-full bg-primary px-1 py-0.5">
+                  <Text className="text-[10px] font-bold text-primary-foreground">
+                    {tab.badge > 99 ? '99+' : tab.badge}
+                  </Text>
+                </View>
+              )}
             </View>
             <Text
               numberOfLines={1}

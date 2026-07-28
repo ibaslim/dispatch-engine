@@ -47,9 +47,17 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "The camera is used to scan parcel QR codes at pickup and capture proof-of-delivery photos."
+        }
+      ],
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
-      "expo-asset"
+      "expo-asset",
+      "./plugins/withAutofillHighlight",
+      "./plugins/withShortCxxPaths"
     ],
     "scheme": "driver-mobile",
     "experiments": {

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,9 @@ import {
   Badge,
   Ref,
   Button,
+  BottomSheet,
+  BottomSheetTitle,
+  BottomSheetItem,
 } from '@components/ui';
 
 /** Job detail — pushed over the tabs. Placeholder content until wired to the API. */
@@ -19,6 +22,14 @@ export default function JobDetailRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { palette } = useTheme();
+  const [contactOpen, setContactOpen] = useState(false);
+
+  const call = (number: string) => {
+    setContactOpen(false);
+    Linking.openURL(`tel:${number}`).catch(() => {
+      // No dialer available (e.g. emulator) — ignore.
+    });
+  };
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-background">
@@ -35,7 +46,7 @@ export default function JobDetailRoute() {
           <Badge label="in transit" />
         </View>
 
-        <Card accent>
+        <Card>
           <CardHeader>
             <CardTitle>Route</CardTitle>
           </CardHeader>
@@ -55,10 +66,39 @@ export default function JobDetailRoute() {
         </Card>
 
         <View className="flex-row gap-3">
-          <Button title="Navigate" variant="outline" className="flex-1" onPress={() => {}} />
+          <Button
+            title="Contact"
+            variant="outline"
+            className="flex-1"
+            onPress={() => setContactOpen(true)}
+          />
           <Button title="Mark delivered" className="flex-1" onPress={() => {}} />
         </View>
       </ScrollView>
+
+      <BottomSheet visible={contactOpen} onClose={() => setContactOpen(false)}>
+        <BottomSheetTitle>Contact</BottomSheetTitle>
+        <BottomSheetItem
+          icon="call"
+          title="Call Pickup Contact"
+          subtitle="Dana (Cafe Umbra)"
+          onPress={() => call('+15035550148')}
+        />
+        <BottomSheetItem
+          icon="call"
+          title="Call Recipient"
+          subtitle="Alex Kim"
+          onPress={() => call('+15035550172')}
+        />
+        <BottomSheetItem
+          icon="help-buoy"
+          title="Contact Support"
+          subtitle="Dispatch help desk"
+          tint="rose"
+          onPress={() => call('+18005550100')}
+          last
+        />
+      </BottomSheet>
     </SafeAreaView>
   );
 }

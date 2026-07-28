@@ -13,6 +13,9 @@
       "@services/*": [
         "apps/driver-mobile/src/services/*"
       ],
+      "@hooks": [
+        "apps/driver-mobile/src/hooks"
+      ],
       "@hooks/*": [
         "apps/driver-mobile/src/hooks/*"
       ],
@@ -33,6 +36,9 @@
       ],
       "@theme/*": [
         "apps/driver-mobile/src/theme/*"
+      ],
+      "@types": [
+        "apps/driver-mobile/src/types"
       ],
       "@types/*": [
         "apps/driver-mobile/src/types/*"
