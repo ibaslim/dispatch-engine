@@ -13,7 +13,7 @@ import {
   ReportSheet,
 } from '@components/orders';
 import { DANGER, DANGER_BORDER } from '@constants/colors';
-import { reportIncident, updateActivityStatus } from '@services/orders';
+import { reportIncident, updateActivityStatus, sendRecipientNotification } from '@services/orders';
 import type { DriverOrder, IncidentReason, ProofOfDelivery } from '@types';
 import { incidentStageFor, nextStep } from '@utils/orderProgress';
 import { callNumber, openDirections } from '@utils/linking';
@@ -155,6 +155,12 @@ export function OrderDetailScreen({ order, onBack }: Props) {
         status: result.status,
       });
       show(`Updated to “${step.label}”.`, { variant: 'success' });
+
+      if (result.activity_status === 'delivery_initiated') {
+        sendRecipientNotification(order.id).catch(() => {
+          show('Unable to notify the recipient by email.', { variant: 'error' });
+        });
+      }
     } catch (err: unknown) {
       show(err instanceof Error ? err.message : 'Could not update the job.', {
         variant: 'error',

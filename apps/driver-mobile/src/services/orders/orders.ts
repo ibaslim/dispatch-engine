@@ -63,6 +63,11 @@ export function updateActivityStatus(
   });
 }
 
+/** Email the recipient with full order details and a tracking link. */
+export function sendRecipientNotification(orderId: string): Promise<void> {
+  return postWithAuth<void>(`${BASE_URL}/${orderId}/notify/recipient`, {});
+}
+
 /**
  * React Native's FormData takes a `{ uri, name, type }` descriptor where the
  * DOM expects a Blob; the cast is required and safe on this platform.
