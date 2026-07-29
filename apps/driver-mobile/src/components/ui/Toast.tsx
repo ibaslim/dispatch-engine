@@ -119,12 +119,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           pointerEvents="box-none"
           style={{
             position: 'absolute',
-            bottom: insets.bottom + 24,
+            bottom: insets.bottom + 80,
             left: 0,
             right: 0,
             alignItems: 'center',
             opacity,
             transform: [{ translateY }],
+            zIndex: 9999,
           }}
         >
           <TouchableOpacity

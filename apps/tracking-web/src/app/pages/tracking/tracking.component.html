@@ -45,6 +45,7 @@
                                 [currentStage]="dispatchStageIndex()"
                                 [orderId]="order()?.order_number ?? ''"
                                 [driverName]="order()?.driver_name ?? ''"
+                                (trackRealtime)="onTrackRealtime()"
                         ></app-dispatch-truck-tracker>
                     </div>
                 }

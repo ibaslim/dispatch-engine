@@ -1,19 +1,26 @@
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
+import redis.asyncio as aioredis
 
 from app.core.deps import get_db, CurrentUser, PlatformAdmin
+from app.core.redis import get_redis
 from app.models.driver_payment import DriverPaymentGroupAssignment
 from app.models.order import ActivityStatus, Order
 from app.models.tenant import Tenant, TenantRole
+from app.schemas.location import LocationIn, LocationOut
 from app.schemas.tenant import TenantResponse
+from app.services.driver_location_service import DriverLocationService
 
 router = APIRouter()
 
+# Annotated alias keeps endpoint signatures concise.
+RedisClient = Annotated[aioredis.Redis, Depends(get_redis)]
 
 class DriverProfileOut(BaseModel):
     id: uuid.UUID
@@ -124,3 +131,57 @@ async def register_push_token(
     )
     db.add(new_token)
     await db.commit()
+
+
+# ─── Driver location heartbeat ───────────────────────────────────────────────
+
+@router.post("/me/location", status_code=status.HTTP_204_NO_CONTENT)
+async def push_driver_location(
+    body: LocationIn,
+    current_user: CurrentUser,
+    redis: RedisClient,
+) -> None:
+
+    if not current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is not associated with a driver tenant.",
+        )
+    service = DriverLocationService(redis)
+    await service.set(current_user.tenant_id, body.lat, body.lng)
+
+
+@router.delete("/me/location", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_driver_location(
+    current_user: CurrentUser,
+    redis: RedisClient,
+) -> None:
+    if not current_user.tenant_id:
+        return  # Not a driver tenant — nothing to delete.
+    service = DriverLocationService(redis)
+    await service.delete(current_user.tenant_id)
+
+
+# ─── Public driver location read ─────────────────────────────────────────────
+
+@router.get("/{driver_id}/location", response_model=LocationOut)
+async def get_driver_location(
+    driver_id: uuid.UUID,
+    redis: RedisClient,
+) -> LocationOut:
+    """
+    Returns 404 if the driver is offline or the location has expired
+    """
+    service = DriverLocationService(redis)
+    loc = await service.get(driver_id)
+    if loc is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Driver location not available. Driver may be offline.",
+        )
+    return LocationOut(
+        driver_id=loc.driver_id,
+        lat=loc.lat,
+        lng=loc.lng,
+        updated_at=loc.updated_at.isoformat(),
+    )

@@ -106,6 +106,31 @@ export class TrackingComponent implements OnInit, OnDestroy {
     this.router.navigate(['/t', value]);
   }
 
+  async onTrackRealtime(): Promise<void> {
+    const driverId = this.order()?.driver_id;
+    if (!driverId) {
+      console.warn('[Track Realtime] No driver assigned to this order yet.');
+      return;
+    }
+    try {
+      const location = await firstValueFrom(
+        this.trackingService.getDriverLocation(driverId)
+      );
+      console.log(
+        `[Track Realtime] Driver ${driverId} last known location:`,
+        `\n  lat: ${location.lat}`,
+        `\n  lng: ${location.lng}`,
+        `\n  updated_at: ${location.updated_at}`,
+        '\n  full:', location
+      );
+    } catch {
+      console.warn(
+        `[Track Realtime] Could not fetch location for driver ${driverId}.`,
+        'Driver may be offline or location has expired (>15 min).'
+      );
+    }
+  }
+
   private stopPolling(): void {
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
