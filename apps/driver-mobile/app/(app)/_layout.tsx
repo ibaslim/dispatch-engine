@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Redirect, Stack } from 'expo-router';
-import { useAuth } from '@contexts';
+import { OnlineStatusProvider, OrdersProvider, useAuth } from '@contexts';
 import { useTheme } from '@theme';
 
 /**
@@ -25,10 +25,18 @@ export default function AppLayout() {
     return <Redirect href="/login" />;
   }
 
+  // Orders load once here rather than per screen — the list, the detail screen
+  // and the tab-bar badge all read the same cache.
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="job/[id]" />
-    </Stack>
+    <OrdersProvider>
+      <OnlineStatusProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="job/[id]" />
+          <Stack.Screen name="order/[id]" />
+          <Stack.Screen name="appearance" />
+        </Stack>
+      </OnlineStatusProvider>
+    </OrdersProvider>
   );
 }
