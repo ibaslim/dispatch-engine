@@ -123,6 +123,10 @@ export class DispatchApiClient {
     return this.request<T>('PATCH', path, body, auth);
   }
 
+  async deletePath<T = void>(path: string, auth = true): Promise<T> {
+    return this.request<T>('DELETE', path, undefined, auth);
+  }
+
   /**
    * Multipart upload (e.g. proof-of-delivery images). The runtime derives the
    * `Content-Type` boundary from the FormData, so we must not set that header

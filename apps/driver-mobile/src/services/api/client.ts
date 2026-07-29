@@ -51,6 +51,10 @@ export function uploadWithAuth<T = void>(path: string, form: FormData): Promise<
   return apiClient.postMultipart<T>(path, form);
 }
 
+export function deleteWithAuth<T = void>(path: string): Promise<T> {
+  return apiClient.deletePath<T>(path);
+}
+
 export function fetchPublic<T>(path: string): Promise<T> {
   return apiClient.getPath<T>(path, false);
 }

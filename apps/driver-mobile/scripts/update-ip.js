@@ -8,6 +8,18 @@ function getLocalIp() {
 
   // We want to scan and find the best matching active local IP address.
   for (const name of Object.keys(interfaces)) {
+    const nameLower = name.toLowerCase();
+    // Skip virtual network interfaces created by WSL, Hyper-V, VirtualBox, etc.
+    if (
+      nameLower.includes('virtual') ||
+      nameLower.includes('vethernet') ||
+      nameLower.includes('wsl') ||
+      nameLower.includes('loopback') ||
+      nameLower.includes('pseudo')
+    ) {
+      continue;
+    }
+
     for (const net of interfaces[name]) {
       // Skip loopback and non-IPv4 addresses
       if (net.family === 'IPv4' && !net.internal) {
