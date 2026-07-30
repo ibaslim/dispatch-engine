@@ -187,33 +187,36 @@ Working state:
 
 ### 4) Driver Mobile (`apps/driver-mobile`)
 
+> **Note:** Due to native modules (Firebase Cloud Messaging), this app requires the custom Development Client built via `npx expo run:android`. It is **not** compatible with the standard Expo Go app.
+
 ```bash
-# backend still runs in Docker
+# Ensure backend API runs in Docker
 docker compose up -d
 
-# in a second terminal
+# In a separate terminal on your host machine:
 cd apps/driver-mobile
 cp .env.example .env
 npm install
-npm run lint
-npm test -- --passWithNoTests
-npm run start
-```
 
-If Expo network reachability is flaky:
+# 1. Build and install native app on Android Emulator or Physical Device:
+npx expo run:android
 
-```bash
-cd apps/driver-mobile
-npm run start:offline
+# 2. Subsequent daily runs (once app is installed):
+npx expo start --dev-client
+
+# 3. Start with clean cache:
+npx expo start --dev-client -c
 ```
 
 Set `EXPO_PUBLIC_API_BASE_URL` in `apps/driver-mobile/.env` to a reachable API URL:
 
-| Environment | Value |
-|---|---|
-| Android emulator | `http://10.0.2.2:8000` |
-| iOS simulator | `http://localhost:8000` |
-| Physical device | `http://<your-machine-LAN-IP>:8000` |
+| Environment | API Base URL | Build Command |
+|---|---|---|
+| **Android Emulator** | `http://10.0.2.2:8000` | `npx expo run:android` |
+| **Physical Device (USB/Wi-Fi)** | `http://<your-machine-LAN-IP>:8000` | `npx expo run:android` |
+| **iOS Simulator** | `http://localhost:8000` | `npx expo run:ios` |
+
+For a full guide, see [apps/driver-mobile/README.md](file:///C:/Users/LIAQAT/Desktop/dispatch-engine/apps/driver-mobile/README.md).
 
 ## Posts Feature End-to-End Check
 
@@ -301,33 +304,54 @@ uvicorn app.main:app --reload
 
 ## Driver Mobile App (React Native)
 
-React Native / Expo runs on the host machine, but it now shares the same `libs/shared/*` TypeScript libraries as the web apps.
+React Native / Expo runs on the host machine, sharing `@dispatch/shared/*` TypeScript libraries with the web apps.
 
-### Start the mobile app
+> **Development Client Note:** Because of native dependencies (e.g. Firebase Cloud Messaging), this app requires the development client compiled via `npx expo run:android`. It cannot run inside standard Expo Go.
+
+### 1. Build and Install on Device / Emulator
 
 ```bash
 cd apps/driver-mobile
 cp .env.example .env
 npm install
-npm run start
+
+# Compile native app, build APK, install on connected Emulator / Device, and start Metro:
+npx expo run:android
 ```
 
-Set `EXPO_PUBLIC_API_BASE_URL` in `apps/driver-mobile/.env` to the API address reachable from the simulator or device:
+### 2. Everyday Development (After Initial Install)
 
-| Environment | Value |
-|---|---|
-| Android emulator | `http://10.0.2.2:8000` |
-| iOS simulator | `http://localhost:8000` |
-| Physical device | `http://<your-machine-LAN-IP>:8000` |
+```bash
+# Start Metro bundler without rebuilding native binaries:
+npx expo start --dev-client
+```
 
-Shared imports already work in mobile:
+### 3. Rebuild with Clean Cache
+
+```bash
+# Clear Metro bundler cache:
+npx expo start --dev-client -c
+
+# Rebuild native app bypassing build cache:
+npx expo run:android --no-build-cache
+```
+
+### Environment Configuration (`EXPO_PUBLIC_API_BASE_URL`)
+
+| Target | `.env` API Base URL | Build Command |
+|---|---|---|
+| **Android Emulator** | `http://10.0.2.2:8000` | `npx expo run:android` |
+| **Physical Device (USB/Wi-Fi)** | `http://<your-machine-LAN-IP>:8000` *(Auto-resolved on `npm start`)* | `npx expo run:android` |
+| **iOS Simulator** | `http://localhost:8000` | `npx expo run:ios` |
+
+Shared imports work seamlessly in mobile:
 
 ```ts
 import type { LoginResponse } from '@dispatch/shared/contracts';
 import { DispatchApiClient } from '@dispatch/shared/api-client';
 ```
 
-Requirements: a Firebase project configured with `google-services.json` (Android) and `GoogleService-Info.plist` (iOS).
+Requirements: a Firebase project configured with `google-services.json` (Android) and `GoogleService-Info.plist` (iOS). For the full guide, see [apps/driver-mobile/README.md](file:///C:/Users/LIAQAT/Desktop/dispatch-engine/apps/driver-mobile/README.md).
 
 ---
 
