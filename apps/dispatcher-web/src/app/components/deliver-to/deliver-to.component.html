@@ -18,7 +18,7 @@
           pattern: 'Enter a valid email.'
         }" [showSubmitValidation]="showSubmitValidation"></app-base-input>
 
-    <app-address-input label="Address" placeholder="Enter a location" [required]="true" pattern="^[A-Za-z0-9\s.,#\-/]+$"
+    <app-address-input label="Address" placeholder="Enter a location" [required]="true"
         [value]="value.address" (valueChange)="onAddressInput($event)" (placeChange)="onPlaceSelected($event)" (pinClick)="pinClick.emit()"
         name="deliveryAddress" [operationalZones]="operationalZones" [showSubmitValidation]="showSubmitValidation"></app-address-input>
 

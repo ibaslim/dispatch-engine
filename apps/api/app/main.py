@@ -20,6 +20,7 @@ from app.api.routers import (
     driver_payroll,
     delivery_configuration,
     public_config,
+    pusher_channels,
 )
 from app.db.seed import seed_platform_admin
 from app.db.seed_locations import seed_canadian_pricing, seed_locations
@@ -71,6 +72,11 @@ def create_app() -> FastAPI:
     application.include_router(onboarding.router, prefix="/api/v1/onboarding", tags=["onboarding"])
     application.include_router(locations.router, prefix="/api/v1/locations", tags=["locations"])
     application.include_router(public_config.router, prefix="/api/v1/public", tags=["public-config"])
+    application.include_router(
+        pusher_channels.router,
+        prefix="/api/v1/pusher",
+        tags=["pusher"],
+    )
     application.include_router(pricing.router, prefix="/api/v1/pricing", tags=["pricing"])
     application.include_router(
         driver_payroll.router,

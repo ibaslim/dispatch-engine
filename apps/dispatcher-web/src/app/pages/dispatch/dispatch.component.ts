@@ -1,12 +1,13 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, OnDestroy, inject } from '@angular/core';
-import { finalize, firstValueFrom } from 'rxjs';
+import { finalize, firstValueFrom, Subject, takeUntil } from 'rxjs';
 
 import { PageComponent } from '../../components/page/page.component';
 import { ButtonComponent } from '../../components/button/button.component';
 import { OrdersService } from '../../services/orders/orders.service';
 import { PaymentMethodType } from '../../models/new-order-form/new-order-form.model';
 import { AuthService } from '../../core/auth/auth.service';
+import { OrderRealtimeEvent, PusherService } from '../../core/realtime/pusher.service';
 
 // ─── Backend types ──────────────────────────────────────────────────────────
 
@@ -111,7 +112,8 @@ export class DispatchComponent implements OnInit, OnDestroy {
 
   // ─── DI ─────────────────────────────────────────────────────────────────────
   private readonly auth = inject(AuthService);
-  private ws: WebSocket | null = null;
+  private readonly pusher = inject(PusherService);
+  private readonly destroy$ = new Subject<void>();
   private countdownHandle: ReturnType<typeof setInterval> | null = null;
 
   get isReadOnlyTenant(): boolean { return !this.auth.isPlatformAdmin(); }
@@ -123,7 +125,9 @@ export class DispatchComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadDispatchState();
-    this.connectWebSocket();
+    this.pusher.orderEvents$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((event) => this.handleRealtimeEvent(event));
     // If this is a driver, also fetch currently live published orders
     if (this.isDriver) {
       this.loadPublishedOrders();
@@ -133,85 +137,27 @@ export class DispatchComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.ws?.close();
+    this.destroy$.next();
+    this.destroy$.complete();
     if (this.countdownHandle) clearInterval(this.countdownHandle);
   }
 
-  // ─── WebSocket ───────────────────────────────────────────────────────────────
+  // ─── Pusher Channels ─────────────────────────────────────────────────────────
 
-  private connectWebSocket(): void {
-    const token = this.auth.getAccessToken();
-    if (!token) return;
-
-    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${proto}://${window.location.host}/api/v1/ws?token=${encodeURIComponent(token)}`;
-
-    try {
-      this.ws = new WebSocket(wsUrl);
-
-      this.ws.onopen = () => console.log('[WS] Connected to dispatch');
-
-      this.ws.onmessage = (evt) => {
-        try {
-          const msg = JSON.parse(evt.data as string);
-          this.handleWsMessage(msg);
-        } catch { /* ignore malformed */ }
-      };
-
-      this.ws.onclose = () => {
-        // Reconnect after 5 seconds if not intentionally closed
-        setTimeout(() => this.connectWebSocket(), 5000);
-      };
-
-      this.ws.onerror = () => this.ws?.close();
-    } catch (err) {
-      console.error('[WS] Failed to connect', err);
-    }
-  }
-
-  private handleWsMessage(msg: Record<string, unknown>): void {
-    const type = msg['type'] as string;
-
-    if (type === 'new_order' && this.isDriver) {
-      // A new order was published — add it to the panel
-      const o = msg['order'] as Record<string, unknown>;
-      if (!o) return;
-      const id = String(o['id']);
-      // Avoid duplicates
-      if (this.publishedOrders.some(p => p.id === id)) return;
-
-      const publishedAt = o['published_at'] ? new Date(o['published_at'] as string) : new Date();
-      const elapsed = Math.floor((Date.now() - publishedAt.getTime()) / 1000);
-      const remaining = Math.max(0, WINDOW_SECONDS - elapsed);
-
-      this.publishedOrders = [
-        {
-          id,
-          orderNumber: String(o['order_number'] ?? ''),
-          pickupAddress: String(o['pickup_address'] ?? ''),
-          deliveryAddress: String(o['delivery_address'] ?? ''),
-          driverFee: Number(o['driver_payout'] ?? 0),
-          publishedAt,
-          remainingSeconds: remaining,
-          accepting: false,
-          accepted: false,
-        },
-        ...this.publishedOrders
-      ];
+  private handleRealtimeEvent(event: OrderRealtimeEvent): void {
+    if (event.event === 'order-accepted') {
+      this.publishedOrders = this.publishedOrders.filter(p => p.id !== event.order_id);
     }
 
-    if (type === 'order_accepted') {
-      // Remove accepted card from all clients (another driver accepted)
-      const orderId = String(msg['order_id']);
-      this.publishedOrders = this.publishedOrders.filter(p => p.id !== orderId);
-      // Reload assigned drivers panel
-      this.loadDispatchState();
+    if (
+      this.isDriver &&
+      ['order-published', 'order-accepted', 'order-driver-changed', 'order-deleted', 'order-updated']
+        .includes(event.event)
+    ) {
+      this.loadPublishedOrders();
     }
 
-    if (type === 'order_published') {
-      // Admin published an order — if this is also an admin view, refresh dispatch
-      this.loadDispatchState();
-    }
+    this.loadDispatchState();
   }
 
   // ─── Published orders ────────────────────────────────────────────────────────
