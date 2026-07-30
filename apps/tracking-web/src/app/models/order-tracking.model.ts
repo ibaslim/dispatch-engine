@@ -2,6 +2,7 @@ export interface OrderTrackingDetails {
   order_number: string;
   status: string;
   activity_status: string;
+  driver_id: string | null;
   driver_name: string | null;
   pickup_name: string | null;
   pickup_address: string | null;

@@ -54,6 +54,7 @@ class PublicOrderTracking(BaseModel):
     order_number: str
     status: OrderStatus
     activity_status: ActivityStatus
+    driver_id: Optional[UUID] = None
     driver_name: Optional[str] = None
 
     pickup_name: Optional[str] = None

@@ -3,6 +3,7 @@ import { View, ActivityIndicator } from 'react-native';
 import { Redirect, Stack } from 'expo-router';
 import { OnlineStatusProvider, OrdersProvider, useAuth } from '@contexts';
 import { useTheme } from '@theme';
+import { useDriverLocation } from '@hooks';
 
 /**
  * Authenticated area. Guards every child route: shows a spinner while the
@@ -30,6 +31,8 @@ export default function AppLayout() {
   return (
     <OrdersProvider>
       <OnlineStatusProvider>
+        {/* Mount the location heartbeat once for the whole authenticated session */}
+        <LocationHeartbeat />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="job/[id]" />
@@ -39,4 +42,14 @@ export default function AppLayout() {
       </OnlineStatusProvider>
     </OrdersProvider>
   );
+}
+
+/**
+ * Mounts the GPS location heartbeat hook inside the provider tree so it has
+ * access to both OnlineStatus and Auth contexts.
+ * Renders nothing — this is a pure side-effect component.
+ */
+function LocationHeartbeat(): null {
+  useDriverLocation();
+  return null;
 }

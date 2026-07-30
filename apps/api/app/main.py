@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.redis import init_redis, close_redis
 from app.api.routers import (
     auth,
     platform,
@@ -28,14 +29,15 @@ from app.db.init_db import init_db
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
+    # --- Startup ---
+    await init_redis()
     await init_db()
-    # Startup – auto-seed admin on first boot
     await seed_platform_admin()
-    # Startup – seed geography data on first boot
     await seed_locations()
     await seed_canadian_pricing()
     yield
-    # Shutdown (optional cleanup)
+    # --- Shutdown ---
+    await close_redis()
 
 
 def create_app() -> FastAPI:
