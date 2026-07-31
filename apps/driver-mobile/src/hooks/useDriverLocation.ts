@@ -1,93 +1,129 @@
 /**
  * useDriverLocation
  *
- * Sends the driver's GPS coordinates to the backend every 5 minutes while
- * `online === true`.  On going offline it fires a DELETE to remove the stale
- * entry from Redis immediately rather than waiting for the 15-minute TTL.
+ * Sends the driver's GPS coordinates to the backend while `online === true`,
+ * both in the FOREGROUND and when the app is BACKGROUNDED / SCREEN OFF.
  *
- * Design notes
- * ------------
- * - Uses `Location.watchPositionAsync` so the OS handles position updates
- *   efficiently — we just cache the latest fix and flush it on the 5-minute
- *   interval rather than requesting a fresh GPS lock every time.
- * - The interval and the watch subscription are cleaned up together whenever
- *   `online` flips to false, preventing any dangling timers or listeners.
- * - Failures are swallowed silently: a missed heartbeat is not fatal (the
- *   previous value in Redis is still valid for up to 15 minutes), and
- *   hammering the user with errors for a background task is bad UX.
+ * Cross-platform iOS & Android background location support:
+ * --------------------------------------------------------
+ * - iOS: Uses `showsBackgroundLocationIndicator: true` + `activityType: AutomotiveNavigation`
+ *   to maintain background location execution with the blue status bar indicator.
+ * - Android: Uses `foregroundService` notification so Android OS keeps the process active
+ *   in the background without killing or throttling the location loop.
+ * - Robust Fallback: If background location updates are rejected, gracefully falls back
+ *   to `watchPositionAsync` + interval so location updates continue in the foreground seamlessly.
  */
 import { useEffect, useRef } from 'react';
 import * as Location from 'expo-location';
+import * as TaskManager from 'expo-task-manager';
 
 import { useOnlineStatus } from '@contexts';
-import { pushDriverLocation, clearDriverLocation } from '@services/driver/location';
+import { clearDriverLocation, pushDriverLocation } from '@services/driver/location';
+import { LOCATION_TASK_NAME } from '../tasks/locationTask';
 
-/** Must match LOCATION_PUSH_INTERVAL_SECONDS in driver_location_service.py */
-const PUSH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+/** Configured via EXPO_PUBLIC_DRIVER_LOCATION_PUSH_INTERVAL_SECONDS env var (defaults to 30 seconds) */
+const PUSH_INTERVAL_SECONDS = Number(process.env.EXPO_PUBLIC_DRIVER_LOCATION_PUSH_INTERVAL_SECONDS) || 30;
+const PUSH_INTERVAL_MS = PUSH_INTERVAL_SECONDS * 1000;
 
 export function useDriverLocation(): void {
   const { online } = useOnlineStatus();
-  // Cache the latest GPS fix so the interval flush does not need to wait for
-  // a fresh acquisition on every tick.
-  const latestCoords = useRef<{ lat: number; lng: number } | null>(null);
+  const heartbeatInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (!online) {
-      // Driver went offline — evict the Redis key immediately.
-      clearDriverLocation().catch(() => {
-        // Best-effort: TTL will clean it up within 15 minutes regardless.
-      });
-      return;
-    }
+    async function stopTracking() {
+      if (heartbeatInterval.current) {
+        clearInterval(heartbeatInterval.current);
+        heartbeatInterval.current = null;
+      }
 
-    let watchSub: Location.LocationSubscription | null = null;
-    let pushInterval: ReturnType<typeof setInterval> | null = null;
-
-    async function start() {
-      const firedInitial = { current: false };
-
-      // Subscribe to position updates from the OS location provider.
-      // `distanceFilter: 0` means any movement triggers an update so our
-      // cached fix is always the most recent available.
-      watchSub = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: 30_000, // refresh the OS fix at most every 30 s
-          distanceInterval: 0,
-        },
-        ({ coords }) => {
-          latestCoords.current = { lat: coords.latitude, lng: coords.longitude };
-
-          // Fire an immediate push on the very first GPS fix so Redis is
-          // populated the moment the driver goes online, not 5 min later.
-          if (!firedInitial.current) {
-            firedInitial.current = true;
-            pushDriverLocation(coords.latitude, coords.longitude).catch(() => {
-              // Swallow — non-fatal.
-            });
-          }
-        },
-      );
-
-      // Push the cached coordinates on each interval tick.
-      pushInterval = setInterval(() => {
-        const coords = latestCoords.current;
-        if (coords) {
-          pushDriverLocation(coords.lat, coords.lng).catch(() => {
-            // Swallow — a missed heartbeat is not fatal.
-          });
+      try {
+        const isStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
+        if (isStarted) {
+          await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
+          console.log('[LOCATION TASK] Stopped background location tracking service.');
         }
-      }, PUSH_INTERVAL_MS);
+      } catch (err) {
+        // Best effort cleanup
+      }
+
+      clearDriverLocation().catch(() => {});
     }
 
-    start().catch(() => {
-      // Location services unavailable — OnlineStatusContext will catch this
-      // through its own interval check and force the driver offline.
-    });
+    async function sendLocationPing() {
+      try {
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        if (loc?.coords) {
+          await pushDriverLocation(loc.coords.latitude, loc.coords.longitude);
+          console.log(
+            `[LOCATION HEARTBEAT] Pushed location: lat=${loc.coords.latitude}, lng=${loc.coords.longitude} (interval: ${PUSH_INTERVAL_SECONDS}s)`,
+          );
+        }
+      } catch (err) {
+        console.warn('[LOCATION HEARTBEAT] Failed to get or push current location:', err);
+      }
+    }
+
+    async function startTracking() {
+      // 1. Request Foreground location permission
+      const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+      if (fgStatus !== 'granted') {
+        console.warn('[LOCATION HEARTBEAT] Foreground location permission denied.');
+        return;
+      }
+
+      // 2. Push immediate location
+      await sendLocationPing();
+
+      // 3. Start active foreground heartbeat timer while app is open
+      if (!heartbeatInterval.current) {
+        heartbeatInterval.current = setInterval(() => {
+          sendLocationPing();
+        }, PUSH_INTERVAL_MS);
+      }
+
+      // 4. Request Background location permission ("Allow all the time")
+      const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+
+      // 5. Start background location service with Android Foreground Service notification
+      if (bgStatus === 'granted') {
+        try {
+          const isStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
+          if (!isStarted) {
+            await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+              accuracy: Location.Accuracy.Highest,
+              timeInterval: PUSH_INTERVAL_MS,
+              distanceInterval: 0,
+              showsBackgroundLocationIndicator: true,
+              activityType: Location.ActivityType.AutomotiveNavigation,
+              foregroundService: {
+                notificationTitle: 'Driver Online - Dispatch Tracking',
+                notificationBody: 'Sharing location for active dispatch tracking',
+                notificationColor: '#1d4ed8',
+              },
+              pausesUpdatesAutomatically: false,
+            });
+            console.log('[LOCATION TASK] Started background location tracking service.');
+          }
+        } catch (err) {
+          console.warn('[LOCATION TASK] Could not start background location service:', err);
+        }
+      } else {
+        console.log('[LOCATION TASK] Background location permission not granted; operating in foreground mode.');
+      }
+    }
+
+    if (online) {
+      startTracking().catch((err) => {
+        console.error('Failed to start location tracking:', err);
+      });
+    } else {
+      stopTracking();
+    }
 
     return () => {
-      watchSub?.remove();
-      if (pushInterval !== null) clearInterval(pushInterval);
+      stopTracking();
     };
   }, [online]);
 }

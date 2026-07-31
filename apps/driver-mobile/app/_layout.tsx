@@ -7,6 +7,7 @@ import { ThemeProvider, useTheme } from '@theme';
 import { AuthProvider } from '@contexts';
 import { ToastProvider } from '@components/ui';
 import { setupNotificationRouting } from '@services/notifications';
+import '../src/tasks/locationTask';
 
 /** StatusBar bar-style follows the resolved light/dark scheme. */
 function ThemedStatusBar() {

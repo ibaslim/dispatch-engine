@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 import redis.asyncio as aioredis
 
+from app.core.config import settings
 from app.core.deps import get_db, CurrentUser, PlatformAdmin
 from app.core.redis import get_redis
 from app.models.driver_payment import DriverPaymentGroupAssignment
@@ -15,6 +16,8 @@ from app.models.order import ActivityStatus, Order
 from app.models.tenant import Tenant, TenantRole
 from app.schemas.location import LocationIn, LocationOut
 from app.schemas.tenant import TenantResponse
+from app.services.driver_active_order_service import DriverActiveOrderService
+from app.services.driver_location_flush_service import DriverLocationFlushService
 from app.services.driver_location_service import DriverLocationService
 
 router = APIRouter()
@@ -140,6 +143,7 @@ async def push_driver_location(
     body: LocationIn,
     current_user: CurrentUser,
     redis: RedisClient,
+    db: AsyncSession = Depends(get_db),
 ) -> None:
 
     if not current_user.tenant_id:
@@ -147,8 +151,24 @@ async def push_driver_location(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User is not associated with a driver tenant.",
         )
+
+    driver_id = current_user.tenant_id
+
+    # 1. Update latest live location in Redis for real-time map tracking
     service = DriverLocationService(redis)
-    await service.set(current_user.tenant_id, body.lat, body.lng)
+    await service.set(driver_id, body.lat, body.lng)
+
+    # 2. Resolve active in-transit order ID for historical log
+    active_order_service = DriverActiveOrderService(redis)
+    active_order_id = await active_order_service.get_active_order_id(driver_id, db)
+
+    # 3. Append history log to per-driver Redis list
+    await service.push_to_history(
+        driver_id=driver_id,
+        lat=body.lat,
+        lng=body.lng,
+        order_id=active_order_id,
+    )
 
 
 @router.delete("/me/location", status_code=status.HTTP_204_NO_CONTENT)

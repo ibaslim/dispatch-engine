@@ -4,38 +4,64 @@ const os = require('os');
 
 function getLocalIp() {
   const interfaces = os.networkInterfaces();
-  let fallbackIp = null;
 
-  // We want to scan and find the best matching active local IP address.
-  for (const name of Object.keys(interfaces)) {
-    const nameLower = name.toLowerCase();
-    // Skip virtual network interfaces created by WSL, Hyper-V, VirtualBox, etc.
-    if (
-      nameLower.includes('virtual') ||
-      nameLower.includes('vethernet') ||
-      nameLower.includes('wsl') ||
-      nameLower.includes('loopback') ||
-      nameLower.includes('pseudo')
-    ) {
-      continue;
-    }
+  // Helper to detect virtual network adapters across Windows, Linux, and macOS
+  const checkIsVirtual = (lower) =>
+    lower.startsWith('vethernet') ||
+    lower.startsWith('veth') ||
+    lower.startsWith('virbr') ||
+    lower.startsWith('br-') ||
+    lower.startsWith('docker') ||
+    lower.startsWith('tun') ||
+    lower.startsWith('tap') ||
+    lower.includes('virtual') ||
+    lower.includes('wsl') ||
+    lower.includes('hyper-v') ||
+    lower.includes('vmware') ||
+    lower.includes('virtualbox') ||
+    lower.includes('loopback');
 
-    for (const net of interfaces[name]) {
-      // Skip loopback and non-IPv4 addresses
-      if (net.family === 'IPv4' && !net.internal) {
-        // Prefer common Wi-Fi / Ethernet subnets (192.168.x.x)
-        if (net.address.startsWith('192.168.')) {
+  // 1. First Pass: Look for real physical Wi-Fi interfaces
+  // Windows: "Wi-Fi", "Wireless"
+  // Linux: "wlan0", "wlp2s0" (starts with "wl" or "wlan")
+  // macOS: "en0" (if Wi-Fi)
+  for (const [name, addrs] of Object.entries(interfaces)) {
+    const lower = name.toLowerCase();
+    const isVirtual = checkIsVirtual(lower);
+
+    const isPhysicalWifi =
+      (lower === 'wi-fi' ||
+        lower.startsWith('wi-fi') ||
+        lower.startsWith('wlan') ||
+        lower.startsWith('wlp') ||
+        lower.includes('wireless') ||
+        lower.includes('wifi')) &&
+      !isVirtual;
+
+    if (isPhysicalWifi) {
+      for (const net of addrs) {
+        if (net.family === 'IPv4' && !net.internal) {
           return net.address;
-        }
-        // Save other private subnets (like 10.x.x.x or 172.x.x.x) as fallbacks
-        if (net.address.startsWith('10.') || net.address.startsWith('172.')) {
-          fallbackIp = net.address;
         }
       }
     }
   }
 
-  return fallbackIp || '127.0.0.1';
+  // 2. Second Pass: Fallback to any non-virtual LAN IPv4 address (e.g. Ethernet: eth0, enp3s0, Ethernet 1)
+  for (const [name, addrs] of Object.entries(interfaces)) {
+    const lower = name.toLowerCase();
+    const isVirtual = checkIsVirtual(lower);
+
+    if (!isVirtual) {
+      for (const net of addrs) {
+        if (net.family === 'IPv4' && !net.internal) {
+          return net.address;
+        }
+      }
+    }
+  }
+
+  return '127.0.0.1';
 }
 
 const localIp = getLocalIp();
@@ -49,6 +75,17 @@ if (fs.existsSync(envPath)) {
   envContent = fs.readFileSync(envExamplePath, 'utf8');
 } else {
   envContent = '# Expo Environment Variables\n';
+}
+
+// If manual override lock is present in .env or environment, do not overwrite manual IP setting
+const isManualLock =
+  envContent.includes('# MANUAL_IP') ||
+  envContent.includes('LOCK_API_IP=true') ||
+  process.env.LOCK_API_IP === 'true';
+
+if (isManualLock) {
+  console.log('[Update IP] Manual IP override lock detected in .env. Preserving custom EXPO_PUBLIC_API_BASE_URL.');
+  process.exit(0);
 }
 
 const apiBaseUrlLine = `EXPO_PUBLIC_API_BASE_URL=http://${localIp}:8000`;

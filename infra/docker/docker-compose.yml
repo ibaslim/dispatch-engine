@@ -2,8 +2,9 @@ services:
   # ── Data stores ─────────────────────────────────────────────────────────────
 
   postgres:
-    image: postgres:16-alpine
+    image: timescale/timescaledb:latest-pg16
     restart: unless-stopped
+    command: ["postgres", "-c", "shared_preload_libraries=timescaledb"]
     environment:
       POSTGRES_USER: dispatch
       POSTGRES_PASSWORD: dispatch
