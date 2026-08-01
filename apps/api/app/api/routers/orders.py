@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.db.session import get_db
@@ -20,7 +20,6 @@ from app.core.deps import CurrentUser
 from app.models.order import Order, OrderStatus, ActivityStatus
 from app.models.tenant import Tenant, TenantRole
 from app.models.delivery_configuration import DeliveryPolicy
-from app.models.driver_payment import DriverPaymentGroupAssignment
 from app.services.delivery_quote_service import (
     DeliveryQuote,
     DeliveryQuoteError,
@@ -33,6 +32,7 @@ from app.services.driver_payout_service import (
     clear_driver_payout_snapshot,
     get_driver_payment_group,
 )
+from app.services.pusher_service import pusher_service
 from app.schemas.order import (
     OrderCreate,
     OrderResponse,
@@ -61,6 +61,28 @@ ACTIVITY_STATUS_TIMESTAMP_FIELDS: dict[ActivityStatus, str] = {
     ActivityStatus.delivery_in_progress: "delivery_in_progress_at",
     ActivityStatus.delivered: "delivered_at",
 }
+
+
+async def _publish_order_event(
+    event_name: str,
+    order: Order,
+    current_user: CurrentUser,
+    *,
+    extra_tenant_ids: tuple[UUID | None, ...] = (),
+    include_drivers: bool = False,
+    data: dict | None = None,
+) -> None:
+    """Notify only audiences that can legitimately see this order."""
+    await pusher_service.publish_order_event(
+        event_name,
+        order.id,
+        actor_user_id=current_user.id,
+        vendor_id=order.vendor_id,
+        driver_id=order.driver_id,
+        extra_tenant_ids=extra_tenant_ids,
+        include_drivers=include_drivers,
+        data=data,
+    )
 
 
 class DeliveryQuoteRequest(BaseModel):
@@ -453,7 +475,14 @@ async def create_order(
         result = await db.execute(
             select(Order).where(Order.id == order.id).options(selectinload(Order.driver))
         )
-        return result.scalar_one()
+        order = result.scalar_one()
+        await _publish_order_event(
+            "order-created",
+            order,
+            current_user,
+            data={"order_number": order.order_number},
+        )
+        return order
 
     except IntegrityError:
         await db.rollback()
@@ -545,6 +574,8 @@ async def update_order(
 
     try:
         previous_driver_id = order.driver_id
+        previous_vendor_id = order.vendor_id
+        was_published = bool(order.published)
         for key, value in update_data.items():
             setattr(order, key, value)
 
@@ -571,7 +602,16 @@ async def update_order(
         result = await db.execute(
             select(Order).where(Order.id == order.id).options(selectinload(Order.driver))
         )
-        return result.scalar_one()
+        order = result.scalar_one()
+        await _publish_order_event(
+            "order-updated",
+            order,
+            current_user,
+            extra_tenant_ids=(previous_driver_id, previous_vendor_id),
+            include_drivers=was_published or bool(order.published),
+            data={"changed_fields": sorted(update_data)},
+        )
+        return order
 
     except IntegrityError:
         await db.rollback()
@@ -602,8 +642,17 @@ async def delete_order(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
+    was_published = bool(order.published)
     await db.delete(order)
     await db.commit()
+
+    await _publish_order_event(
+        "order-deleted",
+        order,
+        current_user,
+        include_drivers=was_published,
+        data={"order_number": order.order_number},
+    )
 
     return {"success": True, "id": order_id}
 
@@ -644,6 +693,14 @@ async def update_status(
     order.status = payload.status
     await db.commit()
 
+    await _publish_order_event(
+        "order-status-changed",
+        order,
+        current_user,
+        include_drivers=bool(order.published),
+        data={"status": payload.status.value},
+    )
+
     return {"success": True}
 
 
@@ -679,6 +736,16 @@ async def update_activity_status(
         order.status = OrderStatus.completed
 
     await db.commit()
+
+    await _publish_order_event(
+        "order-activity-changed",
+        order,
+        current_user,
+        data={
+            "activity_status": order.activity_status.value,
+            "status": order.status.value,
+        },
+    )
 
     if is_new_delivery:
         _notify_sender_order_delivered(order)
@@ -798,6 +865,13 @@ async def report_incident(
 
     await db.commit()
 
+    await _publish_order_event(
+        "order-incident-reported",
+        order,
+        current_user,
+        data={"stage": payload.stage.value, "reason": payload.reason.value},
+    )
+
     return {"success": True, "incident_report": order.incident_report}
 
 # -------------------------
@@ -897,6 +971,13 @@ async def upload_proof_of_delivery_photo(
 
     await db.commit()
 
+    await _publish_order_event(
+        "order-pod-updated",
+        order,
+        current_user,
+        data={"kind": "photo"},
+    )
+
     return {"success": True}
 
 
@@ -930,6 +1011,13 @@ async def upload_proof_of_delivery_signature(
     order.proof_of_delivery = proof
 
     await db.commit()
+
+    await _publish_order_event(
+        "order-pod-updated",
+        order,
+        current_user,
+        data={"kind": "signature"},
+    )
 
     return {"success": True}
 
@@ -1007,6 +1095,13 @@ async def toggle_ready(
     order.ready_for_pickup = payload.ready
     await db.commit()
     await db.refresh(order)
+
+    await _publish_order_event(
+        "order-ready-changed",
+        order,
+        current_user,
+        data={"ready_for_pickup": order.ready_for_pickup},
+    )
 
     return {
         "success": True,
@@ -1202,6 +1297,8 @@ async def assign_driver(
         )
 
     try:
+        previous_driver_id = order.driver_id
+        was_published = bool(order.published)
         driver_changed = order.driver_id != payload.driver_id
         order.driver_id = payload.driver_id
         order.published = False
@@ -1218,7 +1315,19 @@ async def assign_driver(
         result = await db.execute(
             select(Order).where(Order.id == order.id).options(selectinload(Order.driver))
         )
-        return result.scalar_one()
+        order = result.scalar_one()
+        await _publish_order_event(
+            "order-driver-changed",
+            order,
+            current_user,
+            extra_tenant_ids=(previous_driver_id,),
+            include_drivers=was_published,
+            data={
+                "driver_id": str(order.driver_id) if order.driver_id else None,
+                "driver_name": order.driver.name if order.driver else None,
+            },
+        )
+        return order
 
     except Exception as e:
         await db.rollback()
@@ -1278,7 +1387,7 @@ async def publish_order(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    """Mark an order as published and broadcast to all connected driver clients."""
+    """Mark an order as published and notify authorized driver clients."""
     if not current_user.is_platform_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1303,45 +1412,19 @@ async def publish_order(
     )
     order = result.scalar_one()
 
-    # Each driver receives only their group-based payout; platform pricing is
-    # deliberately omitted from the driver websocket payload.
-    from app.api.routers.ws import manager
-    driver_ids = list((await db.scalars(
-        select(Tenant.id).where(Tenant.role == TenantRole.driver, Tenant.is_active.is_(True))
-    )).all())
-    assignments = {
-        assignment.driver_id: assignment.group
-        for assignment in (await db.scalars(
-            select(DriverPaymentGroupAssignment).options(
-                joinedload(DriverPaymentGroupAssignment.group)
-            )
-        )).all()
-    }
-    for driver_id in driver_ids:
-        payout = calculate_driver_payout(
-            assignments.get(driver_id),
-            order.delivery_fees,
-            order.delivery_tips,
-        )
-        await manager.broadcast_to_tenant(str(driver_id), {
-            "type": "new_order",
-            "order": {
-                "id": str(order.id),
-                "order_number": order.order_number,
-                "pickup_address": order.pickup_address,
-                "delivery_address": order.delivery_address,
-                "driver_payout": float(payout.total),
-                "driver_fee_payout": float(payout.delivery_fee),
-                "driver_tip_payout": float(payout.tip),
-                "driver_payment_rule": payout.rule_type,
-                "published_at": order.published_at.isoformat() if order.published_at else None,
-            }
-        })
-    # Also broadcast to platform/admin connections so they can update their UI
-    await manager.broadcast_to_all({
-        "type": "order_published",
-        "order_id": str(order.id),
-    })
+    # Drivers receive only an invalidation event and fetch their tailored order
+    # response over the authorized REST endpoint. Addresses and payout details
+    # are deliberately not sent through Pusher.
+    await _publish_order_event(
+        "order-published",
+        order,
+        current_user,
+        include_drivers=True,
+        data={
+            "order_number": order.order_number,
+            "published_at": order.published_at.isoformat() if order.published_at else None,
+        },
+    )
 
     return order
 
@@ -1409,13 +1492,15 @@ async def accept_order(
     )
     order = result.scalar_one()
 
-    # Broadcast to all clients so the card disappears everywhere
-    from app.api.routers.ws import manager
-    await manager.broadcast_to_all({
-        "type": "order_accepted",
-        "order_id": str(order.id),
-        "driver_id": str(current_user.tenant_id),
-        "driver_name": tenant.contact_name or tenant.name,
-    })
+    await _publish_order_event(
+        "order-accepted",
+        order,
+        current_user,
+        include_drivers=True,
+        data={
+            "driver_id": str(current_user.tenant_id),
+            "driver_name": tenant.contact_name or tenant.name,
+        },
+    )
 
     return _driver_order_response(order, payment_group)

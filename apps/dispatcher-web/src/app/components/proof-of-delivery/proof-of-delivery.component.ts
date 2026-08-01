@@ -1,5 +1,6 @@
+import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import {ErrorMessageComponent} from "../error-message/error-message.component";
+import { ErrorMessageComponent } from '../error-message/error-message.component';
 
 export interface ProofOfDeliveryValue {
     signature: boolean;
@@ -11,8 +12,9 @@ export interface ProofOfDeliveryValue {
     templateUrl: './proof-of-delivery.component.html',
     standalone: true,
     imports: [
+        CommonModule,
         ErrorMessageComponent
-    ] // Add ErrorMessageComponent if needed
+    ]
 })
 export class ProofOfDeliveryComponent {
     @Input() value: ProofOfDeliveryValue = { signature: false, picture: false };

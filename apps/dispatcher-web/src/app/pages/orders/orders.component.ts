@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { firstValueFrom } from 'rxjs';
+import { auditTime, firstValueFrom, Subject, takeUntil } from 'rxjs';
 import { PageComponent } from '@components/page/page.component';
 import { TableComponent } from '@components/table/table.component';
 import { SearchBarComponent } from '@components/search-bar/search-bar.component';
@@ -25,6 +25,7 @@ import { OrderDocumentService } from '@services/orders/order-document.service';
 import { ScheduledOrderPromotionService } from '@services/orders/scheduled-order-promotion.service';
 import { AuthService } from '@core/auth/auth.service';
 import { ToastService } from '@core/toast/toast.service';
+import { PusherService } from '@core/realtime/pusher.service';
 import {
   BackendOrder,
   buildDemoDraftValue,
@@ -187,13 +188,15 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   // ─── Private ───────────────────────────────────────────────────────────────
   private scheduledRefreshHandle: ReturnType<typeof setInterval> | null = null;
+  private readonly destroy$ = new Subject<void>();
 
   constructor(
     private readonly ordersService: OrdersService,
     private readonly orderDocumentService: OrderDocumentService,
     private readonly scheduledOrderPromotionService: ScheduledOrderPromotionService,
     private readonly auth: AuthService,
-    private readonly toast: ToastService
+    private readonly toast: ToastService,
+    private readonly pusher: PusherService
   ) { }
 
   get isReadOnlyTenant(): boolean {
@@ -212,12 +215,17 @@ export class OrdersComponent implements OnInit, OnDestroy {
     }
 
     this.loadOrders();
+    this.pusher.orderEvents$
+      .pipe(auditTime(100), takeUntil(this.destroy$))
+      .subscribe(() => this.loadOrders());
     this.scheduledRefreshHandle = setInterval(() => {
       void this.checkAndUpdateScheduledOrders();
     }, 6000);
   }
 
   ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
     if (this.scheduledRefreshHandle) {
       clearInterval(this.scheduledRefreshHandle);
     }

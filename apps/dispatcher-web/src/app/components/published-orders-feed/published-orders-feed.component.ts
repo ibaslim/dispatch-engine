@@ -1,14 +1,15 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, OnDestroy, OnInit, Output } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, Subject, takeUntil } from 'rxjs';
 import { OrderEntity } from '@models/orders/order-entity.model';
 import { OrdersService } from '@services/orders/orders.service';
 import { AuthService } from '@core/auth/auth.service';
 import { ToastService } from '@core/toast/toast.service';
 import { BackendOrder, mapBackendOrder } from '@pages/orders/orders-mapping.util';
+import { OrderRealtimeEvent, PusherService } from '@core/realtime/pusher.service';
 
 /**
- * Driver-facing real-time "New Orders" feed: connects to the tenant websocket,
+ * Driver-facing real-time "New Orders" feed: subscribes through Pusher Channels,
  * lists newly published orders with a 15-minute accept countdown, and lets the
  * driver accept one. Extracted from OrdersComponent.
  */
@@ -25,18 +26,21 @@ export class PublishedOrdersFeedComponent implements OnInit, OnDestroy {
 
   publishedOrders: any[] = [];
 
-  private ws: WebSocket | null = null;
+  private readonly destroy$ = new Subject<void>();
   private countdownHandle: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly ordersService: OrdersService,
     private readonly auth: AuthService,
-    private readonly toast: ToastService
+    private readonly toast: ToastService,
+    private readonly pusher: PusherService
   ) { }
 
   ngOnInit(): void {
     this.loadPublishedOrders();
-    this.connectWebSocket();
+    this.pusher.orderEvents$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((event) => this.handleRealtimeEvent(event));
     this.countdownHandle = setInterval(() => this.tickCountdowns(), 1000);
   }
 
@@ -44,48 +48,22 @@ export class PublishedOrdersFeedComponent implements OnInit, OnDestroy {
     if (this.countdownHandle) {
       clearInterval(this.countdownHandle);
     }
-    this.ws?.close();
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
-  private connectWebSocket(): void {
-    const token = this.auth.getAccessToken();
-    if (!token) return;
+  private handleRealtimeEvent(event: OrderRealtimeEvent): void {
+    if (event.event === 'order-accepted') {
+      this.publishedOrders = this.publishedOrders.filter(p => p.id !== event.order_id);
+      this.refresh.emit();
+    }
 
-    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${proto}://${window.location.host}/api/v1/ws?token=${encodeURIComponent(token)}`;
-
-    try {
-      this.ws = new WebSocket(wsUrl);
-      this.ws.onmessage = (evt) => {
-        try {
-          const msg = JSON.parse(evt.data as string);
-          if (msg.type === 'new_order') {
-            const o = msg.order;
-            if (!o || this.publishedOrders.some(p => p.id === String(o.id))) return;
-
-            const publishedAt = o.published_at ? new Date(o.published_at) : new Date();
-            const elapsed = Math.floor((Date.now() - publishedAt.getTime()) / 1000);
-            const remaining = Math.max(0, 900 - elapsed); // 15 mins
-
-            this.publishedOrders = [{
-              id: String(o.id),
-              orderNumber: String(o.order_number ?? ''),
-              pickupAddress: String(o.pickup_address ?? ''),
-              deliveryAddress: String(o.delivery_address ?? ''),
-              driverFee: Number(o.driver_payout ?? 0),
-              publishedAt,
-              remainingSeconds: remaining,
-              accepting: false,
-              accepted: false,
-            }, ...this.publishedOrders];
-          } else if (msg.type === 'order_accepted') {
-            this.publishedOrders = this.publishedOrders.filter(p => p.id !== String(msg.order_id));
-            this.refresh.emit();
-          }
-        } catch { /* ignore */ }
-      };
-      this.ws.onclose = () => setTimeout(() => this.connectWebSocket(), 5000);
-    } catch { /* ignore */ }
+    if (
+      ['order-published', 'order-updated', 'order-deleted', 'order-driver-changed']
+        .includes(event.event)
+    ) {
+      this.loadPublishedOrders();
+    }
   }
 
   private loadPublishedOrders(): void {
