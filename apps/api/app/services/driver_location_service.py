@@ -1,17 +1,13 @@
 """
-Driver location service — Redis-backed ephemeral position store.
+Driver location service — Redis-backed live position store & per-driver position history.
 
-Redis key
----------
+Redis live key
+--------------
     driver:location:{driver_id}
 
-Value (JSON string)
--------------------
-    {
-        "lat": float,
-        "lng": float,
-        "updated_at": "<ISO-8601 UTC timestamp>"
-    }
+Redis per-driver history key
+----------------------------
+    driver:location_history:{driver_id}
 """
 import json
 from dataclasses import dataclass
@@ -19,16 +15,18 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 import redis.asyncio as aioredis
+from app.core.config import settings
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
 KEY_PREFIX = "driver:location"
+HISTORY_KEY_PREFIX = "driver:location_history"
 
-# Mobile app pushes every 5 minutes; TTL = 3× = 15 minutes.
-LOCATION_PUSH_INTERVAL_SECONDS: int = 300   # 5 min
-LOCATION_TTL_SECONDS: int = LOCATION_PUSH_INTERVAL_SECONDS * 3  # 15 min
+
+def get_location_ttl_seconds() -> int:
+    return settings.driver_location_push_interval_seconds * 3
 
 
 # ---------------------------------------------------------------------------
@@ -52,6 +50,10 @@ def _key(driver_id: UUID) -> str:
     return f"{KEY_PREFIX}:{driver_id}"
 
 
+def _history_key(driver_id: UUID) -> str:
+    return f"{HISTORY_KEY_PREFIX}:{driver_id}"
+
+
 # ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
@@ -69,7 +71,7 @@ class DriverLocationService:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }
         )
-        await self._redis.set(_key(driver_id), payload, ex=LOCATION_TTL_SECONDS)
+        await self._redis.set(_key(driver_id), payload, ex=get_location_ttl_seconds())
 
     async def get(self, driver_id: UUID) -> DriverLocation | None:
         raw = await self._redis.get(_key(driver_id))
@@ -85,3 +87,26 @@ class DriverLocationService:
 
     async def delete(self, driver_id: UUID) -> None:
         await self._redis.delete(_key(driver_id))
+
+    async def push_to_history(
+        self,
+        driver_id: UUID,
+        lat: float,
+        lng: float,
+        order_id: UUID | None = None,
+    ) -> int:
+        """
+        Appends historical location log entry to per-driver Redis list:
+        driver:location_history:{driver_id}
+        """
+        record = json.dumps(
+            {
+                "driver_id": str(driver_id),
+                "order_id": str(order_id) if order_id else None,
+                "lat": lat,
+                "lng": lng,
+                "recorded_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        history_len = await self._redis.rpush(_history_key(driver_id), record)
+        return history_len

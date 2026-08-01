@@ -15,12 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.config import settings
-from app.db.session import get_db
 from app.core.deps import CurrentUser
+from app.core.redis import get_redis
+from app.db.session import get_db
 from app.models.order import Order, OrderStatus, ActivityStatus
 from app.models.tenant import Tenant, TenantRole
 from app.models.delivery_configuration import DeliveryPolicy
 from app.models.driver_payment import DriverPaymentGroupAssignment
+from app.services.driver_active_order_service import DriverActiveOrderService
 from app.services.delivery_quote_service import (
     DeliveryQuote,
     DeliveryQuoteError,
@@ -653,6 +655,7 @@ async def update_activity_status(
     payload: ActivityStatusUpdate,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
 ):
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
@@ -679,6 +682,14 @@ async def update_activity_status(
         order.status = OrderStatus.completed
 
     await db.commit()
+
+    # Sync driver active order cache for location history
+    if order.driver_id and redis:
+        active_order_svc = DriverActiveOrderService(redis)
+        if payload.activity_status == ActivityStatus.delivery_in_progress:
+            await active_order_svc.set_active_order(order.driver_id, order.id)
+        elif previous_activity_status == ActivityStatus.delivery_in_progress:
+            await active_order_svc.clear_active_order(order.driver_id, order.id)
 
     if is_new_delivery:
         _notify_sender_order_delivered(order)
@@ -1170,6 +1181,7 @@ async def assign_driver(
     payload: AssignDriverRequest,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
 ):
     """Assign a driver to an order. Driver must be an active tenant with role='driver'."""
     if not current_user.is_platform_admin:
@@ -1202,6 +1214,7 @@ async def assign_driver(
         )
 
     try:
+        old_driver_id = order.driver_id
         driver_changed = order.driver_id != payload.driver_id
         order.driver_id = payload.driver_id
         order.published = False
@@ -1213,6 +1226,13 @@ async def assign_driver(
 
         await db.commit()
         await db.refresh(order)
+
+        if redis:
+            active_order_svc = DriverActiveOrderService(redis)
+            if driver_changed and old_driver_id:
+                await active_order_svc.clear_active_order(old_driver_id, order.id)
+            if order.activity_status == ActivityStatus.delivery_in_progress:
+                await active_order_svc.set_active_order(payload.driver_id, order.id)
 
         # Re-fetch with driver relationship loaded
         result = await db.execute(
