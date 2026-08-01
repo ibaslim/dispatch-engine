@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import {
   AfterViewInit,
-  ChangeDetectorRef,
   Component,
   ElementRef,
   EventEmitter,
@@ -150,7 +149,6 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
 
   constructor(
     private readonly googleMaps: GoogleMapsService,
-    private readonly changeDetector: ChangeDetectorRef,
     private readonly toast: ToastService,
   ) {}
 
@@ -161,13 +159,11 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
       this.manualValue = '';
       this.manualMatchedRegion = '';
       this.placeChange.emit(null);
-      this.changeDetector.detectChanges();
     });
     void this.initializeAutocomplete();
   }
 
   ngOnChanges(): void {
-    this.model?.control?.updateValueAndValidity();
     if (this.autocomplete && this.autocomplete.value !== this.value) {
       this.autocomplete.value = this.value;
     }
@@ -226,7 +222,6 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
       this.autocomplete = autocomplete;
       this.autocompleteHost.nativeElement.appendChild(autocomplete);
       this.autocompleteReady = true;
-      this.changeDetector.detectChanges();
     } catch (error) {
       if (this.googleMaps.isQuotaError(error)) {
         this.activateManualFallback(error);
@@ -269,7 +264,6 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
     this.autocomplete?.remove();
     this.autocomplete = undefined;
     this.autocompleteReady = false;
-    this.changeDetector.detectChanges();
   }
 
   private removeAutocompleteListeners(): void {

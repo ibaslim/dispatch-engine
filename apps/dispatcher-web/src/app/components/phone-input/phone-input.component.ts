@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { PhoneValue } from '@models/phone-input/phone-input.model';
 import { ErrorMessageComponent } from '../error-message/error-message.component';
 import { DropdownSelectorComponent } from '../dropdown-selector/dropdown-selector.component';
+import { SelectOption } from '@models/dropdown-selector/dropdown-selector.model';
 import { PHONE_COUNTRIES, PhoneCountry } from '@models/phone-countries/phone-countries.model';
 
 @Component({
@@ -27,18 +28,23 @@ export class PhoneInputComponent implements OnChanges {
 
   @Output() valueChange = new EventEmitter<PhoneValue>();
 
+  countryOptions: Array<SelectOption<string>> = this.buildCountryOptions(this.countries);
+
   private interacted = false;
   private invalidChars = false;
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['countries']) {
+      this.countryOptions = this.buildCountryOptions(this.countries);
+    }
     if (changes['showSubmitValidation'] && !this.showSubmitValidation) {
       this.interacted = false;
       this.invalidChars = false;
     }
   }
 
-  get countryOptions() {
-    return this.countries.map(c => ({
+  private buildCountryOptions(countries: PhoneCountry[]): Array<SelectOption<string>> {
+    return countries.map(c => ({
       value: c.dialCode,
       label: `${c.flag} ${c.dialCode}`
     }));

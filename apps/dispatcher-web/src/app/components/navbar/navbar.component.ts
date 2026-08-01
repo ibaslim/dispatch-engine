@@ -5,6 +5,7 @@ import { AuthService } from '@core/auth/auth.service';
 import { NavItem } from '@models/navbar.model';
 import { ButtonComponent } from '@components/button/button.component';
 import { UserDropdownIconComponent } from '@components/user-dropdown-icon/user-dropdown-icon.component';
+import { RealtimeNotificationsService } from '@core/realtime/realtime-notifications.service';
 
 @Component({
   selector: 'app-navbar',
@@ -14,13 +15,13 @@ import { UserDropdownIconComponent } from '@components/user-dropdown-icon/user-d
 })
 export class NavbarComponent implements OnInit, OnDestroy {
   readonly auth = inject(AuthService);
+  readonly realtimeNotifications = inject(RealtimeNotificationsService);
 
   isMobileMenuOpen = false;
   isHelpOpen = false;
   isDarkTheme = false;
 
-  isNotificationsOn = true;
-  private notificationAudio = new Audio('assets/sounds/notify.mp3');
+  get isNotificationsOn(): boolean { return this.realtimeNotifications.enabled(); }
 
   private readonly allNavItems: NavItem[] = [
     { label: 'Dispatch', route: '/dispatch' },
@@ -82,14 +83,7 @@ export class NavbarComponent implements OnInit, OnDestroy {
 
   // UPDATED: toggle bell + sound
   toggleNotifications(): void {
-    this.isNotificationsOn = !this.isNotificationsOn;
-
-    if (this.isNotificationsOn) {
-      this.notificationAudio.currentTime = 0;
-      this.notificationAudio.play().catch(() => {
-        // ignore autoplay errors
-      });
-    }
+    void this.realtimeNotifications.toggle();
   }
 
   toggleTheme(): void {

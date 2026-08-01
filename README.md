@@ -468,6 +468,26 @@ See `.env.local.example` for the full list. Key variables:
 | `PLATFORM_ADMIN_EMAIL` | Email for the auto-seeded admin | `admin@dispatch.local` |
 | `PLATFORM_ADMIN_PASSWORD` | Password for the auto-seeded admin | `Admin123!` |
 | `PLATFORM_ADMIN_NAME` | Display name for the auto-seeded admin | `Platform Admin` |
+| `PUSHER_APP_ID` | Pusher Channels application ID | disabled when empty |
+| `PUSHER_KEY` | Browser-safe Pusher Channels application key | disabled when empty |
+| `PUSHER_SECRET` | Server-only Pusher Channels secret | disabled when empty |
+| `PUSHER_CLUSTER` | Pusher Channels cluster, such as `mt1` or `eu` | disabled when empty |
+
+### Pusher Channels for dispatcher web
+
+Create a Channels app in the Pusher dashboard, copy its four credentials into
+`.env.local`, and restart the API. The API exposes only the browser-safe key and
+cluster through `GET /api/v1/public/config`; the app secret remains server-side.
+
+The Angular app opens one shared Pusher connection after login. Channel
+subscriptions are authorized with the existing bearer JWT through
+`POST /api/v1/pusher/auth`. Platform, driver, and tenant streams are private and
+role-scoped. When an order changes, Pusher delivers a small invalidation event
+and the affected screen reloads authoritative data through the REST API.
+
+The navbar bell controls real-time toast, audio, and background-tab browser
+notifications. Browser notifications require the user to grant permission and
+do not run after the browser is fully closed.
 
 ---
 
@@ -1389,4 +1409,3 @@ Before opening a pull request, verify the following for the app(s) you changed:
 | Shared lib tests pass | `npx nx test shared-domain && npx nx test shared-api-client` |
 | `.env.local.example` updated | If new env vars were added |
 | README updated | If new setup steps, endpoints, or env vars were added |
-

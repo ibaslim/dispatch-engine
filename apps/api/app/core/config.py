@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     # Local development can fall back to the browser key above.
     google_maps_server_api_key: str = ""
 
+    # Pusher Channels. The key and cluster are browser-safe; the app secret is
+    # server-only and must never be included in a frontend bundle.
+    pusher_app_id: str = ""
+    pusher_key: str = ""
+    pusher_secret: str = ""
+    pusher_cluster: str = ""
+
     # CORS
     cors_origins: List[str] = [
         "http://localhost:4200",
@@ -60,6 +67,16 @@ class Settings(BaseSettings):
     driver_location_flush_interval_seconds: int = 60
     driver_location_retention_days: int = 30
     driver_location_active_order_negative_cache_seconds: int = 300
+    @property
+    def pusher_enabled(self) -> bool:
+        return all(
+            (
+                self.pusher_app_id.strip(),
+                self.pusher_key.strip(),
+                self.pusher_secret.strip(),
+                self.pusher_cluster.strip(),
+            )
+        )
 
 
 settings = Settings()
