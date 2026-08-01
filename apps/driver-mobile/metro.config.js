@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 const { getDefaultConfig } = require('expo/metro-config');
 const { withNativeWind } = require('nativewind/metro');
@@ -30,6 +31,18 @@ config.resolver.extraNodeModules = {
     'node_modules/nativewind/node_modules/react-native-css-interop'
   ),
 };
+
+// Enable file polling ONLY when running inside Docker containers to support cross-OS bind mounts.
+// Native Linux / Mac / Windows host environments will continue using native OS file-system events.
+const isDocker = fs.existsSync('/.dockerenv') || process.env.CHOKIDAR_USEPOLLING === 'true';
+
+if (isDocker) {
+  config.watcher = {
+    ...config.watcher,
+    usePolling: true,
+    interval: 1000,
+  };
+}
 
 // Wrap with NativeWind so Tailwind classNames are compiled and applied.
 // Without this, className props are ignored and the UI renders unstyled.
