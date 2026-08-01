@@ -68,6 +68,7 @@ Open:
 - http://localhost:4200 for the dispatcher portal
 - http://localhost:4300 for the tracking app
 - http://localhost:8000/docs for Swagger
+- http://localhost:8081 for the driver-mobile Metro bundler (when running with `--profile mobile`)
 
 **What happens automatically:**
 
@@ -82,17 +83,19 @@ Open:
 9. Angular dispatcher-web starts on port 4200
 10. Angular tracking-web starts on port 4300
 
+> **Note on Mobile App:** By default, `docker compose up` skips `driver-mobile` to save system resources. To include the mobile app inside Docker, run `docker compose --profile mobile up -d`.
+
 ### Recommended Development Model
 
-- Docker owns Postgres, Redis, Mailpit, FastAPI, Celery, and both Angular dev servers.
+- Docker owns Postgres, Redis, Mailpit, FastAPI, Celery, both Angular dev servers, and optionally Expo Metro for mobile (`--profile mobile`).
 - Your editor on the host edits the bind-mounted source tree directly.
-- React Native runs on the host, but it consumes the same shared TypeScript libraries from `libs/shared/*`.
+- React Native can run in Docker via `--profile mobile` or natively on the host using `npm run start`, consuming the same shared TypeScript libraries from `libs/shared/*`.
 
 This keeps the common path simple:
 
-1. `docker compose up -d`
-2. Edit API or Angular code immediately
-3. Start Expo on the host only when you need the mobile app
+1. `docker compose up -d` (or `docker compose --profile mobile up -d` if you need mobile in Docker)
+2. Edit API or Angular/Mobile code immediately
+3. Start Expo on the host or inspect port 8081/QR code when you need the mobile app
 
 ### One-time setup per developer
 
@@ -250,14 +253,16 @@ Posts are shown in `JobsScreen` under the "Latest Posts" section, loaded from `/
 ## Daily Commands
 
 ```bash
-docker compose up -d             # Start the full local stack
-docker compose logs -f api       # Follow API logs
-docker compose logs -f           # Follow all service logs
-docker compose restart api       # Re-run API startup, dependency sync, and migrations
+docker compose up -d                     # Start core stack (API, Web apps, DBs)
+docker compose --profile mobile up -d   # Start core stack + driver-mobile app
+docker compose logs -f api               # Follow API logs
+docker compose logs -f driver-mobile     # Follow mobile app logs
+docker compose logs -f                   # Follow all service logs
+docker compose restart api               # Re-run API startup, dependency sync, and migrations
 docker compose restart celery-worker
-docker compose restart dispatcher-web tracking-web
-docker compose down              # Stop all services
-docker compose down -v           # Stop services and reset local volumes
+docker compose restart dispatcher-web tracking-web driver-mobile
+docker compose down                      # Stop all services
+docker compose down -v                   # Stop services and reset local volumes
 ```
 
 ### Host-only flows
@@ -265,11 +270,10 @@ docker compose down -v           # Stop services and reset local volumes
 Use these when you need tools that must run outside Docker:
 
 ```bash
-# Mobile app (host only)
+# Mobile app
 cd apps/driver-mobile
-cp .env.example .env
-npm install                    # one-time per developer, then again when package.json changes
-npm run start
+npm run start                       # Host-only Metro
+npx expo run:android --no-bundler   # Build & run on Android device (when Metro is in Docker)
 ```
 
 ```bash

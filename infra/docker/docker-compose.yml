@@ -147,6 +147,29 @@ services:
       api:
         condition: service_healthy
 
+  driver-mobile:
+    profiles:
+      - mobile
+    image: node:20-alpine
+    working_dir: /workspace
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0
+      - REACT_NATIVE_PACKAGER_HOSTNAME=localhost
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHMAN_DISABLE=1
+    ports:
+      - "8081:8081"
+    volumes:
+      - ../../:/workspace
+      - node_modules:/workspace/node_modules
+      - npm_cache:/root/.npm
+    command: ["sh", "-c", "for script in /workspace/infra/scripts/*.sh; do tmp=\"$$script.tmp\"; tr -d '\\r' < \"$$script\" > \"$$tmp\" && mv \"$$tmp\" \"$$script\"; done && sh /workspace/infra/scripts/dev-mobile.sh"]
+    depends_on:
+      api:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   redis_data:

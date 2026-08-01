@@ -4,8 +4,8 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "start": "node scripts/update-ip.js && NODE_OPTIONS=--dns-result-order=ipv4first expo start --dev-client",
-    "start:offline": "node scripts/update-ip.js && NODE_OPTIONS=--dns-result-order=ipv4first expo start --dev-client --offline",
+    "start": "node scripts/update-ip.js && npx cross-env NODE_OPTIONS=--dns-result-order=ipv4first expo start --dev-client",
+    "start:offline": "node scripts/update-ip.js && npx cross-env NODE_OPTIONS=--dns-result-order=ipv4first expo start --dev-client --offline",
     "android": "node scripts/update-ip.js && expo run:android",
     "ios": "node scripts/update-ip.js && expo run:ios",
     "lint": "eslint src --ext .ts,.tsx",
@@ -46,6 +46,7 @@
   "devDependencies": {
     "@babel/core": "^7.24.0",
     "@expo/config-plugins": "^55.0.11",
+    "@expo/metro-config": "~55.0.0",
     "@types/react": "~19.2.10",
     "babel-plugin-module-resolver": "^5.0.0",
     "eslint": "^8.57.0",
