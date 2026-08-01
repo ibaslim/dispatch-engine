@@ -7,11 +7,23 @@ import {
   RefreshControl,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import type { PostResponse } from '@dispatch/shared/contracts';
-import { fetchPublic, fetchWithAuth, logout } from '../services/api';
-import { subscribeForegroundMessages } from '../services/fcm';
+import { fetchPublic, fetchWithAuth } from '@services/api';
+import { subscribeForegroundMessages } from '@services/notifications';
+import { useTheme } from '@theme';
+import {
+  Card,
+  CardBody,
+  Badge,
+  Ref,
+  BottomSheet,
+  BottomSheetTitle,
+  BottomSheetItem,
+} from '@components/ui';
 
 interface Job {
   id: string;
@@ -23,20 +35,31 @@ interface Job {
 
 interface Props {
   onLogout: () => void;
+  onOpenSettings: () => void;
+  onJobPress: (id: string) => void;
 }
 
-export function JobsScreen({ onLogout }: Props) {
+export function JobsScreen({ onLogout, onOpenSettings, onJobPress }: Props) {
+  const { palette } = useTheme();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [posts, setPosts] = useState<PostResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
+
+  const call = (number: string) => {
+    setContactOpen(false);
+    Linking.openURL(`tel:${number}`).catch(() => {
+      // No dialer available (e.g. emulator) — ignore.
+    });
+  };
 
   const loadJobs = useCallback(async () => {
     try {
       const data = await fetchWithAuth<Job[]>('/api/v1/drivers/me/jobs');
       setJobs(data);
     } catch (err: unknown) {
-      if (err instanceof Error && err.message === 'Session expired') {
+      if (err instanceof Error && err.message === 'Session expired. Please log in again.') {
         onLogout();
         return;
       }
@@ -67,26 +90,34 @@ export function JobsScreen({ onLogout }: Props) {
     return unsubscribe;
   }, [loadJobs, loadPosts]);
 
-  async function handleLogout() {
-    await logout();
-    onLogout();
-  }
-
   if (isLoading) {
     return (
-      <View className="flex-1 justify-center items-center bg-white">
-        <ActivityIndicator size="large" color="#2563eb" />
+      <View className="flex-1 justify-center items-center bg-background">
+        <ActivityIndicator size="large" color={palette.primary} />
       </View>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
-      <View className="bg-white shadow-sm px-4 py-3 flex-row justify-between items-center">
-        <Text className="text-xl font-bold text-gray-900">My Jobs</Text>
-        <TouchableOpacity onPress={handleLogout}>
-          <Text className="text-sm text-gray-500">Sign out</Text>
-        </TouchableOpacity>
+    <SafeAreaView edges={['top']} className="flex-1 bg-background">
+      <View className="bg-surface border-b border-border px-4 py-3 flex-row justify-between items-center">
+        <Text className="text-xl font-bold text-foreground">My Jobs</Text>
+        <View className="flex-row items-center gap-4">
+          <TouchableOpacity
+            onPress={() => setContactOpen(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Contact"
+          >
+            <Ionicons name="call-outline" size={20} color={palette.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onOpenSettings} hitSlop={8}>
+            <Text className="text-sm font-medium text-primary">Appearance</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => onLogout()} hitSlop={8}>
+            <Text className="text-sm text-muted">Sign out</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -100,51 +131,82 @@ export function JobsScreen({ onLogout }: Props) {
               loadJobs();
               loadPosts();
             }}
+            tintColor={palette.primary}
+            colors={[palette.primary]}
           />
         }
         ListHeaderComponent={
           <View className="mx-4 mt-4 mb-2">
-            <Text className="text-base font-semibold text-gray-900">Latest Posts</Text>
+            <Text className="text-base font-semibold text-foreground">Latest Posts</Text>
             {posts.length === 0 ? (
-              <Text className="text-sm text-gray-400 mt-2">No posts available.</Text>
+              <Text className="text-sm text-muted mt-2">No posts available.</Text>
             ) : (
               <View className="mt-2 gap-2">
                 {posts.map((post) => (
-                  <View key={post.id} className="bg-white rounded-xl p-4 shadow-sm">
-                    <Text className="font-semibold text-gray-900">{post.title}</Text>
-                    <Text className="text-xs text-gray-500 mt-1">{post.summary}</Text>
-                  </View>
+                  <Card key={post.id}>
+                    <CardBody className="gap-1">
+                      <Text className="font-semibold text-foreground">{post.title}</Text>
+                      <Text className="text-xs text-muted">{post.summary}</Text>
+                    </CardBody>
+                  </Card>
                 ))}
               </View>
             )}
-            <Text className="text-base font-semibold text-gray-900 mt-5">My Jobs</Text>
+            <Text className="text-base font-semibold text-foreground mt-5">My Jobs</Text>
           </View>
         }
         ListEmptyComponent={
           <View className="flex-1 items-center justify-center py-20">
-            <Text className="text-gray-400 text-base">No jobs assigned yet</Text>
+            <Text className="text-muted text-base">No jobs assigned yet</Text>
           </View>
         }
         renderItem={({ item }) => (
-          <View className="bg-white mx-4 my-2 rounded-xl p-4 shadow-sm">
-            <View className="flex-row justify-between items-start mb-2">
-              <Text className="font-semibold text-gray-900">#{item.order_ref}</Text>
-              <View className="bg-blue-100 rounded-full px-3 py-1">
-                <Text className="text-xs font-medium text-blue-800">
-                  {item.status.replace(/_/g, ' ')}
-                </Text>
-              </View>
-            </View>
-            <Text className="text-sm text-gray-500 mb-1">
-              📦 {item.pickup_address}
-            </Text>
-            <Text className="text-sm text-gray-500">
-              📍 {item.delivery_address}
-            </Text>
-          </View>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => onJobPress(item.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`Job ${item.order_ref}`}
+          >
+            <Card className="mx-4 my-2">
+              <CardBody className="gap-3">
+                <View className="flex-row justify-between items-start">
+                  <Ref>{item.order_ref}</Ref>
+                  <Badge label={item.status.replace(/_/g, ' ')} />
+                </View>
+                <View className="gap-1">
+                  <Text className="text-sm text-muted">📦 {item.pickup_address}</Text>
+                  <Text className="text-sm text-muted">📍 {item.delivery_address}</Text>
+                </View>
+              </CardBody>
+            </Card>
+          </TouchableOpacity>
         )}
         contentContainerStyle={{ paddingBottom: 16 }}
       />
+
+      <BottomSheet visible={contactOpen} onClose={() => setContactOpen(false)}>
+        <BottomSheetTitle>Contact</BottomSheetTitle>
+        <BottomSheetItem
+          icon="call"
+          title="Call Pickup Contact"
+          subtitle="Dana (Cafe Umbra)"
+          onPress={() => call('+15035550148')}
+        />
+        <BottomSheetItem
+          icon="call"
+          title="Call Recipient"
+          subtitle="Alex Kim"
+          onPress={() => call('+15035550172')}
+        />
+        <BottomSheetItem
+          icon="help-buoy"
+          title="Contact Support"
+          subtitle="Dispatch help desk"
+          tint="rose"
+          onPress={() => call('+18005550100')}
+          last
+        />
+      </BottomSheet>
     </SafeAreaView>
   );
 }

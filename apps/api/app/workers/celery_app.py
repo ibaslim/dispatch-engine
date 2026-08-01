@@ -17,4 +17,10 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    beat_schedule={
+        "flush-driver-location-logs-periodic": {
+            "task": "flush_driver_location_logs",
+            "schedule": float(settings.driver_location_flush_interval_seconds),
+        },
+    },
 )

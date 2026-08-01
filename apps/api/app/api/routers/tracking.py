@@ -57,6 +57,7 @@ async def get_tracking_order_details(
         order_number=order.order_number,
         status=order.status,
         activity_status=order.activity_status,
+        driver_id=order.driver_id,
         driver_name=order.driver.name if order.driver else None,
         pickup_name=order.pickup_name,
         pickup_address=order.pickup_address,

@@ -36,6 +36,7 @@ from app.models.driver_payment import (
     DriverPaymentGroup,
     DriverPaymentGroupAssignment,
 )
+from app.models.driver_location_log import DriverLocationLog
 
 __all__ = [
     "Tenant",
@@ -73,4 +74,5 @@ __all__ = [
     "SpecialOccasion",
     "DriverPaymentGroup",
     "DriverPaymentGroupAssignment",
+    "DriverLocationLog",
 ]

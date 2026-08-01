@@ -250,3 +250,35 @@ def send_order_delivered_email(
     except Exception as exc:
         raise self.retry(exc=exc, countdown=60)
 
+
+@celery_app.task(name="flush_driver_location_logs")
+def flush_driver_location_logs() -> int:
+    """Flush buffered driver location records from Redis into TimescaleDB."""
+    import asyncio
+    import logging
+    import redis.asyncio as aioredis
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+    from app.core.config import settings
+    from app.services.driver_location_flush_service import DriverLocationFlushService
+
+    logger = logging.getLogger(__name__)
+
+    async def _flush() -> int:
+        local_engine = create_async_engine(settings.database_url, echo=False)
+        local_session_factory = async_sessionmaker(local_engine, expire_on_commit=False, class_=AsyncSession)
+        redis_client = aioredis.from_url(settings.redis_url)
+        try:
+            async with local_session_factory() as session:
+                flush_service = DriverLocationFlushService(redis_client)
+                count = await flush_service.flush_buffer(session)
+                if count > 0:
+                    msg = f"[PERIODIC FLUSH] Periodic flush (interval: {settings.driver_location_flush_interval_seconds}s) completed: saved {count} record(s) to TimescaleDB."
+                    logger.info(msg)
+                return count
+        finally:
+            await redis_client.aclose()
+            await local_engine.dispose()
+
+    return asyncio.run(_flush())
+
+

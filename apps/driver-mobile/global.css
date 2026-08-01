@@ -1,3 +1,110 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * Default theme variables (Blue / Light). These are the fallback values; the
+ * ThemeProvider overrides them at runtime with the selected theme + mode via
+ * NativeWind's vars(). Keep the token set in sync with src/theme/themes.ts.
+ */
+:root {
+  --color-background: 248 250 252;
+  --color-surface: 255 255 255;
+  --color-card: 255 255 255;
+  --color-foreground: 15 23 42;
+  --color-muted: 100 116 139;
+  --color-border: 226 232 240;
+  --color-input: 241 245 249;
+  --color-primary: 37 99 235;
+  --color-primary-foreground: 255 255 255;
+  --color-primary-muted: 219 234 254;
+  --color-primary-muted-foreground: 30 64 175;
+}
+
+/*
+ * Component classes (React Native via NativeWind).
+ *
+ * Design language: a courier "manifest / waybill". Order refs read like
+ * tracking numbers (mono, wide tracking), job cards carry a colored status
+ * edge like a shipping label, and status reads as a small tag with a dot.
+ *
+ * All colors are semantic theme tokens, so these adapt to light/dark and every
+ * accent theme automatically — no `dark:` variants. In RN text styles don't
+ * inherit from a container View, so buttons/badges split into a container class
+ * and a *-text class on the inner <Text>. Consume via src/components/ui.
+ */
+@layer components {
+  /* ---------- Card ---------- */
+  .card {
+    @apply rounded-2xl border border-border bg-card;
+  }
+  .card-header {
+    @apply flex-row items-center justify-between px-5 pt-5 pb-4 border-b border-border;
+  }
+  .card-body {
+    @apply p-5;
+  }
+  .card-footer {
+    @apply px-5 py-4 border-t border-border;
+  }
+  .card-title {
+    @apply text-base font-bold tracking-[-0.2px] text-foreground;
+  }
+  .card-subtitle {
+    @apply text-sm text-muted;
+  }
+
+  /* Order / tracking ref set like a waybill number (the typographic signature). */
+  .ref {
+    @apply font-mono text-sm font-semibold uppercase tracking-[1.5px] text-foreground;
+  }
+
+  /* ---------- Button (container + text) ---------- */
+  .btn {
+    @apply flex-row items-center justify-center gap-2 rounded-xl px-5 py-3.5;
+  }
+  .btn-sm {
+    @apply gap-1.5 rounded-lg px-4 py-2.5;
+  }
+  .btn-primary {
+    @apply bg-primary;
+  }
+  .btn-secondary {
+    @apply bg-primary-muted;
+  }
+  .btn-outline {
+    @apply border border-border bg-transparent;
+  }
+  .btn-ghost {
+    @apply bg-transparent px-2;
+  }
+  .btn-text {
+    @apply text-[15px] font-bold tracking-[0.3px];
+  }
+  .btn-text-sm {
+    @apply text-sm;
+  }
+  .btn-text-primary {
+    @apply text-primary-foreground;
+  }
+  .btn-text-secondary {
+    @apply text-primary-muted-foreground;
+  }
+  .btn-text-outline {
+    @apply text-foreground;
+  }
+  .btn-text-ghost {
+    @apply text-primary;
+  }
+
+  /* ---------- Badge (manifest status tag) ---------- */
+  .badge {
+    @apply flex-row items-center gap-1.5 self-start rounded-full bg-primary-muted px-2.5 py-1;
+  }
+  .badge-dot {
+    @apply h-1.5 w-1.5 rounded-full bg-primary-muted-foreground;
+  }
+  .badge-text {
+    @apply text-[11px] font-bold uppercase tracking-[0.8px] text-primary-muted-foreground;
+  }
+}

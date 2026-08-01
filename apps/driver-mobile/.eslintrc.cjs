@@ -5,6 +5,9 @@ module.exports = {
     node: true,
     jest: true,
   },
+  globals: {
+    __DEV__: 'readonly',
+  },
   parser: '@typescript-eslint/parser',
   parserOptions: {
     ecmaVersion: 'latest',

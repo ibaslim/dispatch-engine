@@ -9,5 +9,5 @@ cp "$ROOT_DIR/.env.local" "$APP_DIR/.env"
 sh "$ROOT_DIR/infra/scripts/sync-python-deps.sh"
 
 cd "$APP_DIR"
-echo "[worker] Starting Celery worker..."
-exec celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+echo "[worker] Starting Celery worker & beat scheduler..."
+exec celery -A app.workers.celery_app worker --loglevel=info --concurrency=2 -B

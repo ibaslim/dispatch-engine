@@ -119,6 +119,23 @@ export class DispatchApiClient {
     return this.post<T>(path, body, auth);
   }
 
+  async patchPath<T = void>(path: string, body: unknown, auth = true): Promise<T> {
+    return this.request<T>('PATCH', path, body, auth);
+  }
+
+  async deletePath<T = void>(path: string, auth = true): Promise<T> {
+    return this.request<T>('DELETE', path, undefined, auth);
+  }
+
+  /**
+   * Multipart upload (e.g. proof-of-delivery images). The runtime derives the
+   * `Content-Type` boundary from the FormData, so we must not set that header
+   * ourselves — a boundary-less type is unparseable by the server.
+   */
+  async postMultipart<T = void>(path: string, form: FormData): Promise<T> {
+    return this.request<T>('POST', path, form, true);
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   private async get<T>(path: string, auth = true): Promise<T> {
@@ -129,41 +146,37 @@ export class DispatchApiClient {
     return this.request<T>('POST', path, body, auth);
   }
 
+  private buildInit(method: string, body: unknown, token: string | null): RequestInit {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    if (body === undefined) return { method, headers };
+    if (typeof FormData !== 'undefined' && body instanceof FormData) {
+      return { method, headers, body };
+    }
+
+    headers['Content-Type'] = 'application/json';
+    return { method, headers, body: JSON.stringify(body) };
+  }
+
   private async request<T>(
     method: string,
     path: string,
     body: unknown,
     auth: boolean,
   ): Promise<T> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (auth) {
-      const token = await this.storage.getAccessToken();
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    const url = `${this.baseUrl}${path}`;
+    const token = auth ? await this.storage.getAccessToken() : null;
+    const res = await fetch(url, this.buildInit(method, body, token));
 
     if (res.status === 401 && auth) {
       // Attempt token refresh
       try {
         await this.refresh();
         const newToken = await this.storage.getAccessToken();
-        if (newToken) headers['Authorization'] = `Bearer ${newToken}`;
-        const retryRes = await fetch(`${this.baseUrl}${path}`, {
-          method,
-          headers,
-          body: body !== undefined ? JSON.stringify(body) : undefined,
-        });
+        const retryRes = await fetch(url, this.buildInit(method, body, newToken));
         if (!retryRes.ok) throw await this.toError(retryRes);
-        if (retryRes.status === 204) return undefined as unknown as T;
-        return retryRes.json() as Promise<T>;
+        return this.toResult<T>(retryRes);
       } catch {
         await this.storage.clearTokens();
         throw new Error('Session expired. Please log in again.');
@@ -171,7 +184,11 @@ export class DispatchApiClient {
     }
 
     if (!res.ok) throw await this.toError(res);
-    if (res.status === 204) return undefined as unknown as T;
+    return this.toResult<T>(res);
+  }
+
+  private toResult<T>(res: Response): Promise<T> {
+    if (res.status === 204) return Promise.resolve(undefined as unknown as T);
     return res.json() as Promise<T>;
   }
 

@@ -5,20 +5,27 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#1d4ed8"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.dispatch.drivermobile",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Required for job tracking.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Required for background job tracking.",
-        "UIBackgroundModes": ["location", "fetch", "remote-notification"]
+        "NSLocationWhenInUseUsageDescription": "Dispatch Engine requires location access while using the app to show active jobs and route navigation.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Dispatch Engine requires location access in the background and when locked to share live position with dispatchers.",
+        "NSLocationAlwaysUsageDescription": "Dispatch Engine requires location access in the background to share live position with dispatchers during active shifts.",
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -27,10 +34,16 @@
         "backgroundColor": "#1d4ed8"
       },
       "package": "com.dispatch.drivermobile",
+      "googleServicesFile": "./google-services.json",
+      "usesCleartextTraffic": true,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "WAKE_LOCK",
+        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE"
       ]
@@ -40,9 +53,31 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Dispatch Engine to access your location even when the app is in the background and screen is locked.",
+          "locationAlwaysPermission": "Allow Dispatch Engine to access your location in the background.",
+          "locationWhenInUsePermission": "Allow Dispatch Engine to access your location while using the app.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "The camera is used to scan parcel QR codes at pickup and capture proof-of-delivery photos."
+        }
+      ],
       "@react-native-firebase/app",
-      "@react-native-firebase/messaging"
+      "@react-native-firebase/messaging",
+      "expo-asset",
+      "./plugins/withAutofillHighlight",
+      "./plugins/withShortCxxPaths"
     ],
-    "scheme": "driver-mobile"
+    "scheme": "driver-mobile",
+    "experiments": {
+      "typedRoutes": true
+    }
   }
 }

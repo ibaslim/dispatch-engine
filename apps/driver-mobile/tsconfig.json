@@ -4,8 +4,47 @@
     "strict": true,
     "baseUrl": "../..",
     "paths": {
-      "@/*": [
-        "apps/driver-mobile/src/*"
+      "@components/*": [
+        "apps/driver-mobile/src/components/*"
+      ],
+      "@screens/*": [
+        "apps/driver-mobile/src/screens/*"
+      ],
+      "@services/*": [
+        "apps/driver-mobile/src/services/*"
+      ],
+      "@hooks": [
+        "apps/driver-mobile/src/hooks"
+      ],
+      "@hooks/*": [
+        "apps/driver-mobile/src/hooks/*"
+      ],
+      "@contexts": [
+        "apps/driver-mobile/src/contexts"
+      ],
+      "@contexts/*": [
+        "apps/driver-mobile/src/contexts/*"
+      ],
+      "@navigation/*": [
+        "apps/driver-mobile/src/navigation/*"
+      ],
+      "@constants/*": [
+        "apps/driver-mobile/src/constants/*"
+      ],
+      "@theme": [
+        "apps/driver-mobile/src/theme"
+      ],
+      "@theme/*": [
+        "apps/driver-mobile/src/theme/*"
+      ],
+      "@types": [
+        "apps/driver-mobile/src/types"
+      ],
+      "@types/*": [
+        "apps/driver-mobile/src/types/*"
+      ],
+      "@utils/*": [
+        "apps/driver-mobile/src/utils/*"
       ],
       "@dispatch/shared/domain": [
         "libs/shared/domain/src/index.ts"
@@ -22,6 +61,9 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    ".expo/types/**/*.d.ts"
+    ".expo/types/**/*.d.ts",
+    "nativewind-env.d.ts",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
   ]
 }
