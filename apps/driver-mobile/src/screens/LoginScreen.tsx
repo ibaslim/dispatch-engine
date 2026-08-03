@@ -21,6 +21,7 @@ interface Props {
   /** Called after a successful sign-in (navigate into the app). */
   onLoginSuccess: () => void;
   onOpenSettings: () => void;
+  onOpenIpConfig?: () => void;
 }
 
 /** Platform serif for the display wordmark — no bundled font needed. */
@@ -28,7 +29,7 @@ const SERIF = Platform.select({ ios: 'Georgia', default: 'serif' });
 
 type Field = 'email' | 'password';
 
-export function LoginScreen({ onSubmit, onLoginSuccess, onOpenSettings }: Props) {
+export function LoginScreen({ onSubmit, onLoginSuccess, onOpenSettings, onOpenIpConfig }: Props) {
   const { palette } = useTheme();
   const toast = useToast();
   const [email, setEmail] = useState('');
@@ -67,8 +68,21 @@ export function LoginScreen({ onSubmit, onLoginSuccess, onOpenSettings }: Props)
       className="flex-1 bg-background"
     >
       <SafeAreaView className="flex-1">
-        {/* Appearance affordance — theme switching lives in Settings. */}
-        <View className="flex-row justify-end px-5 pt-2">
+        {/* Top bar affordances — Server IP config and Appearance settings */}
+        <View className="flex-row items-center justify-between px-5 pt-2">
+          {onOpenIpConfig ? (
+            <TouchableOpacity
+              onPress={onOpenIpConfig}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Server IP Configuration"
+              className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5"
+            >
+              <Ionicons name="hardware-chip-outline" size={15} color={palette.primary} />
+              <Text className="text-sm font-semibold text-primary">Server IP</Text>
+            </TouchableOpacity>
+          ) : <View />}
+
           <TouchableOpacity
             onPress={onOpenSettings}
             hitSlop={12}

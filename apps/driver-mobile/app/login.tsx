@@ -17,6 +17,7 @@ export default function LoginRoute() {
       onSubmit={signIn}
       onLoginSuccess={() => router.replace('/')}
       onOpenSettings={() => router.push('/settings')}
+      onOpenIpConfig={() => router.push('/ipconfig')}
     />
   );
 }

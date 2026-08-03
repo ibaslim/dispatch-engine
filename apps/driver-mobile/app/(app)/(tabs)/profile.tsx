@@ -11,6 +11,7 @@ export default function ProfileRoute() {
     <ProfileScreen
       user={user}
       onOpenAppearance={() => router.push('/appearance')}
+      onOpenIpConfig={() => router.push('/ipconfig')}
       onSignOut={signOut}
     />
   );

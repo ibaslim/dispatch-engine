@@ -10,6 +10,7 @@ import type { AuthUser } from '@contexts';
 interface Props {
   user: AuthUser | null;
   onOpenAppearance: () => void;
+  onOpenIpConfig?: () => void;
   onSignOut: () => void;
 }
 
@@ -35,7 +36,7 @@ function IconChip({ name }: { name: keyof typeof Ionicons.glyphMap }) {
 }
 
 /** Driver account hub: identity, appearance, notification prefs, sign out. */
-export function ProfileScreen({ user, onOpenAppearance, onSignOut }: Props) {
+export function ProfileScreen({ user, onOpenAppearance, onOpenIpConfig, onSignOut }: Props) {
   const { palette } = useTheme();
   const { muted, setMuted } = useMuteBroadcasts();
 
@@ -84,6 +85,28 @@ export function ProfileScreen({ user, onOpenAppearance, onSignOut }: Props) {
         <View>
           <SectionTitle>Preferences</SectionTitle>
           <View className="gap-3">
+            {/* Server IP Config */}
+            {onOpenIpConfig ? (
+              <TouchableOpacity
+                onPress={onOpenIpConfig}
+                accessibilityRole="button"
+                accessibilityLabel="Server IP Configuration"
+              >
+                <Card>
+                  <CardBody className="flex-row items-center gap-4">
+                    <IconChip name="hardware-chip-outline" />
+                    <View className="flex-1">
+                      <Text className="text-base font-semibold text-foreground">Server IP Config</Text>
+                      <Text className="mt-0.5 text-xs leading-5 text-muted">
+                        Configure target backend IP address and test connection.
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={palette.muted} />
+                  </CardBody>
+                </Card>
+              </TouchableOpacity>
+            ) : null}
+
             {/* Appearance — navigates to the dedicated screen */}
             <TouchableOpacity
               onPress={onOpenAppearance}
