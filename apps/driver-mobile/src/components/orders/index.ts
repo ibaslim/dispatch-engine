@@ -1,4 +1,5 @@
 export { OrderCard } from './OrderCard';
+export { PublishedOrderCard } from './PublishedOrderCard';
 export { RouteLine } from './RouteLine';
 export { ProgressTimeline } from './ProgressTimeline';
 export { ContactSheet } from './ContactSheet';

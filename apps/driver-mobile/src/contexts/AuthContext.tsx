@@ -20,6 +20,9 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
+  /** The driver's tenant. Realtime channel names are derived from it. */
+  tenantId: string | null;
+  tenantRole: string | null;
 }
 
 interface AuthContextValue {
@@ -44,7 +47,13 @@ function isDriver(profile: MeResponse): boolean {
 }
 
 function toUser(profile: MeResponse): AuthUser {
-  return { id: profile.id, name: profile.name, email: profile.email };
+  return {
+    id: profile.id,
+    name: profile.name,
+    email: profile.email,
+    tenantId: profile.tenant_id,
+    tenantRole: profile.tenant_role,
+  };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

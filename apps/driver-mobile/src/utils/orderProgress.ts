@@ -12,6 +12,11 @@ export interface ProgressStep {
   status: ActivityStatus;
   /** Timeline row label. */
   label: string;
+  /**
+   * Two-word form for filter pills, where the full label would force the row
+   * to scroll much further than a thumb wants to travel.
+   */
+  shortLabel: string;
   /** Shown under the label while this step is the current one. */
   hint: string;
   /** Label for the button that advances *into* this step. */
@@ -22,30 +27,35 @@ export const PROGRESS_STEPS: readonly ProgressStep[] = [
   {
     status: 'pickup_initiated',
     label: 'Heading to Pickup',
+    shortLabel: 'To Pickup',
     hint: 'Navigate to the pickup address.',
     action: 'Start Pickup',
   },
   {
     status: 'picked_up',
     label: 'Picked Up',
+    shortLabel: 'Picked Up',
     hint: 'Parcel collected from the sender.',
     action: "I've Collected the Parcel",
   },
   {
     status: 'delivery_initiated',
     label: 'Heading to Drop',
+    shortLabel: 'To Drop',
     hint: 'Navigate to the delivery address.',
     action: 'Start Delivery',
   },
   {
     status: 'delivery_in_progress',
     label: 'Arrived — Proof of Delivery',
+    shortLabel: 'At Drop',
     hint: 'Capture proof at the door.',
     action: "I've Arrived at Drop",
   },
   {
     status: 'delivered',
     label: 'Delivered',
+    shortLabel: 'Delivered',
     hint: 'Job complete.',
     action: 'Complete Delivery',
   },

@@ -35,3 +35,19 @@ export function dangerSurface(scheme: 'light' | 'dark'): {
 /** Same reasoning for success: a QR match / upload confirmation is always green. */
 export const SUCCESS = '#22c55e';
 export const SUCCESS_SOFT = 'rgba(34, 197, 94, 0.14)';
+
+/** Time running out on a broadcast offer. Amber sits between SUCCESS and DANGER. */
+export const WARNING = '#fbbf24';
+
+/**
+ * Colour for a countdown that has `percent` of its window left.
+ *
+ * Fixed rather than themed for the same reason as DANGER: a deadline must read
+ * with the same urgency under every accent theme. The thresholds match the
+ * dispatcher's published-orders feed, so both clients agree at a glance.
+ */
+export function countdownColor(percent: number): string {
+  if (percent > 50) return SUCCESS;
+  if (percent > 20) return WARNING;
+  return DANGER;
+}
