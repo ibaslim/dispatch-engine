@@ -6,9 +6,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth, useOnlineStatus, useOrders } from '@contexts';
 import { useMuteBroadcasts } from '@hooks';
 import { BottomSheet, Button, Card, useToast } from '@components/ui';
-import { DANGER, DANGER_BORDER, DANGER_SOFT } from '@constants/colors';
+import { DANGER, dangerSurface } from '@constants/colors';
+import { useTheme } from '@theme';
 import type { DriverOrder } from '@types';
 import * as Location from 'expo-location';
+import {
+  backgroundPermissionHint,
+  backgroundPermissionPath,
+  openLocationSettings,
+} from '@services/driver';
 
 /** Local calendar date as YYYY-MM-DD, for comparing against order dates. */
 function todayIso(): string {
@@ -54,6 +60,30 @@ function StatCard({ value, label, accent }: StatCardProps) {
   );
 }
 
+/**
+ * A Settings path drawn as breadcrumbs with real chevron glyphs.
+ *
+ * The separator is an Ionicons `chevron-forward` rather than a literal "→": the
+ * arrow character is missing from the default Android system font, which
+ * silently substitutes a fallback letter.
+ */
+function SettingsBreadcrumb({ segments, color }: { segments: string[]; color: string }) {
+  return (
+    <View className="flex-row flex-wrap items-center">
+      {segments.map((segment, index) => (
+        <React.Fragment key={segment}>
+          {index > 0 && (
+            <Ionicons name="chevron-forward" size={11} color={color} style={{ marginHorizontal: 3 }} />
+          )}
+          <Text className="text-[12px] font-semibold" style={{ color }}>
+            {segment}
+          </Text>
+        </React.Fragment>
+      ))}
+    </View>
+  );
+}
+
 function MutedPill() {
   return (
     <View className="rounded bg-muted px-2 py-0.5">
@@ -74,10 +104,12 @@ function MutedPill() {
  */
 export function HomeScreen() {
   const { user } = useAuth();
-  const { online, offlineReason, isRestoring, goOnline, goOffline } = useOnlineStatus();
+  const { online, offlineReason, isRestoring, backgroundTracking, goOnline, goOffline } =
+    useOnlineStatus();
   const { orders, inProgress } = useOrders();
   const { muted, reload } = useMuteBroadcasts();
   const { show } = useToast();
+  const { scheme } = useTheme();
 
   const [sheetVisible, setSheetVisible] = useState(false);
   const [goingOnline, setGoingOnline] = useState(false);
@@ -125,6 +157,11 @@ export function HomeScreen() {
     }
   }
 
+  // Online but without background permission: the driver is tracked only while
+  // this screen is up, which is not what "Online" implies — say so explicitly.
+  const backgroundOnly =
+    online && (backgroundTracking === 'needs-settings' || backgroundTracking === 'denied');
+
   const doneToday = completedToday(orders);
   const earnedToday = doneToday.reduce((sum, order) => sum + (order.driver_payout ?? 0), 0);
 
@@ -148,25 +185,44 @@ export function HomeScreen() {
         </View>
 
         {online ? (
-          <View className="gap-3 rounded-2xl border border-primary/40 bg-primary/10 p-5">
+          <View className="gap-3 rounded-2xl border border-primary bg-primary-muted p-5">
             <View className="flex-row items-center gap-2">
               <View className="h-2.5 w-2.5 rounded-full bg-primary" />
               <Text className="flex-1 text-lg font-bold text-primary">You&apos;re Online</Text>
               {muted && <MutedPill />}
             </View>
-            <Text className="text-sm leading-5 text-muted">
+            <Text className="text-sm leading-5 text-primary-muted-foreground">
               You&apos;re receiving new orders. Keep location sharing on to stay online.
             </Text>
+            {backgroundOnly ? (
+              <View className="gap-2 rounded-xl p-3" style={dangerSurface(scheme)}>
+                <View className="flex-row items-center gap-2">
+                  <Ionicons name="warning-outline" size={16} color={DANGER} />
+                  <Text className="flex-1 text-[13px] font-bold" style={{ color: DANGER }}>
+                    Tracking stops when your screen turns off
+                  </Text>
+                </View>
+                <SettingsBreadcrumb segments={backgroundPermissionPath()} color={DANGER} />
+                <Text className="text-[12px] leading-4 text-muted">
+                  {backgroundPermissionHint()}
+                </Text>
+                <Button
+                  title="Open settings"
+                  variant="outline"
+                  size="sm"
+                  onPress={openLocationSettings}
+                />
+              </View>
+            ) : null}
             <View className="flex-row items-center justify-between">
-              <Text className="text-[13px] text-muted">Location: active</Text>
+              <Text className="text-[13px] text-primary-muted-foreground">
+                {backgroundOnly ? 'Location: foreground only' : 'Location: active'}
+              </Text>
               <Button title="Go Offline" variant="outline" size="sm" onPress={goOffline} />
             </View>
           </View>
         ) : (
-          <View
-            className="gap-3 rounded-2xl p-5"
-            style={{ backgroundColor: DANGER_SOFT, borderWidth: 1, borderColor: DANGER_BORDER }}
-          >
+          <View className="gap-3 rounded-2xl border p-5" style={dangerSurface(scheme)}>
             <View className="flex-row items-center gap-2">
               <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: DANGER }} />
               <Text className="flex-1 text-lg font-bold" style={{ color: DANGER }}>
@@ -174,7 +230,7 @@ export function HomeScreen() {
               </Text>
               {muted && <MutedPill />}
             </View>
-            <Text className="text-sm leading-5 text-muted">
+            <Text className="text-sm leading-5 text-foreground/80">
               {offlineReason === 'permission'
                 ? 'Location access was denied or lost, so you were taken offline automatically. Allow location to go back online.'
                 : offlineReason === 'services_disabled'

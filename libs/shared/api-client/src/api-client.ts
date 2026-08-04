@@ -115,16 +115,21 @@ export class DispatchApiClient {
     return this.get<T>(path, auth);
   }
 
-  async postPath<T = void>(path: string, body: unknown, auth = true): Promise<T> {
-    return this.post<T>(path, body, auth);
+  async postPath<T = void>(
+    path: string,
+    body: unknown,
+    auth = true,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    return this.post<T>(path, body, auth, signal);
   }
 
   async patchPath<T = void>(path: string, body: unknown, auth = true): Promise<T> {
     return this.request<T>('PATCH', path, body, auth);
   }
 
-  async deletePath<T = void>(path: string, auth = true): Promise<T> {
-    return this.request<T>('DELETE', path, undefined, auth);
+  async deletePath<T = void>(path: string, auth = true, signal?: AbortSignal): Promise<T> {
+    return this.request<T>('DELETE', path, undefined, auth, signal);
   }
 
   /**
@@ -142,21 +147,31 @@ export class DispatchApiClient {
     return this.request<T>('GET', path, undefined, auth);
   }
 
-  private async post<T = void>(path: string, body: unknown, auth = true): Promise<T> {
-    return this.request<T>('POST', path, body, auth);
+  private async post<T = void>(
+    path: string,
+    body: unknown,
+    auth = true,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    return this.request<T>('POST', path, body, auth, signal);
   }
 
-  private buildInit(method: string, body: unknown, token: string | null): RequestInit {
+  private buildInit(
+    method: string,
+    body: unknown,
+    token: string | null,
+    signal?: AbortSignal,
+  ): RequestInit {
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    if (body === undefined) return { method, headers };
+    if (body === undefined) return { method, headers, signal };
     if (typeof FormData !== 'undefined' && body instanceof FormData) {
-      return { method, headers, body };
+      return { method, headers, body, signal };
     }
 
     headers['Content-Type'] = 'application/json';
-    return { method, headers, body: JSON.stringify(body) };
+    return { method, headers, body: JSON.stringify(body), signal };
   }
 
   private async request<T>(
@@ -164,20 +179,25 @@ export class DispatchApiClient {
     path: string,
     body: unknown,
     auth: boolean,
+    signal?: AbortSignal,
   ): Promise<T> {
     const url = `${this.baseUrl}${path}`;
     const token = auth ? await this.storage.getAccessToken() : null;
-    const res = await fetch(url, this.buildInit(method, body, token));
+    const res = await fetch(url, this.buildInit(method, body, token, signal));
 
     if (res.status === 401 && auth) {
       // Attempt token refresh
       try {
         await this.refresh();
         const newToken = await this.storage.getAccessToken();
-        const retryRes = await fetch(url, this.buildInit(method, body, newToken));
+        const retryRes = await fetch(url, this.buildInit(method, body, newToken, signal));
         if (!retryRes.ok) throw await this.toError(retryRes);
         return this.toResult<T>(retryRes);
-      } catch {
+      } catch (err) {
+        // A caller-cancelled request (timeout/unmount) says nothing about the
+        // session — clearing tokens here would log the driver out on a flaky
+        // network. Only a genuine refresh failure invalidates the session.
+        if (signal?.aborted || (err as Error)?.name === 'AbortError') throw err;
         await this.storage.clearTokens();
         throw new Error('Session expired. Please log in again.');
       }

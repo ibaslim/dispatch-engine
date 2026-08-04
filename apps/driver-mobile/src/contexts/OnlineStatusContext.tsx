@@ -11,7 +11,20 @@ import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 
+import type { BackgroundPermissionState } from '@services/driver';
+
 const STORAGE_KEY = 'driver.pref.online';
+
+/**
+ * Whether screen-off tracking is actually working. `useDriverLocation` reports
+ * this after it resolves background permission.
+ *
+ * This is surfaced because foreground permission alone is not enough to keep a
+ * driver trackable: on Android 11+ background location cannot be granted by a
+ * dialog at all, so a driver could previously go "Online", lock their phone,
+ * and silently stop reporting with nothing in the UI to say so.
+ */
+export type BackgroundTrackingState = BackgroundPermissionState | 'unknown';
 
 /**
  * Why the driver is currently offline. Drives the Home status card copy:
@@ -26,6 +39,13 @@ interface OnlineStatusContextValue {
   offlineReason: OfflineReason;
   /** True until the persisted state + permission check have settled. */
   isRestoring: boolean;
+  /**
+   * Whether background (screen-off) tracking is running. `'needs-settings'`
+   * means the driver must grant "Allow all the time" in system settings.
+   */
+  backgroundTracking: BackgroundTrackingState;
+  /** Reported by the location tracker; not intended for screen components. */
+  reportBackgroundTracking: (state: BackgroundTrackingState) => void;
   /**
    * Request location permission and go online. Resolves to true on success;
    * false means permission was denied (the caller may point the driver at
@@ -54,8 +74,13 @@ export function OnlineStatusProvider({ children }: { children: React.ReactNode }
   const [online, setOnline] = useState(false);
   const [offlineReason, setOfflineReason] = useState<OfflineReason>('manual');
   const [isRestoring, setIsRestoring] = useState(true);
+  const [backgroundTracking, setBackgroundTracking] = useState<BackgroundTrackingState>('unknown');
   const onlineRef = useRef(online);
   onlineRef.current = online;
+
+  const reportBackgroundTracking = useCallback((state: BackgroundTrackingState) => {
+    setBackgroundTracking(state);
+  }, []);
 
   const forceOffline = useCallback((reason: OfflineReason) => {
     setOnline(false);
@@ -119,8 +144,10 @@ export function OnlineStatusProvider({ children }: { children: React.ReactNode }
     return () => sub.remove();
   }, [forceOffline]);
 
-  // Periodic interval check to handle status change while app is active in foreground.
-  // Using an 8-second interval to guarantee zero impact on phone resource usage.
+  // The AppState listener above misses changes made without backgrounding the
+  // app — toggling GPS from the Android quick-settings shade leaves the app
+  // 'active'. This poll covers that gap. It is not free (each tick queries
+  // permission state and the location provider), so keep the interval coarse.
   useEffect(() => {
     if (!online) return;
 
@@ -185,8 +212,24 @@ export function OnlineStatusProvider({ children }: { children: React.ReactNode }
   const goOffline = useCallback(() => forceOffline('manual'), [forceOffline]);
 
   const value = useMemo<OnlineStatusContextValue>(
-    () => ({ online, offlineReason, isRestoring, goOnline, goOffline }),
-    [online, offlineReason, isRestoring, goOnline, goOffline],
+    () => ({
+      online,
+      offlineReason,
+      isRestoring,
+      backgroundTracking,
+      reportBackgroundTracking,
+      goOnline,
+      goOffline,
+    }),
+    [
+      online,
+      offlineReason,
+      isRestoring,
+      backgroundTracking,
+      reportBackgroundTracking,
+      goOnline,
+      goOffline,
+    ],
   );
 
   return <OnlineStatusContext.Provider value={value}>{children}</OnlineStatusContext.Provider>;
