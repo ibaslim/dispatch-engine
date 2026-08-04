@@ -1,7 +1,13 @@
 import React from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Redirect, Stack } from 'expo-router';
-import { OnlineStatusProvider, OrdersProvider, useAuth } from '@contexts';
+import {
+  OnlineStatusProvider,
+  OrdersProvider,
+  PublishedOrdersProvider,
+  RealtimeProvider,
+  useAuth,
+} from '@contexts';
 import { useTheme } from '@theme';
 import { useDriverLocation } from '@hooks';
 
@@ -28,17 +34,26 @@ export default function AppLayout() {
 
   // Orders load once here rather than per screen — the list, the detail screen
   // and the tab-bar badge all read the same cache.
+  //
+  // Nesting is load-bearing: realtime sits inside OnlineStatus because the
+  // new-order broadcast channel follows the driver's shift, and the broadcast
+  // pool sits inside realtime because it refetches off socket events.
   return (
     <OrdersProvider>
       <OnlineStatusProvider>
-        {/* Mount the location heartbeat once for the whole authenticated session */}
-        <LocationHeartbeat />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="job/[id]" />
-          <Stack.Screen name="order/[id]" />
-          <Stack.Screen name="appearance" />
-        </Stack>
+        <RealtimeProvider>
+          <PublishedOrdersProvider>
+            {/* Mount the location heartbeat once for the whole authenticated session */}
+            <LocationHeartbeat />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="job/[id]" />
+              <Stack.Screen name="order/[id]" />
+              <Stack.Screen name="offer/[id]" />
+              <Stack.Screen name="appearance" />
+            </Stack>
+          </PublishedOrdersProvider>
+        </RealtimeProvider>
       </OnlineStatusProvider>
     </OrdersProvider>
   );

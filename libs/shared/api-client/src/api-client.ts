@@ -17,6 +17,35 @@ export interface ApiClientConfig {
   tokenStorage?: TokenStorage;
 }
 
+/**
+ * A non-2xx response. `message` stays the server's `detail` string exactly as
+ * before, so existing `err.message` checks keep working; `status` is added for
+ * callers that must branch on the code — an order accept race returns 409 and
+ * 410 with different meanings ("someone else took it" vs "the offer expired")
+ * and both are normal outcomes, not failures.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    // Extending a builtin loses the prototype under some downlevel transpiles
+    // (React Native's Babel pipeline among them), which would silently break
+    // `instanceof` at runtime. Restore it explicitly.
+    Object.setPrototypeOf(this, ApiError.prototype);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+/**
+ * Narrow an unknown catch value to an ApiError. Duck-typed rather than a bare
+ * `instanceof` so it holds even if the error crossed a module realm.
+ */
+export function isApiError(value: unknown): value is ApiError {
+  return value instanceof Error && typeof (value as ApiError).status === 'number';
+}
+
 export class DispatchApiClient {
   private readonly baseUrl: string;
   private readonly storage: TokenStorage;
@@ -218,6 +247,6 @@ export class DispatchApiClient {
       const body = (await res.json()) as { detail?: string };
       if (body?.detail) message = body.detail;
     } catch { /* ignore */ }
-    return new Error(message);
+    return new ApiError(res.status, message);
   }
 }

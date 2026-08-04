@@ -11,7 +11,11 @@ import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 
-import type { BackgroundPermissionState } from '@services/driver';
+import {
+  ensureBackgroundPermission,
+  getBackgroundState,
+  type BackgroundPermissionState,
+} from '@services/driver';
 
 const STORAGE_KEY = 'driver.pref.online';
 
@@ -29,8 +33,19 @@ export type BackgroundTrackingState = BackgroundPermissionState | 'unknown';
 /**
  * Why the driver is currently offline. Drives the Home status card copy:
  * a manual "Go Offline" reads calm, a permission loss reads as a requirement.
+ *
+ * `background_permission` is its own reason because the fix is different in
+ * kind: on Android 11+ it cannot be granted from a dialog at all, so the copy
+ * has to send the driver to Settings rather than offer a prompt.
  */
-export type OfflineReason = 'manual' | 'permission' | 'services_disabled';
+export type OfflineReason =
+  | 'manual'
+  | 'permission'
+  | 'services_disabled'
+  | 'background_permission';
+
+/** Outcome of attempting to start a shift: 'online', or why it was refused. */
+export type GoOnlineResult = 'online' | Exclude<OfflineReason, 'manual'>;
 
 interface OnlineStatusContextValue {
   /** True while the driver is live and receiving new orders. */
@@ -47,24 +62,35 @@ interface OnlineStatusContextValue {
   /** Reported by the location tracker; not intended for screen components. */
   reportBackgroundTracking: (state: BackgroundTrackingState) => void;
   /**
-   * Request location permission and go online. Resolves to true on success;
-   * false means permission was denied (the caller may point the driver at
-   * system settings).
+   * Request location permission and go online. Resolves to `'online'`, or to
+   * the requirement that blocked it so the caller can say which one.
    */
-  goOnline: () => Promise<boolean>;
+  goOnline: () => Promise<GoOnlineResult>;
   goOffline: () => void;
 }
 
 const OnlineStatusContext = createContext<OnlineStatusContextValue | null>(null);
+
+/** Every requirement of being online, checked without prompting. */
+async function failingRequirement(): Promise<Exclude<OfflineReason, 'manual'> | null> {
+  const { granted } = await Location.getForegroundPermissionsAsync();
+  if (!granted) return 'permission';
+  if (!(await Location.hasServicesEnabledAsync())) return 'services_disabled';
+  if ((await getBackgroundState()) !== 'granted') return 'background_permission';
+  return null;
+}
 
 /**
  * Client-held online/offline shift state, gated by location permission and device location services.
  *
  * The API has no driver-availability endpoint (`drivers.py` only reports
  * `is_online` to admins), so this is the app's source of truth: going online
- * requires foreground location permission and device location services enabled,
- * and losing either while online forces the driver offline (the design treats
- * location as a requirement of being online, not an optional extra).
+ * requires foreground location permission, device location services enabled,
+ * **and** always-on ("Allow all the time") background location — losing any of
+ * them while online forces the driver offline. Background permission is a
+ * requirement rather than a warning because a driver is tracked while driving,
+ * with the screen off; foreground-only tracking would silently stop the moment
+ * the phone locks, which is exactly when it matters.
  *
  * The flag persists across launches so a driver who was on shift stays online
  * after an app restart — but only after re-verifying permission on boot and on
@@ -78,10 +104,6 @@ export function OnlineStatusProvider({ children }: { children: React.ReactNode }
   const onlineRef = useRef(online);
   onlineRef.current = online;
 
-  const reportBackgroundTracking = useCallback((state: BackgroundTrackingState) => {
-    setBackgroundTracking(state);
-  }, []);
-
   const forceOffline = useCallback((reason: OfflineReason) => {
     setOnline(false);
     setOfflineReason(reason);
@@ -90,24 +112,37 @@ export function OnlineStatusProvider({ children }: { children: React.ReactNode }
     });
   }, []);
 
-  // Restore the persisted shift state, re-verifying permission and location services first.
+  /**
+   * Reported by the location tracker. A tracker that finds background updates
+   * unavailable mid-shift ends the shift, for the same reason `goOnline`
+   * refuses to start one: "Online" must never mean "tracked only while you're
+   * looking at the app".
+   */
+  const reportBackgroundTracking = useCallback(
+    (state: BackgroundTrackingState) => {
+      setBackgroundTracking(state);
+      if (state === 'denied' || state === 'needs-settings') {
+        forceOffline('background_permission');
+      }
+    },
+    [forceOffline],
+  );
+
+  // Restore the persisted shift state, re-verifying every requirement first.
   useEffect(() => {
     let active = true;
     (async () => {
       try {
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         if (stored !== 'true') return;
-        
-        const { granted } = await Location.getForegroundPermissionsAsync();
-        const servicesEnabled = await Location.hasServicesEnabledAsync();
-        
+
+        const failing = await failingRequirement();
+
         if (!active) return;
-        if (granted && servicesEnabled) {
-          setOnline(true);
-        } else if (!granted) {
-          forceOffline('permission');
+        if (failing) {
+          forceOffline(failing);
         } else {
-          forceOffline('services_disabled');
+          setOnline(true);
         }
       } catch {
         // Treat storage/permission errors as a fresh offline start.
@@ -120,22 +155,16 @@ export function OnlineStatusProvider({ children }: { children: React.ReactNode }
     };
   }, [forceOffline]);
 
-  // Permission and hardware status can change when the app is in the background.
+  // Permission and hardware status can change when the app is in the background
+  // — including the driver switching location back to "While using the app".
   // Re-checking on every return to foreground catches these updates.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active' || !onlineRef.current) return;
-      Promise.all([
-        Location.getForegroundPermissionsAsync(),
-        Location.hasServicesEnabledAsync(),
-      ])
-        .then(([{ granted }, servicesEnabled]) => {
-          if (!onlineRef.current) return;
-          if (!granted) {
-            forceOffline('permission');
-          } else if (!servicesEnabled) {
-            forceOffline('services_disabled');
-          }
+      failingRequirement()
+        .then((failing) => {
+          if (!onlineRef.current || !failing) return;
+          forceOffline(failing);
         })
         .catch(() => {
           // Keep the current state if the check itself fails.
@@ -153,14 +182,9 @@ export function OnlineStatusProvider({ children }: { children: React.ReactNode }
 
     const interval = setInterval(async () => {
       try {
-        const { granted } = await Location.getForegroundPermissionsAsync();
-        const servicesEnabled = await Location.hasServicesEnabledAsync();
-        if (onlineRef.current) {
-          if (!granted) {
-            forceOffline('permission');
-          } else if (!servicesEnabled) {
-            forceOffline('services_disabled');
-          }
+        const failing = await failingRequirement();
+        if (onlineRef.current && failing) {
+          forceOffline(failing);
         }
       } catch {
         // Ignore check failures
@@ -170,7 +194,7 @@ export function OnlineStatusProvider({ children }: { children: React.ReactNode }
     return () => clearInterval(interval);
   }, [online, forceOffline]);
 
-  const goOnline = useCallback(async (): Promise<boolean> => {
+  const goOnline = useCallback(async (): Promise<GoOnlineResult> => {
     // 1. Check if permission is already granted first, avoiding duplicate prompts
     let { granted } = await Location.getForegroundPermissionsAsync();
     if (!granted) {
@@ -180,9 +204,9 @@ export function OnlineStatusProvider({ children }: { children: React.ReactNode }
 
     if (!granted) {
       forceOffline('permission');
-      return false;
+      return 'permission';
     }
-    
+
     // 2. Check device location services status
     let servicesEnabled = await Location.hasServicesEnabledAsync();
     if (!servicesEnabled) {
@@ -199,14 +223,24 @@ export function OnlineStatusProvider({ children }: { children: React.ReactNode }
 
     if (!servicesEnabled) {
       forceOffline('services_disabled');
-      return false;
+      return 'services_disabled';
+    }
+
+    // 3. Always-on location. Prompts only where a prompt can succeed — on
+    // Android 11+ this returns 'needs-settings' without a dialog, so the UI
+    // has to hand the driver off to system Settings.
+    const background = await ensureBackgroundPermission();
+    setBackgroundTracking(background);
+    if (background !== 'granted') {
+      forceOffline('background_permission');
+      return 'background_permission';
     }
 
     setOnline(true);
     AsyncStorage.setItem(STORAGE_KEY, 'true').catch(() => {
       // Best-effort persistence.
     });
-    return true;
+    return 'online';
   }, [forceOffline]);
 
   const goOffline = useCallback(() => forceOffline('manual'), [forceOffline]);

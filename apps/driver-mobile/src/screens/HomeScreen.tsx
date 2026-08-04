@@ -9,12 +9,12 @@ import { BottomSheet, Button, Card, useToast } from '@components/ui';
 import { DANGER, dangerSurface } from '@constants/colors';
 import { useTheme } from '@theme';
 import type { DriverOrder } from '@types';
-import * as Location from 'expo-location';
 import {
   backgroundPermissionHint,
   backgroundPermissionPath,
   openLocationSettings,
 } from '@services/driver';
+import { goOnlineBlockedMessage, needsSettingsTrip, offlineReasonCopy } from '@utils/shift';
 
 /** Local calendar date as YYYY-MM-DD, for comparing against order dates. */
 function todayIso(): string {
@@ -104,8 +104,7 @@ function MutedPill() {
  */
 export function HomeScreen() {
   const { user } = useAuth();
-  const { online, offlineReason, isRestoring, backgroundTracking, goOnline, goOffline } =
-    useOnlineStatus();
+  const { online, offlineReason, isRestoring, goOnline, goOffline } = useOnlineStatus();
   const { orders, inProgress } = useOrders();
   const { muted, reload } = useMuteBroadcasts();
   const { show } = useToast();
@@ -130,7 +129,7 @@ export function HomeScreen() {
       setSheetVisible(false);
       return;
     }
-    if (offlineReason === 'permission' || offlineReason === 'services_disabled' || !promptedRef.current) {
+    if (offlineReason !== 'manual' || !promptedRef.current) {
       promptedRef.current = true;
       setSheetVisible(true);
     }
@@ -139,28 +138,14 @@ export function HomeScreen() {
   async function handleGoOnline() {
     setGoingOnline(true);
     try {
-      const success = await goOnline();
-      if (!success) {
-        const { granted } = await Location.getForegroundPermissionsAsync();
-        if (!granted) {
-          show('Allow location access in your device settings to go online.', {
-            variant: 'error',
-          });
-        } else {
-          show('Please turn on your device location services to go online.', {
-            variant: 'error',
-          });
-        }
+      const result = await goOnline();
+      if (result !== 'online') {
+        show(goOnlineBlockedMessage(result), { variant: 'error' });
       }
     } finally {
       setGoingOnline(false);
     }
   }
-
-  // Online but without background permission: the driver is tracked only while
-  // this screen is up, which is not what "Online" implies — say so explicitly.
-  const backgroundOnly =
-    online && (backgroundTracking === 'needs-settings' || backgroundTracking === 'denied');
 
   const doneToday = completedToday(orders);
   const earnedToday = doneToday.reduce((sum, order) => sum + (order.driver_payout ?? 0), 0);
@@ -194,29 +179,9 @@ export function HomeScreen() {
             <Text className="text-sm leading-5 text-primary-muted-foreground">
               You&apos;re receiving new orders. Keep location sharing on to stay online.
             </Text>
-            {backgroundOnly ? (
-              <View className="gap-2 rounded-xl p-3" style={dangerSurface(scheme)}>
-                <View className="flex-row items-center gap-2">
-                  <Ionicons name="warning-outline" size={16} color={DANGER} />
-                  <Text className="flex-1 text-[13px] font-bold" style={{ color: DANGER }}>
-                    Tracking stops when your screen turns off
-                  </Text>
-                </View>
-                <SettingsBreadcrumb segments={backgroundPermissionPath()} color={DANGER} />
-                <Text className="text-[12px] leading-4 text-muted">
-                  {backgroundPermissionHint()}
-                </Text>
-                <Button
-                  title="Open settings"
-                  variant="outline"
-                  size="sm"
-                  onPress={openLocationSettings}
-                />
-              </View>
-            ) : null}
             <View className="flex-row items-center justify-between">
               <Text className="text-[13px] text-primary-muted-foreground">
-                {backgroundOnly ? 'Location: foreground only' : 'Location: active'}
+                Location: always on
               </Text>
               <Button title="Go Offline" variant="outline" size="sm" onPress={goOffline} />
             </View>
@@ -231,13 +196,25 @@ export function HomeScreen() {
               {muted && <MutedPill />}
             </View>
             <Text className="text-sm leading-5 text-foreground/80">
-              {offlineReason === 'permission'
-                ? 'Location access was denied or lost, so you were taken offline automatically. Allow location to go back online.'
-                : offlineReason === 'services_disabled'
-                  ? 'Device location services are turned off, so you were taken offline automatically. Turn on location to go back online.'
-                  : 'You are not receiving new orders. Go online to start your shift.'}
+              {offlineReasonCopy(offlineReason)}
             </Text>
+            {offlineReason === 'background_permission' && (
+              <View className="gap-2">
+                <SettingsBreadcrumb segments={backgroundPermissionPath()} color={DANGER} />
+                <Text className="text-[12px] leading-4 text-muted">
+                  {backgroundPermissionHint()}
+                </Text>
+              </View>
+            )}
             <Button title="Go Online" loading={goingOnline} onPress={handleGoOnline} />
+            {needsSettingsTrip(offlineReason) && (
+              <Button
+                title="Open settings"
+                variant="outline"
+                size="sm"
+                onPress={openLocationSettings}
+              />
+            )}
           </View>
         )}
 
@@ -253,14 +230,24 @@ export function HomeScreen() {
           <View className="flex-row items-center gap-3">
             <Ionicons name="close-circle-outline" size={26} color={DANGER} />
             <Text className="flex-1 text-xl font-bold text-foreground">
-              Location required to go online
+              {offlineReason === 'background_permission'
+                ? 'Always-on location required'
+                : 'Location required to go online'}
             </Text>
           </View>
           <Text className="text-sm leading-5 text-muted">
-            {offlineReason === 'services_disabled'
-              ? 'Device location services are turned off. Dispatch Engine Driver needs it to match you with nearby orders and share live tracking while you\'re online.'
-              : 'Location access was denied or turned off. Dispatch Engine Driver needs it to match you with nearby orders and share live tracking while you\'re online.'}
+            {offlineReason === 'background_permission'
+              ? 'Dispatch Engine Driver shares your position while you drive, with the screen off. Android only allows that with “Allow all the time”, which has to be set in Settings.'
+              : offlineReason === 'services_disabled'
+                ? 'Device location services are turned off. Dispatch Engine Driver needs it to match you with nearby orders and share live tracking while you\'re online.'
+                : 'Location access was denied or turned off. Dispatch Engine Driver needs it to match you with nearby orders and share live tracking while you\'re online.'}
           </Text>
+          {offlineReason === 'background_permission' && (
+            <View className="gap-2">
+              <SettingsBreadcrumb segments={backgroundPermissionPath()} color={DANGER} />
+              <Button title="Open settings" variant="outline" onPress={openLocationSettings} />
+            </View>
+          )}
           <View className="mt-1 gap-1">
             <Button title="Go Online" loading={goingOnline} onPress={handleGoOnline} />
             <Button
