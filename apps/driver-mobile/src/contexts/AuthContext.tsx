@@ -13,6 +13,7 @@ import {
   type MeResponse,
 } from '@services/api';
 import { getAccessToken, clearTokens } from '@services/storage';
+import { stopBackgroundTracking } from '@services/driver';
 
 /** The authenticated driver's identity, surfaced to the UI. */
 export interface AuthUser {
@@ -52,6 +53,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const signOut = useCallback(async () => {
+    // Tracking outlives the React tree by design (so a killed app keeps
+    // reporting), which means unmounting the authenticated stack no longer
+    // stops it. Signing out ends the shift, so stop it explicitly — otherwise
+    // the foreground service would keep posting for a logged-out driver.
+    await stopBackgroundTracking();
+
+
     try {
       await apiLogout();
     } catch {

@@ -153,7 +153,12 @@ Before starting, ensure you have installed:
    ```
 
 2. **API IP Resolution**:
-   - Running `npm start` or `npx expo run:android` automatically triggers `scripts/update-ip.js` to set your PC's LAN IP in `.env` (`EXPO_PUBLIC_API_BASE_URL=http://<YOUR_LAN_IP>:8000`).
+   - Set your PC's LAN IP by hand in `.env`: `EXPO_PUBLIC_API_BASE_URL=http://<YOUR_LAN_IP>:8000`.
+     (Auto-detection was removed — it picked the wrong adapter too often. `ipconfig` /
+     `ip addr` and a manual edit is the reliable path.)
+   - You can also override it at runtime from the in-app **Server IP** screen without a
+     rebuild. That override is a development affordance only; release builds always use the
+     `EXPO_PUBLIC_API_BASE_URL` baked in at build time.
 
 3. **Build and Install Wirelessly**:
    Compile and install the custom dev client directly over Wi-Fi onto your phone:
