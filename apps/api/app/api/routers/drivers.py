@@ -1,10 +1,12 @@
 import uuid
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import joinedload
 import redis.asyncio as aioredis
 
@@ -19,6 +21,8 @@ from app.schemas.tenant import TenantResponse
 from app.services.driver_active_order_service import DriverActiveOrderService
 from app.services.driver_location_flush_service import DriverLocationFlushService
 from app.services.driver_location_service import DriverLocationService
+from app.models.token import PushToken
+from app.schemas.auth import PushTokenIn
 
 router = APIRouter()
 
@@ -103,36 +107,70 @@ async def get_my_jobs(current_user: CurrentUser):
     return []
 
 
-@router.post("/me/push-token", status_code=204)
+@router.post("/me/push-token", status_code=status.HTTP_204_NO_CONTENT)
 async def register_push_token(
-    body: dict,
+    body: PushTokenIn,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-):
-    """Register FCM push token for the current driver."""
-    from app.models.token import PushToken
-    from sqlalchemy import select, update
+) -> None:
+    """Register or refresh this device's FCM token.
+    Drivers are single-session, so exactly one token stays active per user. Login
+    already clears the old device's token; this also covers FCM rotating a token
+    on the same device, which would otherwise leave two live rows.
 
-    token = body.get("token")
-    platform = body.get("platform", "android")
+    Upsert rather than insert: re-binds to the caller, since a handset can change hands.
+    """
 
-    if not token:
-        return
 
-    # Deactivate old tokens for this user
+    now = datetime.now(timezone.utc)
+
+    existing = await db.scalar(select(PushToken).where(PushToken.token == body.token))
+    if existing:
+        existing.user_id = current_user.id
+        existing.platform = body.platform
+        existing.is_active = True
+        existing.last_seen_at = now
+    else:
+        db.add(
+            PushToken(
+                user_id=current_user.id,
+                token=body.token,
+                platform=body.platform,
+                is_active=True,
+                last_seen_at=now,
+            )
+        )
+
     await db.execute(
         update(PushToken)
-        .where(PushToken.user_id == current_user.id)
+        .where(
+            PushToken.user_id == current_user.id,
+            PushToken.token != body.token,
+            PushToken.is_active.is_(True),
+        )
         .values(is_active=False)
     )
 
-    new_token = PushToken(
-        user_id=current_user.id,
-        token=token,
-        platform=platform,
-        is_active=True,
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Concurrent login on the same device already wrote this. Nothing to fix.
+        await db.rollback()
+
+
+@router.post("/me/push-token/revoke", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_push_token(
+    body: PushTokenIn,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+
+
+    await db.execute(
+        update(PushToken)
+        .where(PushToken.token == body.token, PushToken.user_id == current_user.id)
+        .values(is_active=False)
     )
-    db.add(new_token)
     await db.commit()
 
 

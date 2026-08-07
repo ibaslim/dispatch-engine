@@ -1,4 +1,5 @@
 import base64
+import logging
 import mimetypes
 import os
 from decimal import Decimal
@@ -46,14 +47,18 @@ from app.schemas.order import (
     IncidentStage,
     INCIDENT_REASONS_REQUIRING_DESCRIPTION,
 )
+from app.workers.celery_app import celery_app
 from app.workers.tasks import (
     send_order_sender_invoice_email,
     send_order_delivered_email,
     send_order_recipient_notification_email,
 )
+
 from uuid import UUID, uuid4
 
 router = APIRouter(tags=["Orders"])
+logger = logging.getLogger(__name__)
+
 APP_TIMEZONE = ZoneInfo("Asia/Karachi")
 PUBLISH_WINDOW_MINUTES = 15
 
@@ -87,6 +92,18 @@ async def _publish_order_event(
         data=data,
     )
 
+
+def _enqueue_push(task_name: str, **kwargs) -> None:
+    """Queue a push task. A broker outage must not fail an already-committed order."""
+    try:
+        celery_app.send_task(task_name, kwargs=kwargs)
+    except Exception:
+        logger.exception("Unable to enqueue push task %s", task_name)
+
+
+def _offer_expires_at(order: Order) -> datetime:
+    published_at = order.published_at or datetime.now(APP_TIMEZONE)
+    return published_at + timedelta(minutes=PUBLISH_WINDOW_MINUTES)
 
 class DeliveryQuoteRequest(BaseModel):
     pickup_place_id: str
@@ -1347,6 +1364,24 @@ async def assign_driver(
                 "driver_name": order.driver.name if order.driver else None,
             },
         )
+
+        if driver_changed and order.driver_id:
+            # Not presence-gated: the work is already theirs.
+            _enqueue_push(
+                "notify_driver_of_assignment",
+                order_id=str(order.id),
+                order_number=order.order_number,
+                driver_tenant_id=str(order.driver_id),
+                expires_at=(datetime.now(APP_TIMEZONE) + timedelta(hours=12)).isoformat(),
+            )
+        if was_published:
+            # Left the broadcast pool — clear it from everyone else's tray.
+            _enqueue_push(
+                "revoke_offer_notification",
+                order_id=str(order.id),
+                exclude_tenant_id=str(order.driver_id) if order.driver_id else None,
+            )
+
         return order
 
     except Exception as e:
@@ -1446,6 +1481,14 @@ async def publish_order(
         },
     )
 
+    # Pusher covers open apps; push covers backgrounded/killed ones.
+    _enqueue_push(
+        "notify_online_drivers_of_offer",
+        order_id=str(order.id),
+        expires_at=_offer_expires_at(order).isoformat(),
+        exclude_tenant_id=str(order.driver_id) if order.driver_id else None,
+    )
+
     return order
 
 
@@ -1521,6 +1564,13 @@ async def accept_order(
             "driver_id": str(current_user.tenant_id),
             "driver_name": tenant.contact_name or tenant.name,
         },
+    )
+
+    # Offer is gone — clear it from every other driver's tray.
+    _enqueue_push(
+        "revoke_offer_notification",
+        order_id=str(order.id),
+        exclude_tenant_id=str(current_user.tenant_id),
     )
 
     return _driver_order_response(order, payment_group)

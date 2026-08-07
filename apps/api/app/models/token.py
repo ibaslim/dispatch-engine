@@ -41,8 +41,13 @@ class PushToken(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         index=True,
     )
-    token: Mapped[str] = mapped_column(String(500), nullable=False)
+    # Unique: registration upserts on the token, so a re-registering device
+    # updates its row instead of accumulating duplicates.
+    token: Mapped[str] = mapped_column(String(500), nullable=False, unique=True, index=True)
     platform: Mapped[str] = mapped_column(String(20), nullable=False)  # 'android' | 'ios'
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_seen_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     user: Mapped["User"] = relationship("User", back_populates="push_tokens")

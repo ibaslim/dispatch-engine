@@ -56,11 +56,126 @@ def send_password_reset_email(self, email: str, reset_url: str) -> None:
         raise self.retry(exc=exc, countdown=60)
 
 
-@celery_app.task(name="send_push_notification")
-def send_push_notification(fcm_token: str, title: str, body: str, data: dict | None = None) -> None:
-    """Send push notification via FCM HTTP v1 API. Stub for now."""
-    # TODO: Implement using firebase-admin SDK
-    pass
+# ─── Push notifications ──────────────────────────────────────────────────────
+#
+# acks_late=False overrides the app-wide default: a redelivered offer after a
+# worker crash may arrive with the 15-minute window already closed. Missing a
+# push is recoverable via the app's REST refetch; ringing late is not.
+
+
+def _run_with_session(coro_factory):
+    """Run an async routine with its own engine, session and Redis client."""
+    import asyncio
+    import redis.asyncio as aioredis
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+    from app.core.config import settings
+
+    async def _run():
+        engine = create_async_engine(settings.database_url, echo=False)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+        redis_client = aioredis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
+        try:
+            async with session_factory() as session:
+                return await coro_factory(session, redis_client)
+        finally:
+            await redis_client.aclose()
+            await engine.dispose()
+
+    return asyncio.run(_run())
+
+
+@celery_app.task(name="notify_online_drivers_of_offer", acks_late=False)
+def notify_online_drivers_of_offer(
+    order_id: str,
+    expires_at: str,
+    exclude_tenant_id: str | None = None,
+) -> int:
+    """Notify on-shift drivers that a new order was published for bidding."""
+    import logging
+    from datetime import datetime
+    from uuid import UUID
+
+    from app.services.push_contract import build_offer_published
+    from app.services.push_dispatch_service import notify_online_drivers
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        envelope = build_offer_published(
+            order_id=order_id,
+            expires_at=datetime.fromisoformat(expires_at),
+        )
+        if envelope.ttl_seconds <= 0:
+            logger.info("Offer %s already expired before dispatch; not sending", order_id)
+            return 0
+
+        excluded = {UUID(exclude_tenant_id)} if exclude_tenant_id else set()
+        return _run_with_session(
+            lambda session, redis: notify_online_drivers(
+                session, redis, envelope, exclude_tenant_ids=excluded
+            )
+        )
+    except Exception:
+        # No retry: the window may close before it lands, and the order is committed.
+        logger.exception("Offer push failed for order %s", order_id)
+        return 0
+
+
+@celery_app.task(name="revoke_offer_notification", acks_late=False)
+def revoke_offer_notification(order_id: str, exclude_tenant_id: str | None = None) -> int:
+    """Clear an offer notification already showing on other drivers' phones."""
+    import logging
+    from uuid import UUID
+
+    from app.services.push_contract import build_offer_revoked
+    from app.services.push_dispatch_service import notify_online_drivers
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        envelope = build_offer_revoked(order_id=order_id)
+        excluded = {UUID(exclude_tenant_id)} if exclude_tenant_id else set()
+        return _run_with_session(
+            lambda session, redis: notify_online_drivers(
+                session, redis, envelope, exclude_tenant_ids=excluded
+            )
+        )
+    except Exception:
+        logger.exception("Offer revoke push failed for order %s", order_id)
+        return 0
+
+
+@celery_app.task(name="notify_driver_of_assignment", acks_late=False)
+def notify_driver_of_assignment(
+    order_id: str,
+    order_number: str | None,
+    driver_tenant_id: str,
+    expires_at: str,
+) -> int:
+    """Tell a driver they were assigned an order. Not presence-gated."""
+    import logging
+    from datetime import datetime
+    from uuid import UUID
+
+    from app.services.push_contract import build_order_assigned
+    from app.services.push_dispatch_service import send_envelope_to_tenants
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        envelope = build_order_assigned(
+            order_id=order_id,
+            order_number=order_number,
+            expires_at=datetime.fromisoformat(expires_at),
+        )
+        return _run_with_session(
+            lambda session, _redis: send_envelope_to_tenants(
+                session, envelope, [UUID(driver_tenant_id)]
+            )
+        )
+    except Exception:
+        logger.exception("Assignment push failed for order %s", order_id)
+        return 0
 
 
 @celery_app.task(name="send_onboarding_submitted_email", bind=True, max_retries=3)

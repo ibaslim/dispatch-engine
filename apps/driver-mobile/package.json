@@ -8,11 +8,13 @@
     "start:offline": "npx cross-env NODE_OPTIONS=--dns-result-order=ipv4first expo start --dev-client --offline",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "icons": "node scripts/generate-app-icons.js",
     "lint": "eslint src --ext .ts,.tsx",
     "test": "jest --passWithNoTests"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
+    "@notifee/react-native": "^9.1.8",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "11.5.2",
     "@react-native-firebase/app": "^20.3.0",
@@ -27,6 +29,7 @@
     "expo-location": "~55.1.12",
     "expo-router": "~55.0.17",
     "expo-secure-store": "~55.0.16",
+    "expo-splash-screen": "~55.0.23",
     "expo-status-bar": "~55.0.6",
     "expo-task-manager": "~55.0.18",
     "nativewind": "^4.0.36",

@@ -26,6 +26,7 @@ from app.api.routers import (
 from app.db.seed import seed_platform_admin
 from app.db.seed_locations import seed_canadian_pricing, seed_locations
 from app.db.init_db import init_db
+from app.services.driver_presence_service import assert_presence_window_sane
 
 
 @asynccontextmanager
@@ -36,6 +37,10 @@ async def lifespan(application: FastAPI):
     await seed_platform_admin()
     await seed_locations()
     await seed_canadian_pricing()
+    # Push offer targeting derives from the driver location key, so location
+    # tuning silently retunes push. Surface that link at boot rather than via a
+    # bug report about drivers missing jobs.
+    assert_presence_window_sane()
     yield
     # --- Shutdown ---
     await close_redis()

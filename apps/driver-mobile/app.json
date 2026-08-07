@@ -6,11 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#1d4ed8"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -29,7 +24,8 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1d4ed8"
+        "monochromeImage": "./assets/adaptive-icon-monochrome.png",
+        "backgroundColor": "#ffffff"
       },
       "package": "com.dispatch.drivermobile",
       "googleServicesFile": "./google-services.json",
@@ -50,6 +46,20 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withSplashImportOrder",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#0b1120"
+          }
+        }
+      ],
       [
         "expo-location",
         {
@@ -69,6 +79,8 @@
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
       "expo-asset",
+      "./plugins/withNotifeeMavenRepo",
+      "./plugins/withNotificationIcon",
       "./plugins/withAutofillHighlight",
       "./plugins/withShortCxxPaths",
       "./plugins/withAndroidAbis",

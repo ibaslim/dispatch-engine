@@ -16,6 +16,7 @@ import {
   getBackgroundState,
   type BackgroundPermissionState,
 } from '@services/driver';
+import { registerFcmToken, refreshFcmTokenIfStale } from '@services/notifications';
 
 const STORAGE_KEY = 'driver.pref.online';
 
@@ -161,6 +162,8 @@ export function OnlineStatusProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active' || !onlineRef.current) return;
+      // Catches an FCM token that rotated while the app was away.
+      refreshFcmTokenIfStale().catch(() => {});
       failingRequirement()
         .then((failing) => {
           if (!onlineRef.current || !failing) return;
@@ -240,6 +243,12 @@ export function OnlineStatusProvider({ children }: { children: React.ReactNode }
     AsyncStorage.setItem(STORAGE_KEY, 'true').catch(() => {
       // Best-effort persistence.
     });
+
+    // Ask for notifications here rather than at login: this is the first moment
+    // the driver has a reason to want them. Fire-and-forget — a declined prompt
+    // costs push, not the shift.
+    registerFcmToken().catch(() => {});
+
     return 'online';
   }, [forceOffline]);
 

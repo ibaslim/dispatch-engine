@@ -14,6 +14,7 @@ import {
 } from '@services/api';
 import { getAccessToken, clearTokens } from '@services/storage';
 import { stopBackgroundTracking } from '@services/driver';
+import { revokeFcmToken } from '@services/notifications';
 
 /** The authenticated driver's identity, surfaced to the UI. */
 export interface AuthUser {
@@ -68,6 +69,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // the foreground service would keep posting for a logged-out driver.
     await stopBackgroundTracking();
 
+    // Before clearing tokens — the revoke call needs the access token. Without
+    // it a logged-out phone keeps buzzing with offers its driver can't see.
+    await revokeFcmToken();
 
     try {
       await apiLogout();

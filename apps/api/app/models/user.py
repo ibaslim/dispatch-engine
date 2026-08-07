@@ -1,7 +1,8 @@
 import uuid
+from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import String, Boolean, ForeignKey, Enum as SAEnum
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 import enum
@@ -38,6 +39,12 @@ class User(Base, UUIDMixin, TimestampMixin):
         ForeignKey("tenants.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
+    )
+
+    # Access tokens issued before this instant are rejected. NULL = never
+    # revoked. Set by revoke_user_sessions(); see app/services/auth_service.py.
+    tokens_valid_from: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     # Relationships
