@@ -1,6 +1,5 @@
 /**
  * Theme tokens for the driver app.
- *
  * Colors are stored as space-separated RGB channels ("R G B") so they can feed
  * both:
  *   - CSS variables consumed by Tailwind via `rgb(var(--color-x) / <alpha>)`
@@ -81,7 +80,7 @@ const NEUTRALS: Record<ColorScheme, NeutralTokens> = {
     foreground: '241 245 249', // slate-100
     muted: '148 163 184', // slate-400
     border: '51 65 85', // slate-700
-    input: '30 41 59', // slate-800
+    input: '40 53 72',
   },
 };
 

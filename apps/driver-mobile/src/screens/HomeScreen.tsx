@@ -169,6 +169,12 @@ export function HomeScreen() {
           </Text>
         </View>
 
+        <View className="flex-row gap-3">
+          <StatCard value={formatUsd(earnedToday)} label="Earned today" accent />
+          <StatCard value={String(doneToday.length)} label="Completed today" />
+          <StatCard value={String(inProgress.length)} label="Active orders" />
+        </View>
+
         {online ? (
           <View className="gap-3 rounded-2xl border border-primary bg-primary-muted p-5">
             <View className="flex-row items-center gap-2">
@@ -217,12 +223,6 @@ export function HomeScreen() {
             )}
           </View>
         )}
-
-        <View className="flex-row gap-3">
-          <StatCard value={formatUsd(earnedToday)} label="Earned today" accent />
-          <StatCard value={String(doneToday.length)} label="Completed today" />
-          <StatCard value={String(inProgress.length)} label="Active orders" />
-        </View>
       </ScrollView>
 
       <BottomSheet visible={sheetVisible} onClose={() => setSheetVisible(false)}>

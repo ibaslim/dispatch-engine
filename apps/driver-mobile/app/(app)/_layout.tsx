@@ -11,11 +11,6 @@ import {
 import { useTheme } from '@theme';
 import { useDriverLocation } from '@hooks';
 
-/**
- * Authenticated area. Guards every child route: shows a spinner while the
- * session loads, redirects to /login when signed out, otherwise renders the
- * stack (tabs + pushed detail screens).
- */
 export default function AppLayout() {
   const { session, isLoading } = useAuth();
   const { palette } = useTheme();
@@ -32,12 +27,6 @@ export default function AppLayout() {
     return <Redirect href="/login" />;
   }
 
-  // Orders load once here rather than per screen — the list, the detail screen
-  // and the tab-bar badge all read the same cache.
-  //
-  // Nesting is load-bearing: realtime sits inside OnlineStatus because the
-  // new-order broadcast channel follows the driver's shift, and the broadcast
-  // pool sits inside realtime because it refetches off socket events.
   return (
     <OrdersProvider>
       <OnlineStatusProvider>
@@ -47,9 +36,11 @@ export default function AppLayout() {
             <LocationHeartbeat />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="job/[id]" />
               <Stack.Screen name="order/[id]" />
               <Stack.Screen name="offer/[id]" />
+              <Stack.Screen name="receipt/[id]" />
+              <Stack.Screen name="pod/[id]/photo" />
+              <Stack.Screen name="pod/[id]/signature" />
               <Stack.Screen name="appearance" />
             </Stack>
           </PublishedOrdersProvider>

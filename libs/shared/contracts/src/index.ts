@@ -9,6 +9,10 @@
 // Re-export generated types once available:
 // export type { components, paths, operations } from './generated/api-schema';
 
+// Push notification wire contract (hand-written; mirrored server-side in
+// app/services/push_contract.py and guarded by a contract test).
+export * from './push-contract';
+
 // Manual DTO interfaces used before generation is wired up:
 
 export interface LoginRequest {

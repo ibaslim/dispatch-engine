@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@theme';
-import { BottomSheet, BottomSheetTitle, Button } from '@components/ui';
+import { BottomSheet, BottomSheetTitle, Button, useBottomSheetScroll } from '@components/ui';
 import {
   DELIVERY_INCIDENT_REASONS,
   INCIDENT_REASONS_REQUIRING_DESCRIPTION,
@@ -56,7 +56,7 @@ export function ReportSheet({ visible, stage, submitting, onClose, onSubmit }: P
 
   return (
     <BottomSheet visible={visible} onClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <>
         <BottomSheetTitle>
           {stage === 'pickup' ? 'Report a pickup issue' : 'Report a delivery issue'}
         </BottomSheetTitle>
@@ -98,15 +98,7 @@ export function ReportSheet({ visible, stage, submitting, onClose, onSubmit }: P
           })}
 
           {needsDescription && (
-            <TextInput
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Describe what happened"
-              placeholderTextColor={palette.muted}
-              multiline
-              className="mt-1 min-h-[88px] rounded-xl bg-input px-4 py-3 text-[15px] text-foreground"
-              style={{ textAlignVertical: 'top' }}
-            />
+            <DescriptionInput value={description} onChangeText={setDescription} />
           )}
 
           <Button
@@ -117,7 +109,37 @@ export function ReportSheet({ visible, stage, submitting, onClose, onSubmit }: P
             onPress={() => reason && onSubmit(reason, description.trim() || null)}
           />
         </View>
-      </KeyboardAvoidingView>
+      </>
     </BottomSheet>
+  );
+}
+
+/**
+ * Separate component so it can call `useBottomSheetScroll` — the context is
+ * provided *inside* `BottomSheet`, so a hook call in `ReportSheet` itself would
+ * only ever see the no-op default. On focus it scrolls the sheet down, keeping
+ * the box and the Submit button above the keyboard.
+ */
+function DescriptionInput({
+  value,
+  onChangeText,
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+}) {
+  const { palette } = useTheme();
+  const { scrollToEnd } = useBottomSheetScroll();
+
+  return (
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      onFocus={scrollToEnd}
+      placeholder="Describe what happened"
+      placeholderTextColor={palette.muted}
+      multiline
+      className="mt-1 min-h-[88px] rounded-xl border border-border bg-input px-4 py-3 text-[15px] text-foreground"
+      style={{ textAlignVertical: 'top' }}
+    />
   );
 }
