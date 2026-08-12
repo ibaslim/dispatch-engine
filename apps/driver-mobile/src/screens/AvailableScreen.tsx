@@ -19,9 +19,6 @@ interface Props {
 
 /**
  * Live pool of broadcast orders the driver can claim.
- *
- * Offline renders a reason and a way out rather than an empty list — an empty
- * screen would read as "no work available", which is the opposite of true.
  */
 export function AvailableScreen({ onOrderPress }: Props) {
   const { palette, scheme } = useTheme();
@@ -49,15 +46,18 @@ export function AvailableScreen({ onOrderPress }: Props) {
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-background">
-      <View className="border-b border-border px-5 py-4">
+      <View className=" border-border px-5 py-1">
         <View className="flex-row items-center justify-between">
-          <Text className="text-2xl font-bold text-foreground">Available</Text>
+          {/*<Text className="text-2xl font-bold text-foreground">Available</Text>*/}
           {online && !isStale && available.length > 0 && (
             <View className="flex-row items-center gap-2">
               <View className="h-2 w-2 rounded-full bg-primary" />
               <Text className="text-[12px] font-semibold text-primary">
                 {available.length} live
               </Text>
+
+
+
             </View>
           )}
         </View>
@@ -103,7 +103,9 @@ export function AvailableScreen({ onOrderPress }: Props) {
         <FlatList
           data={available}
           keyExtractor={(item) => item.id}
-          contentContainerClassName="gap-4 p-5 pb-8"
+          // `grow` lets the empty state fill the viewport and centre itself;
+          // with rows present it costs nothing.
+          contentContainerClassName="grow gap-4 p-5 pb-8"
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -117,7 +119,7 @@ export function AvailableScreen({ onOrderPress }: Props) {
             error ? <Text className="text-[13px] text-muted">{error}</Text> : null
           }
           ListEmptyComponent={
-            <View className="items-center gap-4 px-8 py-24">
+            <View className="flex-1 items-center justify-center gap-4 px-8">
               <View className="rounded-full bg-primary-muted p-6">
                 <Ionicons
                   name="megaphone-outline"

@@ -4,6 +4,10 @@ import { ActivityScreen } from '@screens/ActivityScreen';
 
 export default function ActivityRoute() {
   const router = useRouter();
-  return <ActivityScreen onOrderPress={(id) => router.push(`/order/${id}`)} />;
+  return (
+    <ActivityScreen
+      onOrderPress={(id) => router.push({ pathname: '/receipt/[id]', params: { id } })}
+    />
+  );
 }
 

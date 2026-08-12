@@ -1,6 +1,5 @@
 """
 Push wire contract — server side. The only place a payload is built.
-
 Mirrors libs/shared/contracts/src/push-contract.ts — change both together.
 
 Rules: every data value is a string (FCM requires it); `route` is server-decided

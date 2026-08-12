@@ -49,9 +49,9 @@ export function ProfileScreen({ user, onOpenAppearance, onOpenIpConfig, onSignOu
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-background">
-      <View className="border-b border-border px-5 py-4">
-        <Text className="text-2xl font-bold text-foreground">Profile</Text>
-      </View>
+      {/*<View className="border-b border-border px-5 py-4">*/}
+      {/*  <Text className="text-2xl font-bold text-foreground">Profile</Text>*/}
+      {/*</View>*/}
 
       <ScrollView contentContainerClassName="gap-8 p-5 pb-10" showsVerticalScrollIndicator={false}>
         {/* Identity — a driver credential card */}

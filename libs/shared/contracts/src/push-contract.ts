@@ -7,20 +7,15 @@
  * 1. Every value is a string — FCM's `data` map is `Map<string, string>`.
  * 2. `route` is server-decided, so retargeting isn't an app release.
  * 3. Unknown `type`/`v` is ignored silently, so the server can add types first.
- * 4. No order details — push renders on a locked screen in public. Ids only.
  */
 
 /** Bumped only for a breaking payload change; unknown versions are ignored. */
 export const PUSH_CONTRACT_VERSION = '1';
 
 export const PUSH_TYPES = {
-  /** A new broadcast offer is available to on-shift drivers. */
   OFFER_PUBLISHED: 'offer_published',
-  /** An offer is gone (accepted by someone else, or withdrawn) — cancel it. */
   OFFER_REVOKED: 'offer_revoked',
-  /** This driver was assigned an order directly by a dispatcher. */
   ORDER_ASSIGNED: 'order_assigned',
-  /** An order this driver holds changed materially. */
   ORDER_UPDATED: 'order_updated',
 } as const;
 
@@ -45,7 +40,6 @@ export interface PushPayload {
   v: string;
   type: string;
   order_id: string;
-  /** Where "Details" and a body tap navigate, e.g. `/offer/<uuid>`. */
   route: string;
   title: string;
   body: string;
@@ -106,7 +100,6 @@ export function parsePushPayload(data: unknown): ParsedPush | null {
   };
 }
 
-/** True when the offer window has already closed — do not display. */
 export function isExpired(push: ParsedPush, now: Date = new Date()): boolean {
   return push.expiresAt !== null && push.expiresAt.getTime() <= now.getTime();
 }

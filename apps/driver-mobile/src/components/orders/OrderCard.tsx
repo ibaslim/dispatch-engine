@@ -73,13 +73,13 @@ export function OrderCard({ order, onPress, onContact, onReport }: Props) {
           </TouchableOpacity>
 
           <IconAction
-            icon="call-outline"
+            icon="call"
             label="Contact"
-            color={palette.foreground}
+            color={palette.primary}
             onPress={onContact}
           />
           <IconAction
-            icon="warning-outline"
+            icon="warning"
             label="Report an issue"
             color={DANGER}
             borderColor={DANGER_BORDER}

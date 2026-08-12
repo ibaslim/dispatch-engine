@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@theme';
 import { useOrders } from '@contexts';
@@ -14,13 +15,18 @@ import {
 } from '@components/orders';
 import { DANGER, DANGER_BORDER } from '@constants/colors';
 import { reportIncident, updateActivityStatus, sendRecipientNotification } from '@services/orders';
-import type { DriverOrder, IncidentReason, ProofOfDelivery } from '@types';
+import type { DriverOrder, IncidentReason } from '@types';
 import { incidentStageFor, nextStep } from '@utils/orderProgress';
 import { callNumber, openDirections } from '@utils/linking';
+import {PrimaryColor} from "@expo/config-plugins/build/android";
 
 interface Props {
   order: DriverOrder | undefined;
   onBack: () => void;
+  /** Open the delivery-photo capture screen for this order. */
+  onCapturePhoto: () => void;
+  /** Open the recipient-signature capture screen for this order. */
+  onCaptureSignature: () => void;
 }
 
 function SectionLabel({ children }: { children: string }) {
@@ -80,14 +86,15 @@ function NavigateRow({
       accessibilityLabel={`${title}: ${address}`}
       className={
         active
-          ? 'flex-row items-center gap-3 rounded-xl bg-primary px-4 py-3.5'
-          : 'flex-row items-center gap-3 rounded-xl border border-border bg-card px-4 py-3.5'
+          ? 'flex-row items-start gap-3 rounded-xl bg-primary px-4 py-3.5'
+          : 'flex-row items-start gap-3 rounded-xl border border-border bg-card px-4 py-3.5'
       }
     >
       <Ionicons
         name="location"
         size={20}
         color={active ? palette['primary-foreground'] : palette.foreground}
+        style={{ marginTop: 2 }}
       />
       <View className="flex-1">
         <Text
@@ -100,8 +107,11 @@ function NavigateRow({
           {title}
         </Text>
         <Text
-          numberOfLines={1}
-          className={active ? 'text-[13px] text-primary-foreground/80' : 'text-[13px] text-muted'}
+          className={
+            active
+              ? 'text-[13px] leading-[18px] text-primary-foreground/80'
+              : 'text-[13px] leading-[18px] text-muted'
+          }
         >
           {address}
         </Text>
@@ -116,7 +126,12 @@ function NavigateRow({
  * while moving; the status advance sits at the bottom, where it's a deliberate
  * press rather than something thumbed by accident mid-scroll.
  */
-export function OrderDetailScreen({ order, onBack }: Props) {
+export function OrderDetailScreen({
+  order,
+  onBack,
+  onCapturePhoto,
+  onCaptureSignature,
+}: Props) {
   const { palette } = useTheme();
   const { show } = useToast();
   const { patchOrder } = useOrders();
@@ -127,6 +142,26 @@ export function OrderDetailScreen({ order, onBack }: Props) {
   const [podOpen, setPodOpen] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [reporting, setReporting] = useState(false);
+  /** Set when a capture screen is opened, so the checklist comes back with it. */
+  const resumePod = useRef(false);
+
+  // The POD sheet is a native Modal: a pushed route renders *behind* it, so a
+  // capture screen can only be opened after the sheet is closed. Reopening on
+  // focus keeps it feeling like one flow — sign, come back, mark delivered.
+  useFocusEffect(
+    useCallback(() => {
+      if (resumePod.current) {
+        resumePod.current = false;
+        setPodOpen(true);
+      }
+    }, []),
+  );
+
+  function openCapture(open: () => void) {
+    resumePod.current = true;
+    setPodOpen(false);
+    open();
+  }
 
   if (!order) {
     return (
@@ -174,17 +209,6 @@ export function OrderDetailScreen({ order, onBack }: Props) {
     }
   }
 
-  /** Merge a successful proof upload into the cached order. */
-  function recordProof(changes: Partial<NonNullable<ProofOfDelivery['submission']>>) {
-    if (!order) return;
-    patchOrder(order.id, {
-      proof_of_delivery: {
-        ...order.proof_of_delivery,
-        submission: { ...order.proof_of_delivery?.submission, ...changes },
-      },
-    });
-  }
-
   /**
    * Two steps are gated behind proof, same as dispatcher-web: marking picked up
    * requires scanning the parcel's QR code, and marking delivered requires the
@@ -219,19 +243,19 @@ export function OrderDetailScreen({ order, onBack }: Props) {
   }
 
   return (
-    <SafeAreaView edges={['top']} className="flex-1 bg-background">
-      <View className="flex-row items-center gap-3 px-5 py-3">
+    <SafeAreaView edges={['top']} className="flex-1 bg-background pb-10">
+      <View className="flex-row items-center  px-3 py-3">
         <TouchableOpacity
           onPress={onBack}
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel="Back"
-          className="h-9 w-9 items-center justify-center rounded-full border border-border bg-card"
+          className="h-9 w-9 items-center justify-center "
         >
           <Ionicons name="chevron-back" size={20} color={palette.foreground} />
         </TouchableOpacity>
         <Text className="text-xl font-bold text-foreground">
-          Order {order.order_number ?? '—'}
+          {order.order_number ?? '—'}
         </Text>
       </View>
 
@@ -343,12 +367,19 @@ export function OrderDetailScreen({ order, onBack }: Props) {
         )}
 
         <View className="flex-row gap-3">
-          <Button
-            title="Contact"
-            variant="outline"
-            className="flex-1"
-            onPress={() => setContactOpen(true)}
-          />
+          <TouchableOpacity
+              onPress={() => setContactOpen(true)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Contact"
+              className="h-[50px] flex-1 flex-row items-center justify-center gap-2 rounded-xl btn-outline"
+              style={{  }}
+          >
+            <Ionicons name="call" size={18} color={palette.primary} />
+            <Text className="text-[15px] font-bold" style={{color:palette.primary}}>
+              Contact
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setReportOpen(true)}
             activeOpacity={0.85}
@@ -357,7 +388,7 @@ export function OrderDetailScreen({ order, onBack }: Props) {
             className="h-[50px] flex-1 flex-row items-center justify-center gap-2 rounded-xl border"
             style={{ borderColor: DANGER_BORDER }}
           >
-            <Ionicons name="warning-outline" size={18} color={DANGER} />
+            <Ionicons name="warning" size={18} color={DANGER} />
             <Text className="text-[15px] font-bold" style={{ color: DANGER }}>
               Report
             </Text>
@@ -374,12 +405,12 @@ export function OrderDetailScreen({ order, onBack }: Props) {
 
       <PodCaptureSheet
         visible={podOpen}
-        orderId={order.id}
         signatureRequired={Boolean(order.proof_of_delivery?.signature)}
         submission={order.proof_of_delivery?.submission}
         completing={advancing}
         onClose={() => setPodOpen(false)}
-        onProofUpdate={recordProof}
+        onCapturePhoto={() => openCapture(onCapturePhoto)}
+        onCaptureSignature={() => openCapture(onCaptureSignature)}
         onDelivered={advance}
       />
 

@@ -1,9 +1,6 @@
 """
 Push fan-out: "notify these drivers" -> "send to these device tokens".
-
-Offers go only to drivers on shift, and fail closed if presence can't be read —
-pushing offers to off-shift drivers teaches them to mute the app. Assignments
-ignore presence entirely.
+Offers go only to drivers on shift
 """
 from __future__ import annotations
 
@@ -34,9 +31,6 @@ async def _tokens_for_tenants(db: AsyncSession, tenant_ids: list[UUID]) -> list[
         .where(
             User.tenant_id.in_(tenant_ids),
             User.is_active.is_(True),
-            # Presence derives from driver:location:*, and POST /drivers/me/location
-            # accepts any tenant. Without this, a non-driver tenant that posted a
-            # location would be targeted by driver offer broadcasts.
             Tenant.role == TenantRole.driver,
             Tenant.is_active.is_(True),
             PushToken.is_active.is_(True),
@@ -94,8 +88,6 @@ async def notify_online_drivers(
     recipients = [tenant_id for tenant_id in online if tenant_id not in excluded]
 
     if not recipients:
-        # A sustained run of these is the signature of a broken presence path,
-        # which otherwise looks exactly like a quiet night.
         logger.info("Push %s: no drivers on shift", envelope.data.get("type"))
         return 0
 
