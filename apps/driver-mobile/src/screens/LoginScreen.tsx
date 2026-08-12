@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { registerFcmToken } from '@services/notifications';
 import { useTheme } from '@theme';
 import { Button, useToast } from '@components/ui';
 
@@ -49,8 +48,9 @@ export function LoginScreen({ onSubmit, onLoginSuccess, onOpenSettings, onOpenIp
     setIsLoading(true);
     try {
       await onSubmit(email.trim(), password);
-      // Register the push token after a successful login (fire-and-forget).
-      registerFcmToken().catch(console.error);
+      // Push registration deliberately happens at first go-online, not here:
+      // Android 13+ allows one POST_NOTIFICATIONS prompt, and a login screen
+      // gives the driver no context for why offers need notifications.
       onLoginSuccess();
     } catch (err: unknown) {
       toast.show(

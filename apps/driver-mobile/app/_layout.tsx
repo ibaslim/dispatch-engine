@@ -1,12 +1,16 @@
 import '../global.css';
 import React, { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from '@theme';
 import { AuthProvider } from '@contexts';
 import { ToastProvider } from '@components/ui';
-import { setupNotificationRouting } from '@services/notifications';
+import {
+  consumePendingRoute,
+  setupForegroundRouting,
+  subscribeTokenRefresh,
+} from '@services/notifications';
 import '../src/tasks/locationTask';
 
 /** StatusBar bar-style follows the resolved light/dark scheme. */
@@ -21,7 +25,17 @@ function ThemedStatusBar() {
  */
 export default function RootLayout() {
   // Deep-link notification taps to the relevant route (no-ops without Firebase).
-  useEffect(() => setupNotificationRouting(), []);
+  useEffect(() => setupForegroundRouting(), []);
+
+  // FCM rotates tokens on restore/reinstall; keep the server in step.
+  useEffect(() => subscribeTokenRefresh(), []);
+
+  // A cold-start tap resolves before the router mounts, so the route is parked
+  // and replayed here once there is something to navigate.
+  useEffect(() => {
+    const route = consumePendingRoute();
+    if (route) router.push(route as never);
+  }, []);
 
   return (
     <SafeAreaProvider>

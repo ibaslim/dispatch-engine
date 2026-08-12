@@ -13,7 +13,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { PostResponse } from '@dispatch/shared/contracts';
 import { fetchPublic, fetchWithAuth } from '@services/api';
-import { subscribeForegroundMessages } from '@services/notifications';
 import { useTheme } from '@theme';
 import {
   Card,
@@ -83,11 +82,6 @@ export function JobsScreen({ onLogout, onOpenSettings, onJobPress }: Props) {
   useEffect(() => {
     loadJobs();
     loadPosts();
-    const unsubscribe = subscribeForegroundMessages((title, body) => {
-      Alert.alert(title, body);
-      loadJobs();
-    });
-    return unsubscribe;
   }, [loadJobs, loadPosts]);
 
   if (isLoading) {

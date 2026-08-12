@@ -37,10 +37,7 @@ async def get_tracking_order_details(
 ):
     """
     Public endpoint: return order details for the tracking page.
-    Accepts either the order's UUID (from the tracking link) or the
-    order number (typed by the user, e.g. ORD16072601). Only
-    recipient-relevant fields are exposed — no contact, payment or
-    internal data.
+    Accepts either the order's UUID or order number: ORD16072601).
     """
     query = select(Order).options(selectinload(Order.driver))
     try:

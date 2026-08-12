@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "000000000000",
-    "project_id": "dispatch-driver-placeholder",
-    "storage_bucket": "dispatch-driver-placeholder.appspot.com"
+    "project_number": "218162425960",
+    "project_id": "dispatch-engine-9136",
+    "storage_bucket": "dispatch-engine-9136.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "mobilesdk_app_id": "1:218162425960:android:f7e792c003c8e5d5ad0bdd",
         "android_client_info": {
           "package_name": "com.dispatch.drivermobile"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyPLACEHOLDER0000000000000000000000000"
+          "current_key": "AIzaSyDWMn-kac_KnRV6NBHQZyQ62Uy1aWO75HQ"
         }
       ],
       "services": {
