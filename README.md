@@ -68,6 +68,7 @@ Open:
 - http://localhost:4200 for the dispatcher portal
 - http://localhost:4300 for the tracking app
 - http://localhost:8000/docs for Swagger
+- http://localhost:5555 for the Flower queue dashboard
 - http://localhost:8081 for the driver-mobile Metro bundler (when running with `--profile mobile`)
 
 **What happens automatically:**
@@ -78,7 +79,7 @@ Open:
 4. Database migrations run automatically
 5. Platform admin is seeded on first boot (`admin@dispatch.local` / `Admin123!`)
 6. FastAPI API starts on port 8000 with reload enabled
-7. Celery worker starts
+7. Celery high/default workers, Celery Beat, and Flower start
 8. Workspace Node dependencies are synced inside Docker when `package-lock.json` changes
 9. Angular dispatcher-web starts on port 4200
 10. Angular tracking-web starts on port 4300
@@ -136,6 +137,7 @@ After installing host dependencies, run `TypeScript: Select TypeScript Version` 
 | Tracking Web | http://localhost:4300 |
 | API | http://localhost:8000 |
 | API Docs (Swagger) | http://localhost:8000/docs |
+| Flower | http://localhost:5555 |
 | Mailpit (email UI) | http://localhost:8025 |
 
 ### Default Admin Credentials

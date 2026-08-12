@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
+    flower_basic_auth: str = ""
 
     # JWT
     jwt_secret_key: str = "changeme-insecure-secret"
@@ -67,6 +68,7 @@ class Settings(BaseSettings):
     driver_location_flush_interval_seconds: int = 60
     driver_location_retention_days: int = 30
     driver_location_active_order_negative_cache_seconds: int = 300
+
     @property
     def pusher_enabled(self) -> bool:
         return all(
@@ -80,4 +82,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

@@ -91,6 +91,9 @@ def create_app() -> FastAPI:
         tags=["delivery-configuration"],
     )
 
+    @application.get("/health", tags=["health"])
+    async def health_check():
+        return {"status": "ok"}
     return application
 
 
