@@ -1,16 +1,12 @@
 import '../global.css';
 import React, { useEffect } from 'react';
-import { router, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from '@theme';
 import { AuthProvider } from '@contexts';
 import { ToastProvider } from '@components/ui';
-import {
-  consumePendingRoute,
-  setupForegroundRouting,
-  subscribeTokenRefresh,
-} from '@services/notifications';
+import { setupForegroundRouting, subscribeTokenRefresh } from '@services/notifications';
 import '../src/tasks/locationTask';
 
 /** StatusBar bar-style follows the resolved light/dark scheme. */
@@ -29,13 +25,6 @@ export default function RootLayout() {
 
   // FCM rotates tokens on restore/reinstall; keep the server in step.
   useEffect(() => subscribeTokenRefresh(), []);
-
-  // A cold-start tap resolves before the router mounts, so the route is parked
-  // and replayed here once there is something to navigate.
-  useEffect(() => {
-    const route = consumePendingRoute();
-    if (route) router.push(route as never);
-  }, []);
 
   return (
     <SafeAreaProvider>

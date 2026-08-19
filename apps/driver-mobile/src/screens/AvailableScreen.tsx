@@ -1,16 +1,32 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  RefreshControl,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 
 import { Button, useToast } from '@components/ui';
 import { PublishedOrderCard } from '@components/orders';
-import { DANGER, dangerSurface } from '@constants/colors';
+import { DANGER } from '@constants/colors';
 import { openLocationSettings } from '@services/driver';
 import { goOnlineBlockedMessage, needsSettingsTrip, offlineReasonCopy } from '@utils/shift';
 import { useOnlineStatus, usePublishedOrders, useRealtime } from '@contexts';
 import { useAcceptOffer } from '@hooks';
 import { useTheme } from '@theme';
+import DRIVER_OFFLINE from '../../assets/images/driver-offline.png';
+import DRIVER_ONLINE from '../../assets/images/driver-online.png';
+
+/** Each artwork's own ratio, so neither rider is stretched at any width. */
+const OFFLINE_RATIO = 712 / 874;
+const ONLINE_RATIO = 814 / 948;
+/** Softened so the rider reads as a backdrop behind the copy, not an illustration above it. */
+const ART_BLUR = 1;
+const ART_OPACITY = 0.8;
 
 interface Props {
   /** Open one offer in full. */
@@ -21,7 +37,8 @@ interface Props {
  * Live pool of broadcast orders the driver can claim.
  */
 export function AvailableScreen({ onOrderPress }: Props) {
-  const { palette, scheme } = useTheme();
+  const { palette } = useTheme();
+  const { width } = useWindowDimensions();
   const { show } = useToast();
   const { online, offlineReason, isRestoring, goOnline } = useOnlineStatus();
   const { connectionState } = useRealtime();
@@ -43,6 +60,7 @@ export function AvailableScreen({ onOrderPress }: Props) {
   }
 
   const isStale = online && connectionState !== 'connected' && connectionState !== 'disabled';
+  const artWidth = Math.min(width * 0.35, 156);
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-background">
@@ -73,17 +91,31 @@ export function AvailableScreen({ onOrderPress }: Props) {
           <ActivityIndicator size="large" color={palette.primary} />
         </View>
       ) : !online ? (
-        <View className="flex-1 justify-center p-5">
-          <View className="gap-3 rounded-2xl border p-5" style={dangerSurface(scheme)}>
+        <View className="flex-1 p-5">
+          <View className="flex-1 items-center justify-center gap-4">
+            <Image
+              source={DRIVER_OFFLINE}
+              style={{
+                width: artWidth,
+                height: artWidth / OFFLINE_RATIO,
+                opacity: ART_OPACITY,
+              }}
+              blurRadius={ART_BLUR}
+              resizeMode="contain"
+              accessibilityIgnoresInvertColors
+            />
             <View className="flex-row items-center gap-2">
               <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: DANGER }} />
-              <Text className="flex-1 text-lg font-bold" style={{ color: DANGER }}>
+              <Text className="text-lg font-bold" style={{ color: DANGER }}>
                 You&apos;re Offline
               </Text>
             </View>
-            <Text className="text-sm leading-5 text-foreground/80">
+            <Text className="text-center text-sm leading-5 text-muted">
               {offlineReasonCopy(offlineReason)}
             </Text>
+          </View>
+          {/* Pinned to the foot of the screen: the one action this state offers. */}
+          <View className="gap-2">
             <Button title="Go Online" loading={goingOnline} onPress={handleGoOnline} />
             {needsSettingsTrip(offlineReason) && (
               <Button
@@ -120,13 +152,17 @@ export function AvailableScreen({ onOrderPress }: Props) {
           }
           ListEmptyComponent={
             <View className="flex-1 items-center justify-center gap-4 px-8">
-              <View className="rounded-full bg-primary-muted p-6">
-                <Ionicons
-                  name="megaphone-outline"
-                  size={40}
-                  color={palette['primary-muted-foreground']}
-                />
-              </View>
+              <Image
+                source={DRIVER_ONLINE}
+                style={{
+                  width: artWidth,
+                  height: artWidth / ONLINE_RATIO,
+                  opacity: ART_OPACITY,
+                }}
+                blurRadius={ART_BLUR}
+                resizeMode="contain"
+                accessibilityIgnoresInvertColors
+              />
               <Text className="text-base font-semibold text-foreground">
                 No available orders right now
               </Text>

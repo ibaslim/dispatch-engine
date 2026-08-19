@@ -1,15 +1,18 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@theme';
 import { Card, CardBody, Badge, Ref } from '@components/ui';
 import { DANGER, DANGER_BORDER } from '@constants/colors';
 import type { DriverOrder } from '@types';
-import { activityLabel } from '@utils/orderProgress';
+import { activityLabel, isPickupLeg } from '@utils/orderProgress';
+import { coordsOf, formatDistance, roadDistanceKm, type Coords } from '@utils/distance';
 import { RouteLine } from './RouteLine';
 
 interface Props {
   order: DriverOrder;
+  /** The driver's last known position; null while offline, which hides the distance. */
+  driverPosition?: Coords | null;
   onPress: () => void;
   onContact: () => void;
   onReport: () => void;
@@ -43,20 +46,49 @@ function IconAction({
   );
 }
 
+/** How far the driver's next stop is. Prefixed with ≈ — the figure is an estimate. */
+function DistanceBadge({ km }: { km: number }) {
+  return (
+    <View className="rounded-full bg-primary-muted px-2 py-1">
+      <Text className="text-[11px] font-bold text-primary-muted-foreground">
+        ≈ {formatDistance(km)}
+      </Text>
+    </View>
+  );
+}
+
 /**
  * One job in the Orders list: identity and status, the two stops, then the
  * three things a driver does from the list — open it, call someone, or flag a
  * problem. Report is the only tinted control, so it can't be hit by accident.
  */
-export function OrderCard({ order, onPress, onContact, onReport }: Props) {
+export function OrderCard({ order, driverPosition, onPress, onContact, onReport }: Props) {
   const { palette } = useTheme();
+
+  const pickupLeg = isPickupLeg(order.activity_status);
+  const distanceKm = useMemo(() => {
+    const target = pickupLeg
+      ? coordsOf(order.pickup_latitude, order.pickup_longitude)
+      : coordsOf(order.delivery_latitude, order.delivery_longitude);
+    return driverPosition && target ? roadDistanceKm(driverPosition, target) : null;
+  }, [
+    driverPosition,
+    pickupLeg,
+    order.pickup_latitude,
+    order.pickup_longitude,
+    order.delivery_latitude,
+    order.delivery_longitude,
+  ]);
 
   return (
     <Card>
       <CardBody className="gap-4">
         <View className="flex-row items-start justify-between gap-3">
           <Ref>{order.order_number ?? '—'}</Ref>
-          <Badge label={activityLabel(order.activity_status)} dot={false} />
+          <View className="flex-row items-center gap-2">
+            <Badge label={activityLabel(order.activity_status)} dot={false} />
+            {distanceKm != null && <DistanceBadge km={distanceKm} />}
+          </View>
         </View>
 
         <RouteLine pickup={order.pickup_address} drop={order.delivery_address} />

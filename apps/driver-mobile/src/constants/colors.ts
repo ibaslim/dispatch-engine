@@ -51,3 +51,8 @@ export function countdownColor(percent: number): string {
   if (percent > 20) return WARNING;
   return DANGER;
 }
+
+/** Soft fills for Home's stat chips, which need four tints that stay distinct. */
+export const WARNING_SOFT = 'rgba(251, 191, 36, 0.16)';
+export const ACCENT = '#8b5cf6';
+export const ACCENT_SOFT = 'rgba(139, 92, 246, 0.14)';

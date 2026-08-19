@@ -26,7 +26,8 @@ HISTORY_KEY_PREFIX = "driver:location_history"
 
 
 def get_location_ttl_seconds() -> int:
-    return settings.driver_location_push_interval_seconds * 3
+    """Live location TTL; also the presence window, since offers scan this key."""
+    return settings.driver_presence_window_seconds
 
 
 # ---------------------------------------------------------------------------

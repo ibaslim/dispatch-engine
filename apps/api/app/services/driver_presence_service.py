@@ -30,7 +30,7 @@ def assert_presence_window_sane() -> None:
         logger.warning(
             "Driver presence window is %ss, below the %ss floor. Push offer targeting "
             "derives from the location key, so drivers may drop out of the offer pool "
-            "during brief GPS or network gaps. Raise driver_location_push_interval_seconds.",
+            "during brief GPS or network gaps. Raise driver_presence_window_seconds.",
             window,
             MIN_SANE_PRESENCE_WINDOW_SECONDS,
         )

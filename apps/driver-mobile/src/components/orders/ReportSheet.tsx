@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@theme';
-import { BottomSheet, BottomSheetTitle, Button, useBottomSheetScroll } from '@components/ui';
+import { BottomSheet, Button, useBottomSheetScroll } from '@components/ui';
 import {
   DELIVERY_INCIDENT_REASONS,
   INCIDENT_REASONS_REQUIRING_DESCRIPTION,
@@ -55,12 +55,12 @@ export function ReportSheet({ visible, stage, submitting, onClose, onSubmit }: P
     reason !== null && (!needsDescription || description.trim().length > 0);
 
   return (
-    <BottomSheet visible={visible} onClose={onClose}>
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      title={stage === 'pickup' ? 'Report a pickup issue' : 'Report a delivery issue'}
+    >
       <>
-        <BottomSheetTitle>
-          {stage === 'pickup' ? 'Report a pickup issue' : 'Report a delivery issue'}
-        </BottomSheetTitle>
-
         <View className="gap-2 px-5 pt-1">
           {reasons.map((option) => {
             const selected = option === reason;

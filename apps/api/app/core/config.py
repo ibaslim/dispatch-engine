@@ -63,7 +63,8 @@ class Settings(BaseSettings):
     uploads_dir: str = "data/uploads"
 
     # Driver location tracking
-    driver_location_push_interval_seconds: int = 5
+    # Grace period after a driver's last ping; also gates push offer targeting.
+    driver_presence_window_seconds: int = 120
     driver_location_flush_interval_seconds: int = 60
     driver_location_retention_days: int = 30
     driver_location_active_order_negative_cache_seconds: int = 300

@@ -125,13 +125,21 @@ export function PublishedOrdersProvider({ children }: { children: React.ReactNod
   // Every (re)connection is a gap in coverage — resync rather than assume the
   // list survived it. Covers app resume, network flaps and the initial connect.
   useEffect(() => {
-    if (connectionState !== 'connected' || !online) return;
-    void load('silent');
-  }, [connectionState, online, load]);
+    if (connectionState !== 'connected') return;
+    // Events missed while disconnected never replay, and an assignment lands on
+    // or off shift — so heal the driver's own list on every reconnect.
+    void refreshMyOrders();
+    if (online) void load('silent');
+  }, [connectionState, online, load, refreshMyOrders]);
 
   useEffect(
     () =>
       subscribe((event) => {
+        // Assigned work is theirs on or off shift, so refresh before the guard.
+        if (event.event === 'order-driver-changed') {
+          void refreshMyOrders();
+        }
+
         if (!onlineRef.current) return;
 
         if (event.event === 'order-accepted') {
