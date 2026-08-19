@@ -114,7 +114,7 @@ def build_order_assigned(
             "v": PUSH_CONTRACT_VERSION,
             "type": TYPE_ORDER_ASSIGNED,
             "order_id": str(order_id),
-            "route": f"/job/{order_id}",
+            "route": f"/order/{order_id}",
             "title": title,
             "body": body,
             "expires_at": expires_at.isoformat(),

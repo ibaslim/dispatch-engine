@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@theme';
 import { useOrders } from '@contexts';
+import { useDriverPosition } from '@hooks';
 import { useToast } from '@components/ui';
 import { ContactSheet, OrderCard, ReportSheet } from '@components/orders';
 import { DANGER } from '@constants/colors';
@@ -123,6 +124,7 @@ export function OrdersScreen({ onOrderPress }: Props) {
   const { palette } = useTheme();
   const { show } = useToast();
   const { orders, isLoading, isRefreshing, error, refresh, patchOrder } = useOrders();
+  const driverPosition = useDriverPosition();
 
   const [filter, setFilter] = useState<OrderFilter>('all');
   const [contactOrder, setContactOrder] = useState<DriverOrder | null>(null);
@@ -199,19 +201,6 @@ export function OrdersScreen({ onOrderPress }: Props) {
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-background">
       <View className="border-b border-border bg-background">
-        <View className="flex-row items-center gap-2.5 px-5 pt-4">
-          <Text className="text-2xl font-bold text-foreground">Orders</Text>
-          {active.length > 0 && (
-            <View className="rounded-full bg-primary-muted px-2.5 py-0.5">
-              <Text className="text-[13px] font-bold text-primary-muted-foreground">
-                {active.length}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Full-bleed so pills scroll past the screen edge rather than stopping
-            inside a padded box — the cue that there is more row to reach. */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -233,7 +222,7 @@ export function OrdersScreen({ onOrderPress }: Props) {
       <FlatList
         data={visible}
         keyExtractor={(item) => item.id}
-        contentContainerClassName="gap-4 p-5 pb-8"
+        contentContainerClassName="grow gap-4 p-5 pb-8"
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -247,7 +236,7 @@ export function OrdersScreen({ onOrderPress }: Props) {
           error ? <Text className="text-[13px] text-muted">{error}</Text> : null
         }
         ListEmptyComponent={
-          <View className="items-center gap-1 py-24">
+          <View className="flex-1 items-center justify-center gap-1">
             <Text className="text-base font-semibold text-foreground">
               {activeTab.emptyTitle}
             </Text>
@@ -257,6 +246,7 @@ export function OrdersScreen({ onOrderPress }: Props) {
         renderItem={({ item }) => (
           <OrderCard
             order={item}
+            driverPosition={driverPosition}
             onPress={() => onOrderPress(item.id)}
             onContact={() => setContactOrder(item)}
             onReport={() => setReportOrder(item)}

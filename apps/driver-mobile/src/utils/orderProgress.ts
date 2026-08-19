@@ -79,10 +79,15 @@ export function activityLabel(status: ActivityStatus): string {
   return PROGRESS_STEPS[progressIndex(status)]?.label ?? status.replace(/_/g, ' ');
 }
 
+/** Whether the parcel is still to be collected — i.e. the driver's next stop is pickup. */
+export function isPickupLeg(status: ActivityStatus): boolean {
+  return progressIndex(status) < progressIndex('picked_up');
+}
+
 /**
  * Which leg of the job an issue belongs to. Anything up to (and including)
  * collection is a pickup problem; everything after is a delivery problem.
  */
 export function incidentStageFor(status: ActivityStatus): IncidentStage {
-  return progressIndex(status) < progressIndex('picked_up') ? 'pickup' : 'delivery';
+  return isPickupLeg(status) ? 'pickup' : 'delivery';
 }

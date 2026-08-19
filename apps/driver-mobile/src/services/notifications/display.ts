@@ -7,7 +7,7 @@
  */
 import notifee, { AndroidImportance, AndroidStyle } from '@notifee/react-native';
 import { AppState, Platform } from 'react-native';
-import { PUSH_ACTIONS, isExpired, type ParsedPush } from '@dispatch/shared/contracts';
+import { PUSH_ACTIONS, PUSH_TYPES, isExpired, type ParsedPush } from '@dispatch/shared/contracts';
 
 import { registerNotificationChannels } from './channels';
 
@@ -22,11 +22,17 @@ const NOTIFICATION_COLOR = '#1d4ed8';
 
 /** Notification id = order id, so a duplicate delivery updates instead of stacking. */
 export async function displayOffer(push: ParsedPush): Promise<void> {
-  if (Platform.OS !== 'android') return;
   if (push.silent || isExpired(push)) return;
 
-  // Pusher already updates the Available tab live when the app is open.
-  if (AppState.currentState === 'active') return;
+  const isForeground = AppState.currentState === 'active';
+
+  // iOS draws its own alert from the APNs payload — but not while foregrounded,
+  // so notifee has to draw that case and only that case.
+  if (Platform.OS !== 'android' && !isForeground) return;
+
+  // Pusher already updates the Available tab live, so a foreground offer is
+  // noise. A direct assignment still buzzes — it can land on any screen.
+  if (isForeground && push.type !== PUSH_TYPES.ORDER_ASSIGNED) return;
 
   await registerNotificationChannels();
 
@@ -57,6 +63,8 @@ export async function displayOffer(push: ParsedPush): Promise<void> {
         },
       ],
     },
+    // Buttons come from the category registered at boot.
+    ios: { categoryId: push.category },
   });
 }
 

@@ -2,7 +2,7 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@theme';
-import { BottomSheet, BottomSheetItem, BottomSheetTitle, Button } from '@components/ui';
+import { BottomSheet, BottomSheetItem, Button } from '@components/ui';
 import { SUCCESS } from '@constants/colors';
 import type { ProofOfDelivery } from '@types';
 
@@ -52,9 +52,8 @@ export function PodCaptureSheet({
   const canMarkDelivered = photoDone && (!signatureRequired || signatureDone);
 
   return (
-    <BottomSheet visible={visible} onClose={onClose}>
+    <BottomSheet visible={visible} onClose={onClose} title="Proof of delivery">
       <>
-        <BottomSheetTitle>Proof of delivery</BottomSheetTitle>
         <Text className="px-5 pb-3 text-sm text-muted">
           {canMarkDelivered
             ? 'Everything is captured. You can close the job.'

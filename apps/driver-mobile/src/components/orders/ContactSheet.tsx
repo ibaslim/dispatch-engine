@@ -1,5 +1,5 @@
 import React from 'react';
-import { BottomSheet, BottomSheetTitle, BottomSheetItem } from '@components/ui';
+import { BottomSheet, BottomSheetItem } from '@components/ui';
 import type { DriverOrder } from '@types';
 import { callNumber } from '@utils/linking';
 
@@ -17,8 +17,7 @@ export function ContactSheet({ order, onClose }: Props) {
   };
 
   return (
-    <BottomSheet visible={order !== null} onClose={onClose}>
-      <BottomSheetTitle>Contact</BottomSheetTitle>
+    <BottomSheet visible={order !== null} onClose={onClose} title="Contact">
       {order && (
         <>
           <BottomSheetItem

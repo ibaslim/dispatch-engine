@@ -26,17 +26,20 @@ import {
 import { cancelOffer, displayOffer } from './display';
 import { registerNotificationChannels } from './channels';
 
-/** Set when a tap resolves before the router is ready; drained on mount. */
+/** Cold-start route, parked until the authenticated area can navigate. */
 let pendingRoute: string | null = null;
+let onPending: (() => void) | null = null;
 
 function navigate(route: string): void {
   if (!route.startsWith('/')) return;
-  try {
-    router.push(route as never);
-  } catch {
-    // Router not mounted yet (cold start) — replay once it is.
-    pendingRoute = route;
-  }
+  router.push(route as never);
+}
+
+/** Park a cold-start route. Pushing now is lost when the auth guard mounts. */
+function parkRoute(route: string): void {
+  if (!route.startsWith('/')) return;
+  pendingRoute = route;
+  onPending?.();
 }
 
 /** Route the app was launched into by a notification tap, if any. */
@@ -44,6 +47,14 @@ export function consumePendingRoute(): string | null {
   const route = pendingRoute;
   pendingRoute = null;
   return route;
+}
+
+/** Fires when a route is parked, so a late-resolving tap still routes. */
+export function subscribePendingRoute(listener: () => void): () => void {
+  onPending = listener;
+  return () => {
+    if (onPending === listener) onPending = null;
+  };
 }
 
 /** Apply a payload: display it, or clear what it revokes. */
@@ -97,33 +108,30 @@ export function setupForegroundRouting(): () => void {
 
   const instance = getMessaging();
 
-  const routeFrom = (push: ParsedPush | null) => {
-    if (push?.route) navigate(push.route);
-  };
-
-  // Tapped while the app was backgrounded but alive.
+  // Tapped while the app was backgrounded but alive: router is already mounted.
   const unsubscribeOpened = instance?.onNotificationOpenedApp((remoteMessage) => {
-    routeFrom(parsePushPayload(remoteMessage?.data));
+    const push = parsePushPayload(remoteMessage?.data);
+    if (push?.route) navigate(push.route);
   });
 
   // Cold start via an OS-drawn notification (iOS).
   instance?.getInitialNotification().then((remoteMessage) => {
-    routeFrom(parsePushPayload(remoteMessage?.data));
+    const push = parsePushPayload(remoteMessage?.data);
+    if (push?.route) parkRoute(push.route);
   });
 
   // Cold start via a notifee-drawn notification (Android).
   notifee.getInitialNotification().then((initial) => {
     if (!initial) return;
     const route = initial.notification.data?.route;
-    if (typeof route === 'string') navigate(route);
+    if (typeof route === 'string') parkRoute(route);
   });
 
-  // Data messages arriving while the app is open. Nothing is displayed —
-  // Pusher already updates the UI — but a revoke still has to clear any
-  // notification left in the tray from earlier.
+  // Data messages arriving while the app is open. `displayOffer` decides what
+  // is worth drawing in the foreground; revokes still clear the tray.
   const unsubscribeMessage = instance?.onMessage(async (remoteMessage) => {
     const push = parsePushPayload(remoteMessage?.data);
-    if (push?.type === PUSH_TYPES.OFFER_REVOKED) await cancelOffer(push.orderId);
+    if (push) await handlePush(push);
   });
 
   const unsubscribeForeground = notifee.onForegroundEvent(({ type, detail }) => {

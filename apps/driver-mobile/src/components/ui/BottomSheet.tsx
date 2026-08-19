@@ -12,7 +12,6 @@ import {
   Keyboard,
   Modal,
   PanResponder,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -30,15 +29,19 @@ import { useKeyboardHeight } from '@hooks/useKeyboardHeight';
 interface BottomSheetProps {
   visible: boolean;
   onClose: () => void;
+  /** Heading for the drag header — also the swipe-to-dismiss grab area. */
+  title?: string;
   children: React.ReactNode;
 }
 
 const BACKDROP_OPACITY = 0.5;
 /** Drag distance / velocity past which a release dismisses the sheet. */
-const DISMISS_DISTANCE = 120;
-const DISMISS_VELOCITY = 0.9;
+const DISMISS_DISTANCE = 72;
+const DISMISS_VELOCITY = 0.5;
 /** Gap kept between the top of a tall sheet and the status bar. */
 const TOP_GAP = 24;
+/** Movement past which a backdrop touch is a swipe, not a tap. */
+const TAP_SLOP = 8;
 
 interface SheetScroll {
   /** Bring the bottom of the sheet (usually a focused input) into view. */
@@ -58,10 +61,10 @@ export function useBottomSheetScroll() {
 
 /**
  * Bottom sheet modal: a card that slides up from the bottom edge (covering the
- * navigation bar), with rounded top corners, a drag handle, a tap-to-dismiss
- * backdrop, and drag-to-dismiss. Its height is driven by the content.
+ * navigation bar), with rounded top corners, a tap-to-dismiss backdrop, and a
+ * header (handle + `title`) that swipes down to dismiss. Height follows content.
  */
-export function BottomSheet({ visible, onClose, children }: BottomSheetProps) {
+export function BottomSheet({ visible, onClose, title, children }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
@@ -144,7 +147,12 @@ export function BottomSheet({ visible, onClose, children }: BottomSheetProps) {
 
   const pan = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx),
+      // Claimed on touch-down, not on move: the header holds nothing tappable,
+      // and negotiating on move let the ScrollView win the gesture first.
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderMove: (_, g) => {
         if (g.dy > 0) translateY.setValue(g.dy);
       },
@@ -162,6 +170,18 @@ export function BottomSheet({ visible, onClose, children }: BottomSheetProps) {
     })
   ).current;
 
+  // Tap-to-dismiss only. A `Pressable` here fired `onPress` after a swipe too:
+  // it cancels a press when the finger leaves the element, and this one covers
+  // the whole screen, so a drag started outside the sheet closed it.
+  const backdropPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderRelease: (_, g) => {
+        if (Math.abs(g.dx) < TAP_SLOP && Math.abs(g.dy) < TAP_SLOP) onCloseRef.current();
+      },
+    })
+  ).current;
+
   if (!mounted) return null;
 
   return (
@@ -173,15 +193,13 @@ export function BottomSheet({ visible, onClose, children }: BottomSheetProps) {
       statusBarTranslucent
     >
       <View className="flex-1 justify-end">
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={onClose}
+        <Animated.View
+          {...backdropPan.panHandlers}
+          collapsable={false}
+          accessibilityRole="button"
           accessibilityLabel="Close"
-        >
-          <Animated.View
-            style={[StyleSheet.absoluteFill, { backgroundColor: '#000', opacity: backdrop }]}
-          />
-        </Pressable>
+          style={[StyleSheet.absoluteFill, { backgroundColor: '#000', opacity: backdrop }]}
+        />
 
         <Animated.View
           style={{
@@ -197,16 +215,17 @@ export function BottomSheet({ visible, onClose, children }: BottomSheetProps) {
             (`newArchEnabled=true`) drops it from the native tree — the touch
             then hit-tests against the parent, which holds no responder, and the
             PanResponder never sees a finger. Drag-to-dismiss silently dies while
-            the backdrop's tap-to-dismiss keeps working, because that Pressable
-            has an `accessibilityLabel` and so survives flattening. Same reason
+            the backdrop's tap-to-dismiss keeps working, because that view has an
+            `accessibilityLabel` and so survives flattening. Same reason
             SignaturePad sets it.
           */}
           <View
             {...pan.panHandlers}
             collapsable={false}
-            className="items-center pb-3 pt-3"
+            className={title ? 'pt-3' : 'pb-3 pt-3'}
           >
-            <View className="h-1.5 w-10 rounded-full bg-border" />
+            <View className="h-1.5 w-10 self-center rounded-full bg-border" />
+            {title ? <BottomSheetTitle>{title}</BottomSheetTitle> : null}
           </View>
           <ScrollView
             ref={scrollRef}

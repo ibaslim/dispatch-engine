@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { Redirect, Stack } from 'expo-router';
+import { Redirect, Stack, router } from 'expo-router';
+import { consumePendingRoute, subscribePendingRoute } from '@services/notifications';
 import {
   OnlineStatusProvider,
   OrdersProvider,
@@ -34,6 +35,7 @@ export default function AppLayout() {
           <PublishedOrdersProvider>
             {/* Mount the location heartbeat once for the whole authenticated session */}
             <LocationHeartbeat />
+            <PendingRouteReplay />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="order/[id]" />
@@ -57,5 +59,21 @@ export default function AppLayout() {
  */
 function LocationHeartbeat(): null {
   useDriverLocation();
+  return null;
+}
+
+/**
+ * Navigates to a cold-start notification route once the authenticated stack is
+ * mounted. Pushing any earlier is discarded by the auth guard's redirect.
+ */
+function PendingRouteReplay(): null {
+  useEffect(() => {
+    const drain = () => {
+      const route = consumePendingRoute();
+      if (route) router.push(route as never);
+    };
+    drain();
+    return subscribePendingRoute(drain);
+  }, []);
   return null;
 }
