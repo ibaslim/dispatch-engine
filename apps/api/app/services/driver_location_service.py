@@ -109,5 +109,12 @@ class DriverLocationService:
                 "recorded_at": datetime.now(timezone.utc).isoformat(),
             }
         )
-        history_len = await self._redis.rpush(_history_key(driver_id), record)
-        return history_len
+        key = _history_key(driver_id)
+        max_records = settings.driver_location_history_max_records
+        pipe = self._redis.pipeline()
+        pipe.rpush(key, record)
+        # Keep only the newest entries: a stalled flusher must not grow unbounded.
+        pipe.ltrim(key, -max_records, -1)
+        pipe.llen(key)
+        res = await pipe.execute()
+        return res[-1]
