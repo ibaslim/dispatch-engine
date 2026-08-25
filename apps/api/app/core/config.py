@@ -66,8 +66,11 @@ class Settings(BaseSettings):
     # Grace period after a driver's last ping; also gates push offer targeting.
     driver_presence_window_seconds: int = 120
     driver_location_flush_interval_seconds: int = 60
+    # Enforced daily by purge_driver_location_logs; 0 or less disables the purge.
     driver_location_retention_days: int = 30
     driver_location_active_order_negative_cache_seconds: int = 300
+    # Caps the per-driver Redis buffer so a stalled flusher drops points, not memory.
+    driver_location_history_max_records: int = 10000
 
     # Firebase Cloud Messaging. This credential can push to every driver device,
     # so it is server-only and must never reach a frontend bundle.
