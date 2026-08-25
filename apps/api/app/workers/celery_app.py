@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 from app.core.config import settings
 
 celery_app = Celery(
@@ -21,6 +22,11 @@ celery_app.conf.update(
         "flush-driver-location-logs-periodic": {
             "task": "flush_driver_location_logs",
             "schedule": float(settings.driver_location_flush_interval_seconds),
+        },
+        # Off-peak and daily: retention is a bulk delete, not a hot path.
+        "purge-driver-location-logs-daily": {
+            "task": "purge_driver_location_logs",
+            "schedule": crontab(hour=3, minute=15),
         },
     },
 )
