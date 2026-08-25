@@ -1,4 +1,15 @@
 import base64
+from app.services.driver_location_retention_service import DriverLocationRetentionService
+from datetime import datetime
+from uuid import UUID
+from app.services.push_contract import build_order_assigned
+from app.services.push_dispatch_service import send_envelope_to_tenants
+import asyncio
+import logging
+import redis.asyncio as aioredis
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from app.core.config import settings
+from app.services.driver_location_flush_service import DriverLocationFlushService
 
 from app.workers.celery_app import celery_app
 from app.services.email_service import (
@@ -65,11 +76,6 @@ def send_password_reset_email(self, email: str, reset_url: str) -> None:
 
 def _run_with_session(coro_factory):
     """Run an async routine with its own engine, session and Redis client."""
-    import asyncio
-    import redis.asyncio as aioredis
-    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-    from app.core.config import settings
-
     async def _run():
         engine = create_async_engine(settings.database_url, echo=False)
         session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
@@ -153,13 +159,6 @@ def notify_driver_of_assignment(
     expires_at: str,
 ) -> int:
     """Tell a driver they were assigned an order. Not presence-gated."""
-    import logging
-    from datetime import datetime
-    from uuid import UUID
-
-    from app.services.push_contract import build_order_assigned
-    from app.services.push_dispatch_service import send_envelope_to_tenants
-
     logger = logging.getLogger(__name__)
 
     try:
@@ -369,13 +368,6 @@ def send_order_delivered_email(
 @celery_app.task(name="flush_driver_location_logs")
 def flush_driver_location_logs() -> int:
     """Flush buffered driver location records from Redis into TimescaleDB."""
-    import asyncio
-    import logging
-    import redis.asyncio as aioredis
-    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-    from app.core.config import settings
-    from app.services.driver_location_flush_service import DriverLocationFlushService
-
     logger = logging.getLogger(__name__)
 
     async def _flush() -> int:
@@ -397,3 +389,17 @@ def flush_driver_location_logs() -> int:
     return asyncio.run(_flush())
 
 
+@celery_app.task(name="purge_driver_location_logs")
+def purge_driver_location_logs() -> int:
+    """Drop driver location telemetry older than driver_location_retention_days."""
+    async def _purge() -> int:
+        local_engine = create_async_engine(settings.database_url, echo=False)
+        local_session_factory = async_sessionmaker(local_engine, expire_on_commit=False, class_=AsyncSession)
+        try:
+            async with local_session_factory() as session:
+                result = await DriverLocationRetentionService().purge(session)
+                return result.chunks_dropped or result.rows_deleted
+        finally:
+            await local_engine.dispose()
+
+    return asyncio.run(_purge())
