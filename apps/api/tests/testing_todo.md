@@ -3,13 +3,29 @@
 Work queue for the `apps/api` test suite. Priority order; pick any item.
 See `CLAUDE.md` (rulebook) and `README.md` (how-to) in this folder.
 
-Status as of 2026-08-28: **254 passed, 8 xfailed**, ~141s. 3 of 17 routers have HTTP
-coverage (`orders`, `onboarding`, `stores`); auth surface (`auth.py` + deps + `get_ws_user`)
-now covered by `test_auth_api.py`. Orders routes covered: **17/18** — only `POST /orders/quote`
-and the `create_order` happy path (needs a seeded pricing/quote fixture) remain. The POD read
-guard `_authorize_pod_view` repeats the BUG-004 `pickup_name` leak; pinned by a new strict
-xfail. Legacy metric to move: *routers with a cross-tenant 404 test* = **3/17**. Confirmed
-bugs are tracked in the root `DISCOVERED_BUGS.md`.
+Status as of 2026-08-31: **460 passed, 9 xfailed**, ~266s. Routers with HTTP coverage:
+`onboarding` (8/8), `stores` (2/2), `auth` (4/6 + deps + `get_ws_user`), `orders` (17/18),
+`drivers` (7/7), `tracking` (1/2), `platform` (3/3), `tenants` (6/6),
+`delivery_configuration` (27/27), `driver_payroll` (10/10), `pricing` (9/9). Route coverage now
+**94/106 (~89%)** across **11/17 routers**. The config/money routers each use a split RBAC matrix
+(GET routes are CurrentUser-open, so only writes assert 403; all routes assert 401 for anon) plus
+CRUD/validation and money happy-paths; matrices are mutation-verified. `drivers` surfaced
+**BUG-006** (no-auth live-GPS read; strict xfail, "To review / P0" in `DISCOVERED_BUGS.md`).
+
+Two findings from tenants/platform (noted, not pinned):
+- `/tenants/unsuspend` (and `/suspend`) target the caller's OWN tenant, but once suspended the
+  admin fails the suspended-tenant auth guard (401) and can never self-unsuspend — the endpoint
+  is effectively unreachable; only `/platform/.../unsuspend` (platform admin) can restore a
+  tenant. Documented in `test_tenants_api.py::TestUnsuspendMyTenant`.
+- Test-infra papercut: `TenantFactory`/`InvitationFactory` default emails use the reserved
+  `.test` TLD, which `EmailStr` rejects on request and response validation. Any endpoint taking
+  or returning an EmailStr needs `@example.com`-style emails in tests. Worth fixing the factory
+  defaults to a real-looking TLD (small infra task).
+
+Orders remaining: `POST /orders/quote` and the `create_order` happy path (need a seeded
+pricing/quote fixture). Tracking `/{token}/order` enumeration is a product decision (T5).
+Legacy metric to move: *routers with a cross-tenant 404 test* = **3/17**. Confirmed bugs tracked
+in the root `DISCOVERED_BUGS.md`.
 
 ---
 

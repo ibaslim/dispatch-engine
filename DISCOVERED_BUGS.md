@@ -19,6 +19,26 @@ reproduced) · **FIXED**. Each bug links to its task in `apps/api/tests/testing_
 
 ---
 
+## To review
+
+Open items awaiting triage/fix, highest urgency first. Move a bug out of this list once it
+is scheduled or fixed; the full write-up stays in its flow-ordered section below.
+
+**P0 — fix before release:**
+- **BUG-006** · `GET /drivers/{driver_id}/location` has **no authentication** — anyone with a
+  driver UUID reads live GPS. CONFIRMED (strict xfail in `test_drivers_api.py`). See section 6.
+- **BUG-004** · `GET /orders` scoping fails open — leaks every order to individual/roleless
+  tenants. CONFIRMED LIVE. See section 5.
+- **BUG-005** · `update_status` guard can never fire — any tenant can change any order's
+  status. CONFIRMED. See section 5.
+- **BUG-003** · Onboarding document download path traversal (CWE-22). CONFIRMED. See section 2.
+
+**P1 — fix soon:**
+- **BUG-001** · Auth admits a tenantless (deleted-tenant) user as unscoped. CONFIRMED. §1.
+- **BUG-002** · `get_ws_user` ignores tenant suspension. CONFIRMED. §1.
+
+---
+
 ## 1. Auth & session
 
 ### BUG-001 · Tenant guard fails open + SET NULL orphans admit unscoped users — CONFIRMED
@@ -138,6 +158,29 @@ reproduced) · **FIXED**. Each bug links to its task in `apps/api/tests/testing_
 - **Fix:** change the outer AND to OR (a tenant is refused when it fails its own role's
   ownership check). Remove the two xfail markers once fixed.
 - **Task:** T2 in `apps/api/tests/testing_todo.md`.
+
+---
+
+## 6. Drivers & tracking
+
+### BUG-006 · `GET /drivers/{driver_id}/location` has no authentication — CONFIRMED
+- **Severity:** Critical (unauthenticated disclosure of live driver GPS; privacy + safety)
+- **Reproduced:** 2026-08-28 via
+  `test_drivers_api.py::TestGetDriverLocation::test_unauthenticated_request_is_rejected`
+  (strict xfail). An unauthenticated client read a driver's live coordinates.
+- **Location:** `apps/api/app/api/routers/drivers.py:187` (`get_driver_location`).
+- **What:** the endpoint's only parameters are `driver_id` and `redis: RedisClient` — there
+  is **no `CurrentUser`/auth dependency at all**, and no tenant scoping. Every other route in
+  this router is guarded (`PlatformAdmin` or `CurrentUser`); this one is not. Anyone who can
+  guess or obtain a driver's tenant UUID can poll their real-time location while they are
+  online.
+- **Repro:** with a driver online (any prior `POST /drivers/me/location`), call
+  `GET /api/v1/drivers/{driver_id}/location` with no `Authorization` header → currently 200
+  with lat/lng; should be 401.
+- **Fix:** add an auth dependency and scope the read to who may see this driver — platform
+  admin, the driver themselves, or a vendor with an active order assigned to that driver
+  (the tracking page should use the separate public tracking-token flow, not this route).
+- **Task:** new drivers coverage; see `apps/api/tests/testing_todo.md`.
 
 ---
 

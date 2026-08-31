@@ -63,6 +63,11 @@ class TestAvailableDrivers:
         inactive = await TenantFactory.create(
             db, name="Offline Driver", role=TenantRole.driver, is_active=False
         )
+        # TenantResponse serializes contact_email as EmailStr, which rejects the factory
+        # default `.test` TLD (which the factory hardcodes and won't let extra override).
+        active.contact_email = "active@example.com"
+        db.add(active)
+        await db.flush()
 
         response = await tenant_admin_client.get(f"{DRIVERS}/available")
 
@@ -133,14 +138,14 @@ class TestRegisterPushToken:
 class TestPushDriverLocation:
     """POST /drivers/me/location -- the driver's own live-location heartbeat."""
 
-    async def test_driver_records_a_location(self, driver_client, platform_admin_client, driver_tenant):
+    async def test_driver_records_a_location(self, driver_client, driver_tenant):
         response = await driver_client.post(
             f"{DRIVERS}/me/location", json={"lat": 43.65, "lng": -79.38}
         )
 
         assert response.status_code == 204
-        # Read it back through the public read endpoint.
-        read = await platform_admin_client.get(f"{DRIVERS}/{driver_tenant.id}/location")
+        # Read it back through the location read endpoint (same client; it takes no auth).
+        read = await driver_client.get(f"{DRIVERS}/{driver_tenant.id}/location")
         assert read.status_code == 200
         assert read.json()["lat"] == 43.65
         assert read.json()["lng"] == -79.38
@@ -160,13 +165,13 @@ class TestPushDriverLocation:
 
 
 class TestClearDriverLocation:
-    async def test_driver_clears_its_location(self, driver_client, platform_admin_client, driver_tenant):
+    async def test_driver_clears_its_location(self, driver_client, driver_tenant):
         await driver_client.post(f"{DRIVERS}/me/location", json={"lat": 43.65, "lng": -79.38})
 
         response = await driver_client.delete(f"{DRIVERS}/me/location")
 
         assert response.status_code == 204
-        read = await platform_admin_client.get(f"{DRIVERS}/{driver_tenant.id}/location")
+        read = await driver_client.get(f"{DRIVERS}/{driver_tenant.id}/location")
         assert read.status_code == 404
 
     async def test_requires_authentication(self, client):
@@ -188,12 +193,10 @@ class TestGetDriverLocation:
 
         assert response.status_code == 404
 
-    async def test_returns_the_location_when_online(
-        self, driver_client, platform_admin_client, driver_tenant
-    ):
+    async def test_returns_the_location_when_online(self, driver_client, driver_tenant):
         await driver_client.post(f"{DRIVERS}/me/location", json={"lat": 43.65, "lng": -79.38})
 
-        response = await platform_admin_client.get(f"{DRIVERS}/{driver_tenant.id}/location")
+        response = await driver_client.get(f"{DRIVERS}/{driver_tenant.id}/location")
 
         assert response.status_code == 200
         assert response.json()["driver_id"] == str(driver_tenant.id)
