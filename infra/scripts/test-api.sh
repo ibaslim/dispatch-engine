@@ -8,6 +8,12 @@ APP_DIR="$ROOT_DIR/apps/api"
 DB_HOST="${TEST_DB_HOST:-postgres}"
 export DATABASE_URL="${TEST_DATABASE_URL:-postgresql+asyncpg://dispatch:dispatch@${DB_HOST}:5432/dispatch_test}"
 
+# Measure coverage with PEP 669 sys.monitoring (Python 3.12+). The default settrace
+# tracer does not record lines that resume after an `await`, so async endpoints report
+# far below their true coverage; sysmon tracks resumed coroutine frames correctly (and
+# runs faster). No effect on non-coverage runs.
+export COVERAGE_CORE="${COVERAGE_CORE:-sysmon}"
+
 cd "$APP_DIR"
 
 # Create the test database on first run; a no-op afterwards.

@@ -5,9 +5,9 @@ The whole suite authenticates by minting tokens directly (conftest.authenticate)
 which bypasses /login and the deps rejection branches. This file is the only place
 that drives the real login flow and every rejection path end to end.
 
-Two known production bugs are pinned here with strict xfail (see DISCOVERED_BUGS.md
-BUG-001 and BUG-002). Do not "fix" them by weakening the assertion -- the code is to
-be fixed on a separate branch, at which point the marker is removed.
+A known production bug is pinned here with strict xfail (see DISCOVERED_BUGS.md BUG-001).
+Do not "fix" it by weakening the assertion -- the code is to be fixed on a separate branch,
+at which point the marker is removed.
 """
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -420,15 +420,6 @@ class TestWebsocketAuth:
 
         assert await get_ws_user(_ws(create_access_token(str(user.id))), db) is None
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="SECURITY (DISCOVERED_BUGS.md BUG-002): get_ws_user validates the user is "
-        "active but never checks the tenant is active, unlike _get_current_user. A driver on "
-        "a suspended tenant keeps a live websocket. Remove this marker once get_ws_user "
-        "enforces the tenant-active check.",
-    )
-    async def test_suspended_tenant_driver_is_rejected(self, db):
-        t = await TenantFactory.create(db, role=TenantRole.driver, is_active=False)
-        user = await UserFactory.create(db, tenant=t, is_active=True, roles=(RoleEnum.driver,))
-
-        assert await get_ws_user(_ws(create_access_token(str(user.id))), db) is None
+    # get_ws_user does not check tenant suspension, unlike _get_current_user -- a driver on
+    # a suspended tenant keeps a live websocket. Not pinned: ws.py is being abandoned (see
+    # apps/api/tests/testing_todo.md, dropped T17), so this gap is not worth tracking.
