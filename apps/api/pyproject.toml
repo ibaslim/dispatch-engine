@@ -1,9 +1,17 @@
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+addopts = "--strict-markers"
+markers = [
+    "unit: no I/O; pure functions and in-memory model methods",
+    "integration: requires the test Postgres",
+    "e2e: multi-step business flows across routers",
+    "slow: excluded from the default local loop",
+]
 
 [tool.coverage.run]
 source = ["app"]

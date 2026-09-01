@@ -7,8 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app.models.invitation import Invitation
-from tests.conftest import make_invitation
+from tests.factories import make_invitation
 
 
 class TestInvitationIsValid:

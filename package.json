@@ -11,6 +11,8 @@
     "start": "nx serve",
     "build": "nx build",
     "test": "nx test",
+    "test:api": "docker compose exec api sh /workspace/infra/scripts/test-api.sh",
+    "test:api:cov": "docker compose exec api sh /workspace/infra/scripts/test-api.sh --cov=app --cov-report=term-missing",
     "lint": "nx lint",
     "generate:contracts": "ts-node libs/shared/contracts/scripts/generate.ts"
   },
