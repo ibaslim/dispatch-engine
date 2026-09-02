@@ -124,9 +124,18 @@
         <div *ngIf="basePricingTab === 'general'" class="space-y-3">
           <div class="border-b border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-950 dark:bg-blue-950/20 dark:text-blue-300"><i class="ph ph-info mr-1"></i> Total price = base price + (distance beyond the included radius × extra charge per km).</div>
           <article *ngFor="let group of filteredBasePriceGroups; trackBy: trackByPricingGroup" class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-[#343734] dark:bg-[#232623]">
-            <button type="button" (click)="togglePricingZone(group.zone.id)" class="flex w-full items-center justify-between gap-4 p-5 text-left hover:bg-gray-50 dark:hover:bg-[#292c29]" [attr.aria-expanded]="isPricingZoneExpanded(group.zone.id)">
-              <div><h3 class="font-semibold">{{ group.zone.name }}</h3><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ group.rows.length }} delivery {{ group.rows.length === 1 ? 'category' : 'categories' }} · {{ group.radius_km | number:'1.0-2' }} km radius</p></div>
-              <i class="ph text-xl transition-transform" [ngClass]="isPricingZoneExpanded(group.zone.id) ? 'ph-caret-up' : 'ph-caret-down'"></i>
+            <button type="button" (click)="togglePricingZone(group.zone.id)" class="flex w-full items-start justify-between gap-4 p-5 text-left hover:bg-gray-50 dark:hover:bg-[#292c29]" [attr.aria-expanded]="isPricingZoneExpanded(group.zone.id)">
+              <div class="min-w-0">
+                <h3 class="font-semibold">{{ group.zone.name }}</h3>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ group.rows.length }} delivery {{ group.rows.length === 1 ? 'category' : 'categories' }} · {{ group.radius_km | number:'1.0-2' }} km radius</p>
+                <dl class="mt-2 flex flex-col flex-wrap gap-x-5 gap-y-1 sm:flex-row">
+                  <div *ngFor="let province of citiesByProvince(group.zone)" class="flex items-baseline gap-1.5">
+                    <dt class="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">{{ province.stateName }}</dt>
+                    <dd class="text-xs text-gray-600 dark:text-gray-300">{{ province.cities.join(', ') }}</dd>
+                  </div>
+                </dl>
+              </div>
+              <i class="ph text-xl transition-transform shrink-0" [ngClass]="isPricingZoneExpanded(group.zone.id) ? 'ph-caret-up' : 'ph-caret-down'"></i>
             </button>
             <div *ngIf="isPricingZoneExpanded(group.zone.id)" class="border-t border-gray-200 dark:border-[#343734]">
               <div class="flex flex-wrap items-end justify-between gap-4 bg-gray-50 px-5 py-4 dark:bg-[#1d201d]">
