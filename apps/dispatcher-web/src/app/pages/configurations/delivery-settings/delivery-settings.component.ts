@@ -260,6 +260,18 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
     return `${row.zone.id}:${row.category.id}`;
   }
 
+  citiesByProvince(zone: OperationalZone): { stateName: string; cities: string[] }[] {
+    const map = new Map<string, string[]>();
+    for (const city of zone.cities) {
+      const list = map.get(city.state_name) || [];
+      list.push(city.name);
+      map.set(city.state_name, list);
+    }
+    return [...map.entries()]
+      .map(([stateName, cities]) => ({ stateName, cities: cities.sort((a, b) => a.localeCompare(b)) }))
+      .sort((a, b) => a.stateName.localeCompare(b.stateName));
+  }
+
   async openZone(zone?: OperationalZone): Promise<void> {
     this.resetModal('zone', zone?.id);
     this.zoneForm = { name: zone?.name || '', stateId: zone?.cities[0]?.state_id || '' };
