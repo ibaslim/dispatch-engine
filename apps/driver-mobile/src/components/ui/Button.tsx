@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   type TouchableOpacityProps,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@theme';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost';
@@ -15,11 +16,10 @@ interface ButtonProps extends TouchableOpacityProps {
   variant?: ButtonVariant;
   size?: ButtonSize;
   loading?: boolean;
+  /** Optional leading glyph. Takes the label's colour for the variant. */
+  icon?: keyof typeof Ionicons.glyphMap;
 }
 
-// Class names MUST be written as complete literal strings — NativeWind extracts
-// classes by static scanning, so a computed name like `btn-${variant}` would
-// never get compiled. Keep these maps literal.
 const CONTAINER: Record<ButtonVariant, string> = {
   primary: 'btn btn-primary',
   secondary: 'btn btn-secondary',
@@ -34,17 +34,13 @@ const LABEL: Record<ButtonVariant, string> = {
   ghost: 'btn-text btn-text-ghost',
 };
 
-/**
- * Themed, tactile button. Colors/shape come from the `.btn*` classes
- * (global.css) so it tracks the active theme + mode; TouchableOpacity gives the
- * press dim. The label lives on an inner <Text> because RN doesn't inherit text
- * styles from the container.
- */
+
 export function Button({
   title,
   variant = 'primary',
   size = 'md',
   loading = false,
+  icon,
   disabled,
   className,
   ...rest
@@ -65,7 +61,9 @@ export function Button({
     .filter(Boolean)
     .join(' ');
 
-  const spinnerColor =
+  // The label's colour comes from a class, so the icon — which needs a real
+  // value — mirrors that mapping here. Keep the two in sync with `LABEL`.
+  const glyphColor =
     variant === 'primary'
       ? palette['primary-foreground']
       : variant === 'secondary'
@@ -84,9 +82,14 @@ export function Button({
       {...rest}
     >
       {loading ? (
-        <ActivityIndicator color={spinnerColor} />
+        <ActivityIndicator color={glyphColor} />
       ) : (
-        <Text className={label}>{title}</Text>
+        <>
+          {icon ? (
+            <Ionicons name={icon} size={size === 'sm' ? 16 : 18} color={glyphColor} />
+          ) : null}
+          <Text className={label}>{title}</Text>
+        </>
       )}
     </TouchableOpacity>
   );

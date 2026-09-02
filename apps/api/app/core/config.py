@@ -63,10 +63,28 @@ class Settings(BaseSettings):
     uploads_dir: str = "data/uploads"
 
     # Driver location tracking
-    driver_location_push_interval_seconds: int = 5
+    # Grace period after a driver's last ping; also gates push offer targeting.
+    driver_presence_window_seconds: int = 120
     driver_location_flush_interval_seconds: int = 60
+    # Enforced daily by purge_driver_location_logs; 0 or less disables the purge.
     driver_location_retention_days: int = 30
     driver_location_active_order_negative_cache_seconds: int = 300
+    # Caps the per-driver Redis buffer so a stalled flusher drops points, not memory.
+    driver_location_history_max_records: int = 10000
+
+    # Firebase Cloud Messaging. This credential can push to every driver device,
+    # so it is server-only and must never reach a frontend bundle.
+    #
+    # The downloaded service-account key, pasted inline as a single line. One
+    # form only, deliberately: the key's PEM newlines are already escaped as
+    # "\n" *inside* the JSON, so json.loads restores them and nothing has to be
+    # repaired by hand. Splitting it into separate fields is what produces the
+    # classic "Could not deserialize key data"; a file path would be one more
+    # artifact to deploy, mount and accidentally commit.
+    firebase_credentials_json: str = ""
+    # Kill switch: silences all push without a deploy or credential change.
+    fcm_enabled_flag: bool = True
+
     @property
     def pusher_enabled(self) -> bool:
         return all(
@@ -77,6 +95,11 @@ class Settings(BaseSettings):
                 self.pusher_cluster.strip(),
             )
         )
+
+    @property
+    def fcm_enabled(self) -> bool:
+        """False on machines with no credential, so push degrades to silence."""
+        return self.fcm_enabled_flag and bool(self.firebase_credentials_json.strip())
 
 
 settings = Settings()

@@ -1,27 +1,39 @@
-import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
-import { PanResponder, View } from 'react-native';
+import React, { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import {
+  PanResponder,
+  StyleSheet,
+  View,
+  type GestureResponderEvent,
+  type NativeTouchEvent,
+  type ViewStyle,
+} from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { captureRef } from 'react-native-view-shot';
 
 export interface SignaturePadHandle {
-  /** Snapshot the pad to a PNG file and resolve with its `file://` uri. */
   capture: () => Promise<string>;
   clear: () => void;
 }
 
 interface Props {
-  height?: number;
   /** Reports whether the pad currently holds at least one stroke. */
   onChange?: (hasInk: boolean) => void;
+  /** Rendered behind the ink — the signature line, hints, etc. */
+  children?: React.ReactNode;
+  className?: string;
+  style?: ViewStyle;
 }
 
-/**
- * Finger-drawn signature capture. Always white with black ink regardless of
- * theme — the PNG is emailed to the sender and shown to dispatchers, so it must
- * look like paper, not like the app (mirrors dispatcher-web's white canvas).
- */
+const INK = '#111111';
+const STROKE_WIDTH = 3;
+
+function clamp(value: number, max: number): number {
+  if (value < 0) return 0;
+  return value > max ? max : value;
+}
+
 export const SignaturePad = forwardRef<SignaturePadHandle, Props>(function SignaturePad(
-  { height = 180, onChange },
+  { onChange, children, className, style },
   ref,
 ) {
   const padRef = useRef<View>(null);
@@ -31,29 +43,65 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(function Signa
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
+  /** Pad origin in page space, derived once per stroke — see `onPanResponderGrant`. */
+  const origin = useRef({ x: 0, y: 0 });
+  const size = useRef({ width: 0, height: 0 });
+  /** Only the finger that started the stroke draws; later fingers are ignored. */
+  const touchId = useRef<NativeTouchEvent['identifier'] | null>(null);
+
+  const pointAt = (pageX: number, pageY: number) => {
+    const x = clamp(pageX - origin.current.x, size.current.width);
+    const y = clamp(pageY - origin.current.y, size.current.height);
+    return `${x.toFixed(1)} ${y.toFixed(1)}`;
+  };
+
+  /** The tracked finger's touch in this event, or null if it isn't in it. */
+  const trackedTouch = (event: GestureResponderEvent): NativeTouchEvent | null => {
+    const id = touchId.current;
+    if (id === null) return null;
+    const { changedTouches } = event.nativeEvent;
+    if (changedTouches?.length) {
+      return changedTouches.find((touch) => touch.identifier === id) ?? null;
+    }
+    return event.nativeEvent.identifier === id ? event.nativeEvent : null;
+  };
+
   const endStroke = () => {
     const stroke = currentRef.current;
     currentRef.current = '';
+    touchId.current = null;
     setCurrent('');
-    // A bare "M" is a tap, not a stroke — ignore it like the web canvas does.
-    if (stroke.includes('L')) {
-      setPaths((existing) => [...existing, stroke]);
-      onChangeRef.current?.(true);
-    }
+    if (!stroke) return;
+    // A tap is a legitimate mark (the dot on an "i"): give it a zero-length
+    // segment so the round line cap renders it as a dot.
+    const d = stroke.includes('L') ? stroke : `${stroke} L ${stroke.slice(2)}`;
+    setPaths((existing) => [...existing, d]);
+    onChangeRef.current?.(true);
   };
 
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
+      // A parent scroll container must not be able to snatch a stroke halfway.
+      onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: (event) => {
-        const { locationX, locationY } = event.nativeEvent;
-        currentRef.current = `M ${locationX.toFixed(1)} ${locationY.toFixed(1)}`;
+        const touch = event.nativeEvent;
+        touchId.current = touch.identifier;
+        // `locationX/Y` is trustworthy on this one event only, because the
+        // finger is provably inside the pad — so use it once to place the pad
+        // in page space, then work in page space from here on.
+        origin.current = {
+          x: touch.pageX - touch.locationX,
+          y: touch.pageY - touch.locationY,
+        };
+        currentRef.current = `M ${pointAt(touch.pageX, touch.pageY)}`;
         setCurrent(currentRef.current);
       },
       onPanResponderMove: (event) => {
-        const { locationX, locationY } = event.nativeEvent;
-        currentRef.current += ` L ${locationX.toFixed(1)} ${locationY.toFixed(1)}`;
+        const touch = trackedTouch(event);
+        if (!touch) return;
+        currentRef.current += ` L ${pointAt(touch.pageX, touch.pageY)}`;
         setCurrent(currentRef.current);
       },
       onPanResponderRelease: endStroke,
@@ -65,33 +113,58 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(function Signa
     capture: () => captureRef(padRef, { format: 'png', quality: 1, result: 'tmpfile' }),
     clear: () => {
       currentRef.current = '';
+      touchId.current = null;
       setCurrent('');
       setPaths([]);
       onChangeRef.current?.(false);
     },
   }));
 
+  // Committed strokes only re-render when one is added, not on every move —
+  // a long signature otherwise re-mounts every Path 60 times a second.
+  const committed = useMemo(
+    () =>
+      paths.map((d, index) => (
+        <Path
+          key={index}
+          d={d}
+          stroke={INK}
+          strokeWidth={STROKE_WIDTH}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+      )),
+    [paths],
+  );
+
   return (
     <View
       ref={padRef}
       collapsable={false}
       {...pan.panHandlers}
-      className="w-full overflow-hidden rounded-xl border border-border"
-      style={{ height, backgroundColor: '#ffffff' }}
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        size.current = { width, height };
+      }}
+      className={className}
+      style={[{ backgroundColor: '#ffffff', overflow: 'hidden' }, style]}
       accessibilityLabel="Signature pad"
     >
+      {/* Guides sit under the ink and take no layout space of their own. */}
+      {children ? <View style={StyleSheet.absoluteFill}>{children}</View> : null}
       <Svg width="100%" height="100%">
-        {[...paths, current].filter(Boolean).map((d, index) => (
+        {committed}
+        {current ? (
           <Path
-            key={index}
-            d={d}
-            stroke="#111111"
-            strokeWidth={2.5}
+            d={current}
+            stroke={INK}
+            strokeWidth={STROKE_WIDTH}
             strokeLinecap="round"
             strokeLinejoin="round"
             fill="none"
           />
-        ))}
+        ) : null}
       </Svg>
     </View>
   );

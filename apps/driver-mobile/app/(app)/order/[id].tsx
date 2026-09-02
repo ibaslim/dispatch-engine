@@ -8,5 +8,12 @@ export default function OrderDetailRoute() {
   const router = useRouter();
   const { getOrder } = useOrders();
 
-  return <OrderDetailScreen order={getOrder(id)} onBack={() => router.back()} />;
+  return (
+    <OrderDetailScreen
+      order={getOrder(id)}
+      onBack={() => router.back()}
+      onCapturePhoto={() => router.push({ pathname: '/pod/[id]/photo', params: { id } })}
+      onCaptureSignature={() => router.push({ pathname: '/pod/[id]/signature', params: { id } })}
+    />
+  );
 }

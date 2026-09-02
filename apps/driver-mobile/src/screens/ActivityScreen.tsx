@@ -39,6 +39,28 @@ function getTodayStr(): string {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
+/** One figure from the selected timeframe. Three of these sit above the list. */
+function StatTile({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <View className="flex-1 items-center rounded-2xl border border-border bg-card p-4">
+      <Text className="text-xs font-bold uppercase tracking-wider text-muted">{label}</Text>
+      <Text
+        className={`mt-1.5 text-lg font-black ${accent ? 'text-primary' : 'text-foreground'}`}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 export function ActivityScreen({ onOrderPress }: Props) {
   const { palette } = useTheme();
   const { orders, isLoading, isRefreshing, error, refresh } = useOrders();
@@ -101,10 +123,10 @@ export function ActivityScreen({ onOrderPress }: Props) {
     <SafeAreaView edges={['top']} className="flex-1 bg-background">
       {/* Header */}
       <View className="border-b border-border bg-background px-5 py-4">
-        <Text className="text-2xl font-bold text-foreground">Activity</Text>
+        {/*<Text className="text-2xl font-bold text-foreground">Activity</Text>*/}
 
         {/* Timeframe Pills */}
-        <View className="mt-4 flex-row gap-2">
+        <View className=" flex-row gap-2">
           {(['all', 'today', 'week', 'month'] as const).map((t) => {
             const label = {
               all: 'All Time',
@@ -136,41 +158,14 @@ export function ActivityScreen({ onOrderPress }: Props) {
         </View>
       </View>
 
-      {/* Stats Cards */}
-      <View className="flex-row gap-3 px-5 pt-4">
-        <View className="flex-1 rounded-2xl bg-card border border-border p-4 items-center">
-          <Text className="text-xs font-bold uppercase tracking-wider text-muted">
-            Earnings
-          </Text>
-          <Text className="mt-1.5 text-lg font-black text-primary">
-            {formatUsd(stats.earnings)}
-          </Text>
-        </View>
-
-        <View className="flex-1 rounded-2xl bg-card border border-border p-4 items-center">
-          <Text className="text-xs font-bold uppercase tracking-wider text-muted">
-            Completed
-          </Text>
-          <Text className="mt-1.5 text-lg font-black text-foreground">
-            {stats.count}
-          </Text>
-        </View>
-
-        <View className="flex-1 rounded-2xl bg-card border border-border p-4 items-center">
-          <Text className="text-xs font-bold uppercase tracking-wider text-muted">
-            Avg. Payout
-          </Text>
-          <Text className="mt-1.5 text-lg font-black text-foreground">
-            {formatUsd(stats.average)}
-          </Text>
-        </View>
-      </View>
-
-      {/* Orders List */}
+      {/* Orders list — the stats ride in its header so they scroll away with
+          the orders they describe; only the timeframe pills stay pinned. */}
       <FlatList
         data={filteredOrders}
         keyExtractor={(item) => item.id}
-        contentContainerClassName="gap-4 p-5 pb-8"
+        // `grow` lets the empty state fill what's left under the stats and
+        // centre itself; with rows present it costs nothing.
+        contentContainerClassName="grow gap-4 p-5 pb-8"
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -181,15 +176,22 @@ export function ActivityScreen({ onOrderPress }: Props) {
           />
         }
         ListHeaderComponent={
-          <View className="gap-1">
-            <Text className="text-[11px] font-bold uppercase tracking-[1px] text-muted">
-              Delivered Orders
-            </Text>
-            {error && <Text className="text-[13px] text-muted">{error}</Text>}
+          <View className="gap-4">
+            <View className="flex-row gap-3">
+              <StatTile label="Earnings" value={formatUsd(stats.earnings)} accent />
+              <StatTile label="Completed" value={String(stats.count)} />
+              <StatTile label="Avg. Payout" value={formatUsd(stats.average)} />
+            </View>
+            <View className="gap-1">
+              <Text className="text-[11px] font-bold uppercase tracking-[1px] text-muted">
+                Delivered Orders
+              </Text>
+              {error && <Text className="text-[13px] text-muted">{error}</Text>}
+            </View>
           </View>
         }
         ListEmptyComponent={
-          <View className="items-center gap-2 py-20 px-5">
+          <View className="flex-1 items-center justify-center gap-2 px-5">
             <View className="rounded-full bg-input p-4">
               <Ionicons name="receipt-outline" size={32} color={palette.muted} />
             </View>

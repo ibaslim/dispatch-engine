@@ -9,7 +9,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.security import decode_access_token
 from app.db.session import get_db as _get_db
@@ -22,6 +22,20 @@ get_db = _get_db
 
 
 DBSession = Annotated[AsyncSession, Depends(get_db)]
+
+
+def _token_is_revoked(payload: dict, user: User) -> bool:
+    """True when this access token predates the user's last session revocation.
+
+    Strict `<`: login stamps the column then issues the token, and `iat` is whole
+    seconds — `<=` would make a fresh login revoke itself.
+    """
+    if user.tokens_valid_from is None:
+        return False
+    issued_at = payload.get("iat")
+    if issued_at is None:
+        return True
+    return int(issued_at) < int(user.tokens_valid_from.timestamp())
 
 
 async def _get_current_user(
@@ -47,24 +61,23 @@ async def _get_current_user(
     except (JWTError, ValueError):
         raise exc
 
+    # joinedload rather than a follow-up SELECT: this runs on every authenticated
+    # request, and the tenant is a many-to-one, so it costs a LEFT JOIN instead of
+    # a second round trip. Also makes `current_user.tenant` safe to read — lazy
+    # loading raises MissingGreenlet under async.
     result = await db.execute(
         select(User)
-        .options(selectinload(User.roles))
+        .options(joinedload(User.tenant), selectinload(User.roles))
         .where(User.id == user_uuid)
     )
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise exc
-    # If user belongs to a tenant, ensure tenant is active
-    if user.tenant_id:
-        from app.models.tenant import Tenant
-
-        tenant_result = await db.execute(
-            select(Tenant).where(Tenant.id == user.tenant_id)
-        )
-        tenant = tenant_result.scalar_one_or_none()
-        if tenant is not None and not tenant.is_active:
-            raise exc
+    if _token_is_revoked(payload, user):
+        raise exc
+    # A tenant_id pointing at a missing tenant row stays allowed, as before.
+    if user.tenant is not None and not user.tenant.is_active:
+        raise exc
     return user
 
 
@@ -96,22 +109,17 @@ async def _get_current_user_allow_inactive(
 
     result = await db.execute(
         select(User)
-        .options(selectinload(User.roles))
+        .options(joinedload(User.tenant), selectinload(User.roles))
         .where(User.id == user_uuid)
     )
     user = result.scalar_one_or_none()
     if user is None:
         raise exc
+    if _token_is_revoked(payload, user):
+        raise exc
     # Keep tenant suspension enforced even for inactive users
-    if user.tenant_id:
-        from app.models.tenant import Tenant
-
-        tenant_result = await db.execute(
-            select(Tenant).where(Tenant.id == user.tenant_id)
-        )
-        tenant = tenant_result.scalar_one_or_none()
-        if tenant is not None and not tenant.is_active:
-            raise exc
+    if user.tenant is not None and not user.tenant.is_active:
+        raise exc
     return user
 
 
@@ -141,13 +149,18 @@ async def _get_current_user_allow_inactive_and_suspended(
     except (JWTError, ValueError):
         raise exc
 
+    # Tenant is eager-loaded here too, even though this variant runs no tenant
+    # check: keeping `current_user.tenant` loaded across all three avoids a
+    # MissingGreenlet that would surface on only some endpoints.
     result = await db.execute(
         select(User)
-        .options(selectinload(User.roles))
+        .options(joinedload(User.tenant), selectinload(User.roles))
         .where(User.id == user_uuid)
     )
     user = result.scalar_one_or_none()
     if user is None:
+        raise exc
+    if _token_is_revoked(payload, user):
         raise exc
     return user
 
@@ -228,10 +241,12 @@ async def get_ws_user(websocket: WebSocket, db: AsyncSession) -> Optional[User]:
         user_uuid = UUID(user_id)
         result = await db.execute(
             select(User)
-            .options(selectinload(User.roles))
+            .options(joinedload(User.tenant), selectinload(User.roles))
             .where(User.id == user_uuid)
         )
         user = result.scalar_one_or_none()
-        return user if (user and user.is_active) else None
+        if user is None or not user.is_active or _token_is_revoked(payload, user):
+            return None
+        return user
     except (JWTError, ValueError):
         return None

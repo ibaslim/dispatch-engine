@@ -17,3 +17,4 @@ httpx==0.28.1
 websockets==16.0
 reportlab==4.2.5
 pusher==3.3.4
+firebase-admin==6.6.0

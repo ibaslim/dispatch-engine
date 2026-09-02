@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class LoginRequest(BaseModel):
@@ -11,6 +11,9 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
 
+class PushTokenIn(BaseModel):
+    token: str = Field(min_length=1, max_length=500)
+    platform: str = Field(default="android", pattern="^(android|ios)$")
 
 class PendingApprovalResponse(BaseModel):
     """Response when user exists but has pending onboarding or approval."""

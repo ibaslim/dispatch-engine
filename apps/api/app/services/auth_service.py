@@ -1,9 +1,11 @@
 import hashlib
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from typing import Union
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update as sa_update
+from sqlalchemy.orm import joinedload
 
 from app.core.security import (
     verify_password,
@@ -12,10 +14,10 @@ from app.core.security import (
 )
 from app.core.config import settings
 from app.models.user import User
-from app.models.token import RefreshToken
+from app.models.token import PushToken, RefreshToken
 from app.models.onboarding_application import OnboardingApplication, ApplicationStatus
 from app.schemas.auth import TokenResponse, PendingApprovalResponse, SuspendedAccountResponse
-from app.models.tenant import Tenant
+from app.models.tenant import Tenant, TenantRole
 
 
 def _hash_token(raw: str) -> str:
@@ -97,7 +99,13 @@ async def authenticate_user(
 
     return user
 
-async def create_token_pair(db: AsyncSession, user: User) -> TokenResponse:
+async def create_token_pair(
+    db: AsyncSession, user: User, new_session: bool = True
+) -> TokenResponse:
+    # if driver, then on new login, previous sessions must be revoked
+    if new_session:
+        await revoke_sessions_if_driver(db, user.id)
+
     # Get onboarding status
     app_result = await db.execute(
         select(OnboardingApplication)
@@ -181,16 +189,61 @@ async def refresh_access_token(db: AsyncSession, raw_refresh: str) -> TokenRespo
     record.is_revoked = True
     db.add(record)
 
-    return await create_token_pair(db, user)
+    # Continuing an existing session, so it must not revoke itself.
+    return await create_token_pair(db, user, new_session=False)
 
 
-async def revoke_refresh_token(db: AsyncSession, raw_refresh: str) -> None:
+async def revoke_refresh_token(db: AsyncSession, raw_refresh: str) -> uuid.UUID | None:
+    """Revoke one refresh token. Returns its owner, or None if unknown."""
     token_hash = _hash_token(raw_refresh)
     result = await db.execute(
         select(RefreshToken).where(RefreshToken.token_hash == token_hash)
     )
     record = result.scalar_one_or_none()
-    if record:
-        record.is_revoked = True
-        db.add(record)
-        await db.commit()
+    if not record:
+        return None
+    record.is_revoked = True
+    db.add(record)
+    await db.commit()
+    return record.user_id
+
+
+async def revoke_sessions_if_driver(db: AsyncSession, user_id: uuid.UUID) -> bool:
+    """Drivers hold one session at a time across web, Android and iOS.
+
+    Called at login (before the new token is issued) and at logout. Other tenant
+    roles may legitimately hold several sessions, so they are left alone.
+    """
+    user = await db.scalar(
+        select(User).options(joinedload(User.tenant)).where(User.id == user_id)
+    )
+    if user is None or user.tenant is None or user.tenant.role != TenantRole.driver:
+        return False
+
+    await revoke_user_sessions(db, user_id)
+    return True
+
+
+async def revoke_user_sessions(db: AsyncSession, user_id: uuid.UUID) -> None:
+    """Sign a user out everywhere: access, refresh and push tokens.
+
+    Stamping tokens_valid_from is what makes outstanding access tokens stop
+    working immediately instead of lasting out their 15 minutes.
+    """
+    now = datetime.now(timezone.utc)
+
+    await db.execute(
+        sa_update(User).where(User.id == user_id).values(tokens_valid_from=now)
+    )
+    await db.execute(
+        sa_update(RefreshToken)
+        .where(RefreshToken.user_id == user_id, RefreshToken.is_revoked.is_(False))
+        .values(is_revoked=True)
+    )
+    # A device with no session must stop receiving offers.
+    await db.execute(
+        sa_update(PushToken)
+        .where(PushToken.user_id == user_id, PushToken.is_active.is_(True))
+        .values(is_active=False)
+    )
+    await db.commit()

@@ -6,7 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from '@theme';
 import { AuthProvider } from '@contexts';
 import { ToastProvider } from '@components/ui';
-import { setupNotificationRouting } from '@services/notifications';
+import { setupForegroundRouting, subscribeTokenRefresh } from '@services/notifications';
 import '../src/tasks/locationTask';
 
 /** StatusBar bar-style follows the resolved light/dark scheme. */
@@ -21,7 +21,10 @@ function ThemedStatusBar() {
  */
 export default function RootLayout() {
   // Deep-link notification taps to the relevant route (no-ops without Firebase).
-  useEffect(() => setupNotificationRouting(), []);
+  useEffect(() => setupForegroundRouting(), []);
+
+  // FCM rotates tokens on restore/reinstall; keep the server in step.
+  useEffect(() => subscribeTokenRefresh(), []);
 
   return (
     <SafeAreaProvider>

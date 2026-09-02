@@ -26,7 +26,8 @@ HISTORY_KEY_PREFIX = "driver:location_history"
 
 
 def get_location_ttl_seconds() -> int:
-    return settings.driver_location_push_interval_seconds * 3
+    """Live location TTL; also the presence window, since offers scan this key."""
+    return settings.driver_presence_window_seconds
 
 
 # ---------------------------------------------------------------------------
@@ -108,5 +109,12 @@ class DriverLocationService:
                 "recorded_at": datetime.now(timezone.utc).isoformat(),
             }
         )
-        history_len = await self._redis.rpush(_history_key(driver_id), record)
-        return history_len
+        key = _history_key(driver_id)
+        max_records = settings.driver_location_history_max_records
+        pipe = self._redis.pipeline()
+        pipe.rpush(key, record)
+        # Keep only the newest entries: a stalled flusher must not grow unbounded.
+        pipe.ltrim(key, -max_records, -1)
+        pipe.llen(key)
+        res = await pipe.execute()
+        return res[-1]

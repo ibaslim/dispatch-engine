@@ -11,7 +11,7 @@ from app.schemas.auth import (
 )
 from app.services.auth_service import (
     authenticate_user, create_token_pair,
-    refresh_access_token, revoke_refresh_token,
+    refresh_access_token, revoke_refresh_token, revoke_sessions_if_driver,
 )
 from app.models.tenant import Tenant
 
@@ -30,6 +30,7 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
+    # Driver single-session is enforced inside create_token_pair.
     return await create_token_pair(db, result)
 
 
@@ -46,7 +47,13 @@ async def refresh(req: RefreshRequest, db: AsyncSession = Depends(get_db)):
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(req: RefreshRequest, db: AsyncSession = Depends(get_db)):
-    await revoke_refresh_token(db, req.refresh_token)
+    user_id = await revoke_refresh_token(db, req.refresh_token)
+    if user_id is None:
+        return
+
+    # Drivers are single-session, so logout also kills the access token still in
+    # hand. Other roles only lose the session they presented.
+    await revoke_sessions_if_driver(db, user_id)
 
 
 @router.get("/me", response_model=MeResponse)

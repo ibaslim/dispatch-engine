@@ -1,15 +1,17 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { Redirect, Stack } from 'expo-router';
-import { OnlineStatusProvider, OrdersProvider, useAuth } from '@contexts';
+import { Redirect, Stack, router } from 'expo-router';
+import { consumePendingRoute, subscribePendingRoute } from '@services/notifications';
+import {
+  OnlineStatusProvider,
+  OrdersProvider,
+  PublishedOrdersProvider,
+  RealtimeProvider,
+  useAuth,
+} from '@contexts';
 import { useTheme } from '@theme';
 import { useDriverLocation } from '@hooks';
 
-/**
- * Authenticated area. Guards every child route: shows a spinner while the
- * session loads, redirects to /login when signed out, otherwise renders the
- * stack (tabs + pushed detail screens).
- */
 export default function AppLayout() {
   const { session, isLoading } = useAuth();
   const { palette } = useTheme();
@@ -26,19 +28,25 @@ export default function AppLayout() {
     return <Redirect href="/login" />;
   }
 
-  // Orders load once here rather than per screen — the list, the detail screen
-  // and the tab-bar badge all read the same cache.
   return (
     <OrdersProvider>
       <OnlineStatusProvider>
-        {/* Mount the location heartbeat once for the whole authenticated session */}
-        <LocationHeartbeat />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="job/[id]" />
-          <Stack.Screen name="order/[id]" />
-          <Stack.Screen name="appearance" />
-        </Stack>
+        <RealtimeProvider>
+          <PublishedOrdersProvider>
+            {/* Mount the location heartbeat once for the whole authenticated session */}
+            <LocationHeartbeat />
+            <PendingRouteReplay />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="order/[id]" />
+              <Stack.Screen name="offer/[id]" />
+              <Stack.Screen name="receipt/[id]" />
+              <Stack.Screen name="pod/[id]/photo" />
+              <Stack.Screen name="pod/[id]/signature" />
+              <Stack.Screen name="appearance" />
+            </Stack>
+          </PublishedOrdersProvider>
+        </RealtimeProvider>
       </OnlineStatusProvider>
     </OrdersProvider>
   );
@@ -51,5 +59,21 @@ export default function AppLayout() {
  */
 function LocationHeartbeat(): null {
   useDriverLocation();
+  return null;
+}
+
+/**
+ * Navigates to a cold-start notification route once the authenticated stack is
+ * mounted. Pushing any earlier is discarded by the auth guard's redirect.
+ */
+function PendingRouteReplay(): null {
+  useEffect(() => {
+    const drain = () => {
+      const route = consumePendingRoute();
+      if (route) router.push(route as never);
+    };
+    drain();
+    return subscribePendingRoute(drain);
+  }, []);
   return null;
 }

@@ -12,6 +12,11 @@ export interface ProgressStep {
   status: ActivityStatus;
   /** Timeline row label. */
   label: string;
+  /**
+   * Two-word form for filter pills, where the full label would force the row
+   * to scroll much further than a thumb wants to travel.
+   */
+  shortLabel: string;
   /** Shown under the label while this step is the current one. */
   hint: string;
   /** Label for the button that advances *into* this step. */
@@ -22,30 +27,35 @@ export const PROGRESS_STEPS: readonly ProgressStep[] = [
   {
     status: 'pickup_initiated',
     label: 'Heading to Pickup',
+    shortLabel: 'To Pickup',
     hint: 'Navigate to the pickup address.',
     action: 'Start Pickup',
   },
   {
     status: 'picked_up',
     label: 'Picked Up',
+    shortLabel: 'Picked Up',
     hint: 'Parcel collected from the sender.',
     action: "I've Collected the Parcel",
   },
   {
     status: 'delivery_initiated',
     label: 'Heading to Drop',
+    shortLabel: 'To Drop',
     hint: 'Navigate to the delivery address.',
     action: 'Start Delivery',
   },
   {
     status: 'delivery_in_progress',
     label: 'Arrived — Proof of Delivery',
+    shortLabel: 'At Drop',
     hint: 'Capture proof at the door.',
     action: "I've Arrived at Drop",
   },
   {
     status: 'delivered',
     label: 'Delivered',
+    shortLabel: 'Delivered',
     hint: 'Job complete.',
     action: 'Complete Delivery',
   },
@@ -69,10 +79,15 @@ export function activityLabel(status: ActivityStatus): string {
   return PROGRESS_STEPS[progressIndex(status)]?.label ?? status.replace(/_/g, ' ');
 }
 
+/** Whether the parcel is still to be collected — i.e. the driver's next stop is pickup. */
+export function isPickupLeg(status: ActivityStatus): boolean {
+  return progressIndex(status) < progressIndex('picked_up');
+}
+
 /**
  * Which leg of the job an issue belongs to. Anything up to (and including)
  * collection is a pickup problem; everything after is a delivery problem.
  */
 export function incidentStageFor(status: ActivityStatus): IncidentStage {
-  return progressIndex(status) < progressIndex('picked_up') ? 'pickup' : 'delivery';
+  return isPickupLeg(status) ? 'pickup' : 'delivery';
 }

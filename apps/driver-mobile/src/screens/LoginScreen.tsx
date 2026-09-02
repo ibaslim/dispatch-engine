@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { registerFcmToken } from '@services/notifications';
 import { useTheme } from '@theme';
 import { Button, useToast } from '@components/ui';
 
@@ -21,6 +20,7 @@ interface Props {
   /** Called after a successful sign-in (navigate into the app). */
   onLoginSuccess: () => void;
   onOpenSettings: () => void;
+  onOpenIpConfig?: () => void;
 }
 
 /** Platform serif for the display wordmark — no bundled font needed. */
@@ -28,7 +28,7 @@ const SERIF = Platform.select({ ios: 'Georgia', default: 'serif' });
 
 type Field = 'email' | 'password';
 
-export function LoginScreen({ onSubmit, onLoginSuccess, onOpenSettings }: Props) {
+export function LoginScreen({ onSubmit, onLoginSuccess, onOpenSettings, onOpenIpConfig }: Props) {
   const { palette } = useTheme();
   const toast = useToast();
   const [email, setEmail] = useState('');
@@ -48,8 +48,9 @@ export function LoginScreen({ onSubmit, onLoginSuccess, onOpenSettings }: Props)
     setIsLoading(true);
     try {
       await onSubmit(email.trim(), password);
-      // Register the push token after a successful login (fire-and-forget).
-      registerFcmToken().catch(console.error);
+      // Push registration deliberately happens at first go-online, not here:
+      // Android 13+ allows one POST_NOTIFICATIONS prompt, and a login screen
+      // gives the driver no context for why offers need notifications.
       onLoginSuccess();
     } catch (err: unknown) {
       toast.show(
@@ -67,8 +68,21 @@ export function LoginScreen({ onSubmit, onLoginSuccess, onOpenSettings }: Props)
       className="flex-1 bg-background"
     >
       <SafeAreaView className="flex-1">
-        {/* Appearance affordance — theme switching lives in Settings. */}
-        <View className="flex-row justify-end px-5 pt-2">
+        {/* Top bar affordances — Server IP config and Appearance settings */}
+        <View className="flex-row items-center justify-between px-5 pt-2">
+          {onOpenIpConfig ? (
+            <TouchableOpacity
+              onPress={onOpenIpConfig}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Server IP Configuration"
+              className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5"
+            >
+              <Ionicons name="hardware-chip-outline" size={15} color={palette.primary} />
+              <Text className="text-sm font-semibold text-primary">Server IP</Text>
+            </TouchableOpacity>
+          ) : <View />}
+
           <TouchableOpacity
             onPress={onOpenSettings}
             hitSlop={12}

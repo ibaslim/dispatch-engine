@@ -32,16 +32,23 @@ app/                          # Expo Router routes (see "Navigation")
   (app)/                      # Authenticated area (auth guard)
     _layout.tsx               #   redirect to /login when signed out
     (tabs)/                   #   bottom-tab group (BottomNav custom tabBar)
-      _layout.tsx, index.tsx, route.tsx, pay.tsx, activity.tsx, profile.tsx
-    job/[id].tsx              #   job detail, pushed over the tabs
+      _layout.tsx, index.tsx, orders.tsx, available.tsx, activity.tsx, profile.tsx
+    order/[id].tsx            #   order detail, pushed over the tabs
+    offer/[id].tsx            #   broadcast offer detail
+    receipt/[id].tsx          #   finished delivery, read-only (from Activity)
+    pod/[id]/photo.tsx        #   proof capture: delivery photo (full-bleed viewfinder)
+    pod/[id]/signature.tsx    #   proof capture: recipient signature (full-bleed paper)
 src/
   components/ui/              # Reusable presentational components (primitives)
   screens/
     LoginScreen.tsx           # Email/password login; registers push token on success
-    JobsScreen.tsx            # Authenticated job list; subscribes to foreground push
+    OrdersScreen.tsx          # The driver's assigned orders (list)
+    OrderDetailScreen.tsx     # One live order in full; hosts the POD checklist sheet
+    DeliveryReceiptScreen.tsx # One finished order, read-only — earnings, parties, items
   services/
     api/          client.ts   # Wraps @dispatch/shared DispatchApiClient (+ index barrel)
     storage/      *.ts         # SecureStore-backed token storage (+ index barrel)
+    realtime/     pusher.ts    # Pusher Channels socket (+ index barrel)
     notifications/fcm.ts       # Firebase Cloud Messaging integration (+ index barrel)
   hooks/                       # Custom React hooks
   contexts/                    # React contexts (e.g. AuthContext)
@@ -55,6 +62,66 @@ Each `services/*` subfolder has an `index.ts` barrel, so import from the folder 
 
 Auth is token-based: access/refresh tokens live in `expo-secure-store` under `dispatch.access_token` / `dispatch.refresh_token`. `AuthProvider` (`@contexts`) exposes `{ session, isLoading, signIn, signOut }`; the `app/(app)/_layout.tsx` guard redirects to `/login` when there's no session.
 
+## Realtime (Pusher Channels)
+
+New-order broadcasts reach the Available tab over Pusher, mirroring the
+dispatcher's `core/realtime/pusher.service.ts`. The wire contract (channel
+names, event names, envelope) is shared with the API's `pusher_service.py` —
+change all three together.
+
+- **No app-side credentials.** `pusher_key` + `pusher_cluster` come from
+  `GET /api/v1/public/config` at connect time; the secret never leaves the API,
+  which signs each private-channel subscription at `POST /api/v1/pusher/auth`
+  against the caller's JWT.
+- **Two channels, separate lifetimes.** `private-tenant-<id>` stays up for the
+  whole session (updates to jobs the driver already holds).
+  `private-drivers` — the new-order broadcast — is attached only while the
+  driver is **online**, so going off shift stops offers without going deaf to
+  current work. Provider order in `app/(app)/_layout.tsx` encodes this:
+  `Orders > OnlineStatus > Realtime > PublishedOrders`.
+- **Events are signals, never data.** `publish_order` deliberately sends no
+  address or payout over Pusher, so handlers refetch `GET /orders/published`.
+  That makes gaps self-healing: coming online, reconnecting, or resuming from
+  background all run the same refetch, and the endpoint returns current state
+  (published, unclaimed, inside the 15-minute window).
+- The socket is dropped on `AppState` background and reopened on resume — a
+  frozen websocket keeps reporting "connected" while dropping frames.
+- Foreground only, by design. Backgrounded/killed delivery goes over FCM — see
+  "Push notifications" below.
+
+## Push notifications (FCM + notifee)
+
+Reaches drivers Pusher can't: app backgrounded or killed. Wire contract is
+shared (`@dispatch/shared/contracts` → `push-contract.ts`) and mirrored server-
+side in `app/services/push_contract.py` — change both together.
+
+- **Payload differs per platform, deliberately.** Android gets **data-only**: a
+  `notification` block would make the OS draw the tray item itself, with no
+  action buttons, and our handler would never run. iOS gets a real alert plus
+  `category`, because silent pushes aren't delivered after force-quit. So
+  Android draws via notifee; iOS is drawn by the OS.
+- **`index.js` registration is not movable.** `registerBackgroundHandlers()`
+  must run at module scope, before any React tree exists — same constraint as
+  `locationTask`. Moving it into a component silently breaks killed-app delivery.
+- **Ids only, never order data.** Push renders on a locked screen in public, so
+  the payload carries ids and generic copy; the app refetches over REST. Same
+  rule as Pusher, which has a smaller exposure surface.
+- **Channel id is versioned** (`order-offers-v1`): an Android channel's
+  importance is immutable once created on a device, so changing it needs a new id.
+- Permission is requested at **first go-online**, not login — Android 13+ allows
+  one POST_NOTIFICATIONS prompt and a denial is only reversible in system settings.
+- Token is revoked on sign-out, else a logged-out phone keeps buzzing.
+- Notifications self-clear: FCM ttl, notifee `timeoutAfter`, and a silent
+  `offer_revoked` push when another driver accepts.
+- **notifee needs `plugins/withNotifeeMavenRepo.js`.** `app.notifee:core` ships
+  as local artifacts under its own node_modules. notifee does self-register that
+  repo via `rootProject.allprojects`, but Expo's CLI builds with
+  `--configure-on-demand`, so it runs too late for `:app` and the build fails
+  with *"Could not find any matches for app.notifee:core:+"*, having searched
+  only google/mavenCentral/jitpack. The plugin declares it in the root project
+  instead. Don't hand-edit `android/build.gradle` — `prebuild --clean` drops it.
+- notifee is a native module: **rebuild the dev client**, a Metro reload is not enough.
+
 ## Navigation
 
 **The app uses Expo Router (file-based routing). Do NOT hand-roll navigation** with `useState` +
@@ -67,13 +134,19 @@ Conventions:
   providers live in `app/_layout.tsx`.
 - **Routes** live in `app/`. `(app)` is the authenticated group (one auth guard covers all
   children); `(tabs)` is the bottom-tab group; **detail screens are pushed routes** (e.g.
-  `app/(app)/job/[id].tsx`) so they cover the tab bar; **Settings is a modal route** (`app/settings.tsx`).
+  `app/(app)/order/[id].tsx`) so they cover the tab bar; **Settings is a modal route** (`app/settings.tsx`).
 - **Tabs** use our `BottomNav` design via the custom `tabBar` adapter `@navigation/AppTabBar` —
   do not replace it with the default tab bar. Tab icon/label config lives in `AppTabBar`'s `TAB_META`.
 - **Screens stay presentational** (`src/screens/*`): they take callback props; the thin route files
   inject `router.push(...)` / `useAuth()` handlers. Navigate with typed hrefs
-  (`router.push({ pathname: '/job/[id]', params: { id } })`); typed routes are enabled
+  (`router.push({ pathname: '/order/[id]', params: { id } })`); typed routes are enabled
   (`app.json` → `experiments.typedRoutes`).
+- **Proof of delivery is a sheet plus two screens.** `PodCaptureSheet` is only a checklist of
+  what the order still needs; each item pushes its own full-bleed capture route
+  (`pod/[id]/photo`, `pod/[id]/signature`). **A pushed route renders *behind* an open
+  `BottomSheet`**, because the sheet is a native `Modal` — so `OrderDetailScreen` closes the sheet
+  before navigating and reopens it via `useFocusEffect` on return. The capture screens write their
+  own results with `patchOrder`; nothing is passed back through navigation.
 - **Deep links**: scheme is `driver-mobile://` (`app.json`); FCM taps route via
   `setupNotificationRouting()` (wired in `app/_layout.tsx`). Cold-start deep links need the native
   manifest's scheme intent-filter — regenerate with `expo prebuild` if it's missing.
@@ -117,9 +190,48 @@ npx expo install --check    # verify deps match the installed SDK
 - **Not Expo Go compatible.** Because of the `@react-native-firebase` native modules, this app must run via a **development build** (`expo run:android`), not the Expo Go client.
 - **`npm start` is bash-only.** The `start` script prefixes `NODE_OPTIONS=...` inline, which fails in PowerShell/cmd. On Windows, run `npx expo start --dev-client` (optionally `$env:NODE_OPTIONS="--dns-result-order=ipv4first"` first).
 - **Firebase requires `google-services.json`.** Prebuild fails without `expo.android.googleServicesFile` set in `app.json`. A **placeholder** `google-services.json` is committed so the app builds and runs; **replace it with the real file from your Firebase project** (package `com.dispatch.drivermobile`) for push to actually work. FCM code in `fcm.ts` no-ops gracefully when messaging is unavailable.
-- **Assets are placeholders.** `assets/*.png` (icon/splash/adaptive-icon/favicon) are solid-color placeholders. Replace with real artwork before shipping.
+- **`pusher-js` pulls in a native module.** Its React Native build imports
+  `@react-native-community/netinfo` at module scope, so the package is a hard
+  dependency and the **dev client must be rebuilt** (`npx expo run:android`)
+  after adding it — a Metro reload is not enough.
+- **Icons are generated — edit the master, not the outputs.** `assets/logo-master.png` (1024×1024 RGBA
+  on transparency) is the only hand-authored artwork. `npm run icons` re-renders `icon.png`,
+  `adaptive-icon.png`, `adaptive-icon-monochrome.png`, `splash-icon.png`, `favicon.png` and
+  `assets/notification/drawable-*/ic_notification.png` from it — see "App icons, splash and
+  notification icon" below. Editing a generated file is pointless; the next run overwrites it.
 - **`android/` and `ios/` are gitignored (managed workflow).** They're generated by `expo prebuild`, not committed. Do all native config via `app.json` + config plugins so it survives regeneration — never hand-edit `android/`/`ios/` as the source of truth (a `prebuild --clean` wipes it).
 - **API base URL** comes from `EXPO_PUBLIC_API_BASE_URL` (see `.env.example`, defaults to `http://localhost:8000`). Copy `.env.example` to `.env` and set it.
+
+## App icons, splash and notification icon
+
+One master artwork, everything else generated:
+
+```bash
+npm run icons                # regenerate from assets/logo-master.png
+npx expo prebuild --platform android   # icons are native — required to see a change
+```
+
+- **`assets/logo-master.png` is the source of truth** — 1024×1024, RGBA, mark on transparency.
+  `scripts/generate-app-icons.js` crops to the alpha bounding box and **re-centres**, so the master
+  does not need the mark centred or tightly cropped. The script is dependency-free (PNG codec on
+  `zlib`) and deliberately manual — it is not wired into prebuild or postinstall.
+- **Per-asset scale factors are masks, not taste** (documented at `TARGETS` in the script): 0.62 for
+  the adaptive foreground because Android's safe zone is the centre 66% and OEM masks clip outside
+  it; 0.72 for the iOS/legacy icon because iOS adds no padding of its own.
+- **Downscaling is premultiplied.** Averaging straight RGBA drags the invisible black of transparent
+  pixels into the edges — a dark fringe that only shows up at small sizes.
+- **Splash is `expo-splash-screen`, not the legacy `splash` key** (ignored in SDK 55). Android 12+
+  only ever draws a centred icon on a flat colour and circle-crops it, so the image must be the
+  **logo alone on transparency** — a pre-composed full-screen splash gets center-cropped to a
+  fragment. Background is white, `#0b1120` in dark mode (matches the `background` dark token in
+  `src/theme/themes.ts`).
+- **The Android notification small icon must be white-on-transparent.** Android keeps only the alpha
+  channel and discards colour, so an opaque launcher icon draws as a **solid white square** in the
+  status bar. `plugins/withNotificationIcon.js` installs `ic_notification` at five densities plus a
+  `notificationColor` tint; `display.ts` references it via `SMALL_ICON`. Keep the colour constant in
+  the plugin and in `display.ts` in sync.
+- **`android.adaptiveIcon.backgroundColor` is `#ffffff`, not the brand blue** — the mark's truck is
+  blue, so a blue plate made it disappear.
 
 ## Theming (light/dark × 8 accent themes)
 
@@ -167,7 +279,31 @@ This app was scaffolded but not fully wired at first, and hit a series of first-
 - **`react-native-css-interop`** (NativeWind's runtime) is nested under `nativewind/node_modules` due to a peer conflict, so it's aliased in `metro.config.js` `extraNodeModules` — don't remove that alias.
 - **SecureStore keys must match `[A-Za-z0-9._-]`.** Colons throw `Invalid key` at runtime (why `secureTokenStorage.ts` uses `dispatch.access_token`, not `dispatch:...`).
 - **Native build quirks** (regenerate from `app.json`, but if a fresh prebuild misses them): adaptive icon references `@color/iconBackground` — if absent from `res/values/colors.xml`, add `<color name="iconBackground">#1d4ed8</color>`; ensure `android/app/build.gradle` `namespace`/`applicationId` are `com.dispatch.drivermobile` (from `app.json` `android.package`).
+- **Android builds arm64-v8a only.** `plugins/withAndroidAbis.js` pins `reactNativeArchitectures`
+  to `arm64-v8a` instead of RN's default four ABIs, so native modules compile once rather than four
+  times. **This does not run on the standard x86_64 emulator** — for one, build with
+  `RN_ANDROID_ABIS=arm64-v8a,x86_64 npx expo run:android` (or pass
+  `-PreactNativeArchitectures=x86_64` straight to Gradle). It's a plugin, not a `gradle.properties`
+  edit, so `prebuild --clean` can't silently restore the slow four-ABI build.
 - **Don't run `expo install <pkg> -- --save-dev`** — the `--` gets mis-parsed and npm prunes unrelated packages. Use `npx expo install <pkg>` (add `--dev` via the Expo flag if needed).
+- **Windows: `ninja: error: manifest 'build.ninja' still dirty after 100 tries`.** Gradle writes generated prefab configs under
+  `<module>/android/.cxx/Debug/<hash>/prefab/<abi>/prefab/lib/<triple>/cmake/...`. For deeply nested modules that crosses Windows'
+  260-char `MAX_PATH` (`react-native-workletsConfigVersion.cmake` landed at 262). ninja stats those paths without long-path support,
+  reads the file as *missing*, and a missing input on a phony edge is permanently dirty — so CMake regenerates until ninja gives up.
+  `LongPathsEnabled=1` does **not** help: ninja isn't manifested for it. Fixed by `plugins/withShortCxxPaths.js`, which relocates each
+  module's CMake staging dir to `C:/rn-cxx/<module>` (override with the `RN_CXX_DIR` env var). It's a no-op off Windows. The hook must
+  live in `settings.gradle` — `buildStagingDirectory` is read during project configuration, so setting it from the root `build.gradle`
+  fails with *"It is too late to set buildStagingDirectory"*, and `afterEvaluate` breaks under `--configure-on-demand`.
+- **Two dependency pins live in `package.json` `overrides` — don't drop them.** Both are transitive versions npm otherwise resolves wrong:
+  - `react-native-reanimated: 4.2.1` — nativewind → `react-native-css-interop` peers `react-native-reanimated: >=3.6.2`, so npm installs
+    the newest (4.5.3), which requires `react-native-worklets 0.10–0.11`. Autolinking binds the single top-level worklets (0.7.4, what
+    SDK 55 pins), so 4.5.3 fails to compile with `fatal error: 'worklets/Compat/StableApi.h' file not found`. 4.2.1 is Expo SDK 55's
+    pinned version and peers on `worklets >=0.7.0`.
+  - `expo-font: ~55.0.8` — `@expo/vector-icons` peers `expo-font: >=14.0.4` and `expo-symbols` peers `*`, so npm hoists the newest
+    (57.0.1) above expo's own 55.0.8. That crashes on launch with
+    `NoSuchMethodError: expo.modules.kotlin.types.ReturnTypeKt.getDirectConverter(...)` at `FontLoaderModule`.
+
+  `npx expo install --check` passes in both cases — it only validates *direct* dependencies, and these are transitive.
 
 ## Dependency management
 
