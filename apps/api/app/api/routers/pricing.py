@@ -2,7 +2,6 @@ import uuid
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
@@ -20,36 +19,15 @@ from app.models.location import (
     StatePricing,
 )
 from app.models.tenant import Tenant, TenantRole
+from app.schemas.pricing import (
+    CityPricingOut,
+    PartnerOut,
+    PartnerRates,
+    Rates,
+    StatePricingOut,
+)
 
 router = APIRouter()
-
-
-class Rates(BaseModel):
-    partner_price_per_km: float = Field(ge=0)
-    partner_price_per_kg: float = Field(ge=0)
-    individual_price_per_km: float = Field(ge=0)
-    individual_price_per_kg: float = Field(ge=0)
-
-
-class PartnerRates(BaseModel):
-    price_per_km: float = Field(ge=0)
-    price_per_kg: float = Field(ge=0)
-
-
-class PartnerOut(BaseModel):
-    id: uuid.UUID
-    name: str
-
-
-class CityPricingOut(Rates):
-    city_id: uuid.UUID
-    city_name: str
-
-
-class StatePricingOut(Rates):
-    state_id: uuid.UUID
-    state_name: str
-    cities: List[CityPricingOut]
 
 
 def _apply_rates(target: GlobalPricing | StatePricing | CityPricing, rates: Rates) -> None:

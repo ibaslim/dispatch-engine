@@ -5,7 +5,8 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from app.api.routers.driver_payroll import PaymentGroupInput, _save_payment_group
+from app.api.routers.driver_payroll import _save_payment_group
+from app.schemas.driver_payroll import PaymentGroupInput
 from app.api.routers.orders import _driver_order_response
 from app.models.driver_payment import DriverPaymentGroup
 from app.models.order import ActivityStatus, Order, OrderStatus

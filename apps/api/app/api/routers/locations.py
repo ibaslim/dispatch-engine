@@ -1,40 +1,14 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from pydantic import BaseModel
 from typing import List
 import uuid
 
 from app.core.deps import get_db, CurrentUser
 from app.models.location import Country, State, City
+from app.schemas.location import CityOut, CountryOut, StateOut
 
 router = APIRouter()
-
-
-# ─── Response schemas ────────────────────────────────────────────────────────
-
-class CountryOut(BaseModel):
-    id: uuid.UUID
-    name: str
-    code: str
-
-    model_config = {"from_attributes": True}
-
-
-class StateOut(BaseModel):
-    id: uuid.UUID
-    name: str
-    country_id: uuid.UUID
-
-    model_config = {"from_attributes": True}
-
-
-class CityOut(BaseModel):
-    id: uuid.UUID
-    name: str
-    state_id: uuid.UUID
-
-    model_config = {"from_attributes": True}
 
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────

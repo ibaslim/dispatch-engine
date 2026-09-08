@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select, update
@@ -16,6 +15,7 @@ from app.core.redis import get_redis
 from app.models.driver_payment import DriverPaymentGroupAssignment
 from app.models.order import ActivityStatus, Order
 from app.models.tenant import Tenant, TenantRole
+from app.schemas.driver import DriverProfileOut
 from app.schemas.location import LocationIn, LocationOut
 from app.schemas.tenant import TenantResponse
 from app.services.driver_active_order_service import DriverActiveOrderService
@@ -28,25 +28,6 @@ router = APIRouter()
 
 # Annotated alias keeps endpoint signatures concise.
 RedisClient = Annotated[aioredis.Redis, Depends(get_redis)]
-
-class DriverProfileOut(BaseModel):
-    id: uuid.UUID
-    name: str
-    is_active: bool
-    contact_name: str | None
-    contact_email: str | None
-    contact_phone_country_code: str | None
-    contact_phone_number: str | None
-    address: str | None
-    notes: str | None
-    rating: float = 0
-    vehicle_type: str | None = None
-    plate_number: str | None = None
-    is_online: bool = False
-    completed_deliveries: int = 0
-    payment_group_id: uuid.UUID | None = None
-    payment_group_name: str | None = None
-    payment_rule_type: str | None = None
 
 
 @router.get("", response_model=list[DriverProfileOut])

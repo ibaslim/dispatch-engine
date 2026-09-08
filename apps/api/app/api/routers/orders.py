@@ -9,7 +9,6 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,9 +43,15 @@ from app.schemas.order import (
     OrderResponse,
     OrderUpdate,
     ActivityStatusUpdate,
+    AppliedChargeResponse,
+    AssignDriverRequest,
+    DeliveryQuoteRequest,
+    DeliveryQuoteResponse,
     IncidentReportCreate,
     IncidentReason,
     IncidentStage,
+    ReadyUpdate,
+    StatusUpdate,
     INCIDENT_REASONS_REQUIRING_DESCRIPTION,
 )
 from app.workers.celery_app import celery_app
@@ -106,48 +111,6 @@ def _enqueue_push(task_name: str, **kwargs) -> None:
 def _offer_expires_at(order: Order) -> datetime:
     published_at = order.published_at or datetime.now(APP_TIMEZONE)
     return published_at + timedelta(minutes=PUBLISH_WINDOW_MINUTES)
-
-class DeliveryQuoteRequest(BaseModel):
-    pickup_place_id: str
-    delivery_place_id: str
-    pickup_address: str | None = None
-    delivery_address: str | None = None
-    delivery_category_id: UUID
-    vendor_id: UUID | None = None
-    delivery_date: str | None = None
-    delivery_time: str | None = None
-    surcharge_ids: list[UUID] = Field(default_factory=list)
-
-
-class AppliedChargeResponse(BaseModel):
-    id: UUID | None
-    kind: str
-    label: str
-    amount: float
-
-
-class DeliveryQuoteResponse(BaseModel):
-    eligible: bool = True
-    pickup_city: str
-    pickup_zone_id: UUID
-    pickup_zone_name: str
-    delivery_city: str
-    delivery_zone_id: UUID
-    delivery_zone_name: str
-    distance_meters: int
-    distance_km: float
-    duration_seconds: int
-    radius_km: float
-    extra_distance_km: float
-    base_price: float
-    additional_per_km: float
-    distance_charge: float
-    applied_charges: list[AppliedChargeResponse]
-    delivery_fee: float
-    # Pickup zone's tax rates, so the order form previews what the server will charge.
-    gst_rate: float = 0
-    pst_rate: float = 0
-    manual_fallback: bool = False
 
 
 def _quote_response(quote: DeliveryQuote) -> DeliveryQuoteResponse:
@@ -715,10 +678,6 @@ async def delete_order(
 # -------------------------
 # STATUS UPDATE
 # -------------------------
-class StatusUpdate(BaseModel):
-    status: OrderStatus
-
-
 @router.patch("/{order_id}/status")
 async def update_status(
     order_id: str,
@@ -1134,10 +1093,6 @@ async def get_proof_of_delivery_image(
 # -------------------------
 # READY FOR PICKUP
 # -------------------------
-class ReadyUpdate(BaseModel):
-    ready: bool
-
-
 @router.patch("/{order_id}/ready")
 async def toggle_ready(
     order_id: str,
@@ -1324,10 +1279,6 @@ async def send_recipient_notification(
 # -------------------------
 # ASSIGN DRIVER
 # -------------------------
-class AssignDriverRequest(BaseModel):
-    driver_id: UUID
-
-
 @router.patch("/{order_id}/assign-driver", response_model=OrderResponse)
 async def assign_driver(
     order_id: str,

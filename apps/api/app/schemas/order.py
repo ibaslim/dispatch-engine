@@ -230,3 +230,64 @@ class OrderResponse(OrderCreate):
 
     class Config:
         from_attributes = True
+
+
+# -------------------------
+# STATUS / READY / DRIVER ASSIGNMENT
+# -------------------------
+class StatusUpdate(BaseModel):
+    status: OrderStatus
+
+
+class ReadyUpdate(BaseModel):
+    ready: bool
+
+
+class AssignDriverRequest(BaseModel):
+    driver_id: UUID
+
+
+# -------------------------
+# DELIVERY QUOTE
+# -------------------------
+class DeliveryQuoteRequest(BaseModel):
+    pickup_place_id: str
+    delivery_place_id: str
+    pickup_address: str | None = None
+    delivery_address: str | None = None
+    delivery_category_id: UUID
+    vendor_id: UUID | None = None
+    delivery_date: str | None = None
+    delivery_time: str | None = None
+    surcharge_ids: list[UUID] = Field(default_factory=list)
+
+
+class AppliedChargeResponse(BaseModel):
+    id: UUID | None
+    kind: str
+    label: str
+    amount: float
+
+
+class DeliveryQuoteResponse(BaseModel):
+    eligible: bool = True
+    pickup_city: str
+    pickup_zone_id: UUID
+    pickup_zone_name: str
+    delivery_city: str
+    delivery_zone_id: UUID
+    delivery_zone_name: str
+    distance_meters: int
+    distance_km: float
+    duration_seconds: int
+    radius_km: float
+    extra_distance_km: float
+    base_price: float
+    additional_per_km: float
+    distance_charge: float
+    applied_charges: list[AppliedChargeResponse]
+    delivery_fee: float
+    # Pickup zone's tax rates, so the order form previews what the server will charge.
+    gst_rate: float = 0
+    pst_rate: float = 0
+    manual_fallback: bool = False

@@ -4,7 +4,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from app.api.routers.delivery_configuration import (
+from app.schemas.delivery_configuration import (
     AfterHoursInput,
     BasePriceInput,
     CategoryInput,
