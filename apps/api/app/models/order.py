@@ -74,8 +74,10 @@ class Order(Base):
     items = Column(JSON)
 
     subtotal = Column(Float, default=0)
-    tax_rate = Column(Float, default=0)
-    tax_amount = Column(Float, default=0)
+    gst_rate = Column(Float, default=0)
+    gst_amount = Column(Float, default=0)
+    pst_rate = Column(Float, default=0)
+    pst_amount = Column(Float, default=0)
     delivery_fees = Column(Float, default=0)
     delivery_tips = Column(Float, default=0)
     discount = Column(Float, default=0)

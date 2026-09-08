@@ -80,40 +80,6 @@
             </div>
         </div>
 
-        <!-- TAX + SUBTOTAL -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
-            <app-base-input label="Default Tax Rate %" [value]="value.taxRate" [disabled]="true">
-            </app-base-input>
-
-            <div class="rounded-md border border-gray-300 dark:border-[#5a5d5a] px-4 py-2.5">
-                <p class="text-sm text-gray-600 dark:text-gray-200">Subtotal (C$):</p>
-                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    {{ money(value.subtotal || 0) }}
-                </p>
-            </div>
-        </div>
-
-        <!-- TAX -->
-        <div class="rounded-md border border-gray-300 dark:border-[#5a5d5a] px-4 py-2.5">
-            <p class="text-sm text-gray-600 dark:text-gray-200">Tax (C$):</p>
-            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {{ money(value.taxAmount) }}
-            </p>
-        </div>
-
-        <!-- DELIVERY FEE -->
-        <app-base-input label="Delivery Fees (C$)" [value]="value.deliveryFees" [disabled]="true">
-        </app-base-input>
-
-        <div *ngIf="routeQuote" class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm dark:border-[#3a3d3a] dark:bg-[#252825]">
-            <p class="mb-2 font-semibold text-gray-800 dark:text-gray-100">Delivery fee breakdown</p>
-            <div class="space-y-1.5 text-gray-600 dark:text-gray-300">
-                <div class="flex justify-between gap-4"><span>{{ routeQuote.manual_fallback ? 'Manual-address fixed base delivery' : 'Base delivery · ' + (routeQuote.radius_km | number:'1.0-2') + ' km included' }}</span><span>+ C$ {{ routeQuote.base_price | number:'1.2-2' }}</span></div>
-                <div *ngIf="routeQuote.distance_charge > 0" class="flex justify-between gap-4"><span>Extra distance · {{ routeQuote.extra_distance_km | number:'1.2-2' }} km</span><span>+ C$ {{ routeQuote.distance_charge | number:'1.2-2' }}</span></div>
-                <div *ngFor="let charge of routeQuote.applied_charges" class="flex justify-between gap-4"><span>{{ charge.label }}</span><span>+ C$ {{ charge.amount | number:'1.2-2' }}</span></div>
-            </div>
-        </div>
-
         <!-- DELIVERY TIP -->
         <app-base-input label="Delivery Tips (C$)" [value]="value.deliveryTips"
             (valueChange)="patch({ deliveryTips: $event })">
@@ -123,12 +89,46 @@
         <app-base-input label="Discount (C$)" [value]="value.discount" (valueChange)="patch({ discount: $event })">
         </app-base-input>
 
-        <!-- TOTAL -->
-        <div class="rounded-md border border-gray-300 dark:border-[#5a5d5a] px-4 py-2.5">
-            <p class="text-sm text-gray-600 dark:text-gray-200">Total (C$):</p>
-            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {{ money(value.total) }}
-            </p>
+        <!-- RECEIPT: every computed charge, so the total can be checked by eye -->
+        <dl class="rounded-md border border-gray-300 dark:border-[#5a5d5a] px-4 py-3 text-sm">
+            <div class="flex justify-between gap-4 py-1">
+                <dt class="text-gray-600 dark:text-gray-300">Subtotal</dt>
+                <dd class="tabular-nums text-gray-900 dark:text-gray-100">{{ money(value.subtotal || 0) }}</dd>
+            </div>
+
+            <div *ngFor="let tax of taxLines(value)" class="flex justify-between gap-4 py-1">
+                <dt class="text-gray-600 dark:text-gray-300">{{ tax.label }}</dt>
+                <dd class="tabular-nums text-gray-900 dark:text-gray-100">{{ money(tax.amount) }}</dd>
+            </div>
+
+            <div class="flex justify-between gap-4 py-1">
+                <dt class="text-gray-600 dark:text-gray-300">Delivery fees</dt>
+                <dd class="tabular-nums text-gray-900 dark:text-gray-100">{{ money(value.deliveryFees || 0) }}</dd>
+            </div>
+
+            <div *ngIf="value.deliveryTips > 0" class="flex justify-between gap-4 py-1">
+                <dt class="text-gray-600 dark:text-gray-300">Tips</dt>
+                <dd class="tabular-nums text-gray-900 dark:text-gray-100">{{ money(value.deliveryTips) }}</dd>
+            </div>
+
+            <div *ngIf="value.discount > 0" class="flex justify-between gap-4 py-1">
+                <dt class="text-gray-600 dark:text-gray-300">Discount</dt>
+                <dd class="tabular-nums text-red-600 dark:text-red-400">-{{ money(value.discount) }}</dd>
+            </div>
+
+            <div class="mt-2 flex justify-between gap-4 border-t border-gray-200 pt-2.5 dark:border-[#3a3d3a]">
+                <dt class="font-semibold text-gray-900 dark:text-gray-100">Total</dt>
+                <dd class="text-base font-semibold tabular-nums text-gray-900 dark:text-gray-100">{{ money(value.total) }}</dd>
+            </div>
+        </dl>
+
+        <div *ngIf="routeQuote" class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm dark:border-[#3a3d3a] dark:bg-[#252825]">
+            <p class="mb-2 font-semibold text-gray-800 dark:text-gray-100">Delivery fee breakdown</p>
+            <div class="space-y-1.5 text-gray-600 dark:text-gray-300">
+                <div class="flex justify-between gap-4"><span>{{ routeQuote.manual_fallback ? 'Manual-address fixed base delivery' : 'Base delivery · ' + (routeQuote.radius_km | number:'1.0-2') + ' km included' }}</span><span>+ C$ {{ routeQuote.base_price | number:'1.2-2' }}</span></div>
+                <div *ngIf="routeQuote.distance_charge > 0" class="flex justify-between gap-4"><span>Extra distance · {{ routeQuote.extra_distance_km | number:'1.2-2' }} km</span><span>+ C$ {{ routeQuote.distance_charge | number:'1.2-2' }}</span></div>
+                <div *ngFor="let charge of routeQuote.applied_charges" class="flex justify-between gap-4"><span>{{ charge.label }}</span><span>+ C$ {{ charge.amount | number:'1.2-2' }}</span></div>
+            </div>
         </div>
 
         <!-- INSTRUCTIONS -->

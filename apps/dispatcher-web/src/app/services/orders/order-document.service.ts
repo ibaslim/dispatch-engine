@@ -5,7 +5,7 @@ import QRCode from 'qrcode';
 import JsBarcode from 'jsbarcode';
 import { OrderEntity } from '@models/orders/order-entity.model';
 import { toNumber } from '@pages/orders/orders-mapping.util';
-import { escapeHtml, formatPaymentMethod, formatStatusLabel, maskCard, money } from '@pages/orders/orders-formatting.util';
+import { escapeHtml, formatPaymentMethod, formatStatusLabel, maskCard, money, taxLines } from '@pages/orders/orders-formatting.util';
 
 /**
  * PDF/print/label document generation for orders — extracted from OrdersComponent.
@@ -60,7 +60,8 @@ export class OrderDocumentService {
       </div>
       <div class="section">
         <div class="row"><span>Subtotal</span><span>${escapeHtml(money(order.full.details.subtotal))}</span></div>
-        <div class="row"><span>Tax (${escapeHtml(String(order.full.details.taxRate))}%)</span><span>${escapeHtml(money(order.full.details.taxAmount))}</span></div>
+        ${taxLines(order.full.details).map((tax) => `
+        <div class="row"><span>${escapeHtml(tax.label)}</span><span>${escapeHtml(money(tax.amount))}</span></div>`).join('')}
         <div class="row"><span>Delivery Fees</span><span>${escapeHtml(money(order.full.details.deliveryFees))}</span></div>
         <div class="row"><span>Tips</span><span>${escapeHtml(money(order.full.details.deliveryTips))}</span></div>
         <div class="row"><span>Discount</span><span>${escapeHtml(money(order.full.details.discount))}</span></div>

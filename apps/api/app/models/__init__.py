@@ -19,6 +19,7 @@ from app.models.location import (
     PartnerStatePricing,
     State,
     StatePricing,
+    StateTax,
 )
 from app.models.delivery_configuration import (
     AfterHoursDelivery,
@@ -55,6 +56,7 @@ __all__ = [
     "City",
     "CityPricing",
     "StatePricing",
+    "StateTax",
     "GlobalPricing",
     "DriverPricing",
     "DriverStatePricing",

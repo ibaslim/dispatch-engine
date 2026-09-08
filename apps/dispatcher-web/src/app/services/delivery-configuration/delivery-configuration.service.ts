@@ -15,7 +15,21 @@ export interface OperationalZone {
   id: string;
   name: string;
   radius_km: number;
+  gst_percentage: number | null;
   cities: ZoneCity[];
+}
+
+export interface ProvinceZone {
+  id: string;
+  name: string;
+  gst_percentage: number | null;
+}
+
+export interface ProvinceTax {
+  state_id: string;
+  state_name: string;
+  pst_percentage: number | null;
+  zones: ProvinceZone[];
 }
 
 export interface DeliveryCategory {
@@ -26,7 +40,6 @@ export interface DeliveryCategory {
 
 export interface DeliveryPolicy {
   allow_intercity: boolean;
-  default_tax_percentage: number;
 }
 
 export interface AfterHoursDelivery {
@@ -143,6 +156,22 @@ export class DeliveryConfigurationService {
     return this.http.put<{ radius_km: number }>(
       `${BASE}/base-prices/zones/${zoneId}/radius`,
       { radius_km: radiusKm }
+    );
+  }
+  saveZoneGst(zoneId: string, gstPercentage: number | null): Observable<{ gst_percentage: number | null }> {
+    return this.http.put<{ gst_percentage: number | null }>(
+      `${BASE}/base-prices/zones/${zoneId}/tax`,
+      { gst_percentage: gstPercentage }
+    );
+  }
+
+  getProvinceTaxes(): Observable<ProvinceTax[]> {
+    return this.http.get<ProvinceTax[]>(`${BASE}/taxes`);
+  }
+  saveProvinceTax(stateId: string, pstPercentage: number | null): Observable<{ pst_percentage: number | null }> {
+    return this.http.put<{ pst_percentage: number | null }>(
+      `${BASE}/taxes/${stateId}`,
+      { pst_percentage: pstPercentage }
     );
   }
   savePartnerPriceOverride(

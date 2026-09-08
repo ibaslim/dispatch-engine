@@ -169,6 +169,14 @@ export const routes: Routes = [
         data: { section: 'surcharges' },
       },
       {
+        path: 'taxes',
+        loadComponent: () =>
+          import('./pages/configurations/delivery-settings/delivery-settings.component').then(
+            (m) => m.DeliverySettingsComponent
+          ),
+        data: { section: 'taxes' },
+      },
+      {
         path: 'driver-payroll',
         loadComponent: () =>
           import('./pages/configurations/driver-payroll/driver-payroll.component').then(

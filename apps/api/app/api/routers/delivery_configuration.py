@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, time
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field, StringConstraints, model_validator
@@ -21,7 +21,7 @@ from app.models.delivery_configuration import (
     Surcharge,
     ZoneCategoryPrice,
 )
-from app.models.location import City
+from app.models.location import City, State, StateTax
 from app.models.tenant import Tenant, TenantRole
 
 router = APIRouter()
@@ -30,6 +30,10 @@ Description = Annotated[str, StringConstraints(strip_whitespace=True, min_length
 Money = Annotated[Decimal, Field(ge=0, max_digits=10, decimal_places=2)]
 Distance = Annotated[Decimal, Field(gt=0, max_digits=8, decimal_places=2)]
 TaxPercentage = Annotated[Decimal, Field(ge=0, le=100, max_digits=5, decimal_places=2)]
+# Three decimals because Quebec's QST is 9.975%.
+OptionalTaxPercentage = Annotated[
+    Optional[Decimal], Field(default=None, ge=0, le=100, max_digits=6, decimal_places=3)
+]
 
 
 class ZoneInput(BaseModel):
@@ -39,7 +43,6 @@ class ZoneInput(BaseModel):
 
 class DeliveryPolicyInput(BaseModel):
     allow_intercity: bool
-    default_tax_percentage: TaxPercentage = Decimal("0.00")
 
 
 class ZoneCityOut(BaseModel):
@@ -53,6 +56,7 @@ class ZoneOut(BaseModel):
     id: uuid.UUID
     name: str
     radius_km: Distance
+    gst_percentage: OptionalTaxPercentage = None
     cities: list[ZoneCityOut]
 
 
@@ -177,6 +181,7 @@ def _zone_out(zone: OperationalZone) -> ZoneOut:
         id=zone.id,
         name=zone.name,
         radius_km=zone.radius_km,
+        gst_percentage=zone.gst_percentage,
         cities=[
             ZoneCityOut(
                 id=item.city.id,
@@ -227,10 +232,7 @@ async def _validate_zone_cities(
 @router.get("/delivery-policy", response_model=DeliveryPolicyInput)
 async def get_delivery_policy(_: PlatformAdmin, db: AsyncSession = Depends(get_db)):
     policy = await db.scalar(select(DeliveryPolicy).where(DeliveryPolicy.key == "default"))
-    return DeliveryPolicyInput(
-        allow_intercity=bool(policy and policy.allow_intercity),
-        default_tax_percentage=policy.default_tax_percentage if policy else Decimal("0.00"),
-    )
+    return DeliveryPolicyInput(allow_intercity=bool(policy and policy.allow_intercity))
 
 
 @router.put("/delivery-policy", response_model=DeliveryPolicyInput)
@@ -242,7 +244,6 @@ async def update_delivery_policy(
         policy = DeliveryPolicy(key="default")
         db.add(policy)
     policy.allow_intercity = payload.allow_intercity
-    policy.default_tax_percentage = payload.default_tax_percentage
     await db.commit()
     return payload
 
@@ -443,6 +444,93 @@ async def update_zone_radius(
 ):
     zone = await _entity(db, OperationalZone, zone_id, "Operational zone")
     zone.radius_km = payload.radius_km
+    await db.commit()
+    return payload
+
+
+class ZoneGstInput(BaseModel):
+    gst_percentage: OptionalTaxPercentage = None
+
+
+@router.put("/base-prices/zones/{zone_id}/tax", response_model=ZoneGstInput)
+async def update_zone_tax(
+    zone_id: uuid.UUID,
+    payload: ZoneGstInput,
+    _: PlatformAdmin,
+    db: AsyncSession = Depends(get_db),
+):
+    zone = await _entity(db, OperationalZone, zone_id, "Operational zone")
+    zone.gst_percentage = payload.gst_percentage
+    await db.commit()
+    return payload
+
+
+class ProvinceZoneOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    gst_percentage: OptionalTaxPercentage = None
+
+
+class ProvinceTaxOut(BaseModel):
+    state_id: uuid.UUID
+    state_name: str
+    pst_percentage: OptionalTaxPercentage = None
+    zones: list[ProvinceZoneOut]
+
+
+class ProvinceTaxInput(BaseModel):
+    pst_percentage: OptionalTaxPercentage = None
+
+
+@router.get("/taxes", response_model=list[ProvinceTaxOut])
+async def list_province_taxes(_: PlatformAdmin, db: AsyncSession = Depends(get_db)):
+    """Provinces you operate in, with their PST and the zones that reach into them.
+
+    Zones are included so the GST feeding each province's total is visible on the
+    same screen -- a zone can span provinces, so one province may list several.
+    """
+    result = await db.execute(
+        select(State, OperationalZone)
+        .join(City, City.state_id == State.id)
+        .join(OperationalZoneCity, OperationalZoneCity.city_id == City.id)
+        .join(OperationalZone, OperationalZone.id == OperationalZoneCity.zone_id)
+        .distinct()
+        .order_by(State.name, OperationalZone.name)
+    )
+    taxes = {
+        tax.state_id: tax.pst_percentage
+        for tax in (await db.scalars(select(StateTax))).all()
+    }
+    provinces: dict[uuid.UUID, ProvinceTaxOut] = {}
+    for state, zone in result.all():
+        province = provinces.get(state.id)
+        if province is None:
+            province = ProvinceTaxOut(
+                state_id=state.id,
+                state_name=state.name,
+                pst_percentage=taxes.get(state.id),
+                zones=[],
+            )
+            provinces[state.id] = province
+        province.zones.append(
+            ProvinceZoneOut(id=zone.id, name=zone.name, gst_percentage=zone.gst_percentage)
+        )
+    return list(provinces.values())
+
+
+@router.put("/taxes/{state_id}", response_model=ProvinceTaxInput)
+async def update_province_tax(
+    state_id: uuid.UUID,
+    payload: ProvinceTaxInput,
+    _: PlatformAdmin,
+    db: AsyncSession = Depends(get_db),
+):
+    await _entity(db, State, state_id, "Province")
+    tax = await db.scalar(select(StateTax).where(StateTax.state_id == state_id))
+    if tax is None:
+        tax = StateTax(state_id=state_id)
+        db.add(tax)
+    tax.pst_percentage = payload.pst_percentage
     await db.commit()
     return payload
 

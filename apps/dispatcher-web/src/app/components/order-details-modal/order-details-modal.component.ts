@@ -3,7 +3,7 @@ import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core
 import { PopupComponent } from '@components/popup/popup.component';
 import { ToggleButtonComponent } from '@components/toggle-button/toggle-button.component';
 import { OrderEntity } from '@models/orders/order-entity.model';
-import { driverEarningsLabel, formatPaymentMethod, maskCard } from '@pages/orders/orders-formatting.util';
+import { driverEarningsLabel, formatPaymentMethod, maskCard, taxLines } from '@pages/orders/orders-formatting.util';
 import { OrdersService } from '@services/orders/orders.service';
 
 const INCIDENT_REASONS_BY_STAGE: Record<'pickup' | 'delivery', { value: string; label: string }[]> = {
@@ -38,6 +38,8 @@ export class OrderDetailsModalComponent implements OnChanges {
   @Input() order: OrderEntity | null = null;
   @Input() isReadOnlyTenant = false;
   @Input() isDriver = false;
+
+  protected readonly taxLines = taxLines;
   @Input() readyForPickup = false;
   @Output() close = new EventEmitter<void>();
   @Output() menuAction = new EventEmitter<string>();

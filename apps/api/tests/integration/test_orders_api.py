@@ -84,7 +84,8 @@ class TestListOrders:
         body = response.json()[0]
         assert body["subtotal"] == 0
         assert body["total"] == 0
-        assert body["tax_amount"] == 0
+        assert body["gst_amount"] == 0
+        assert body["pst_amount"] == 0
         assert body["payment_details"] is None
 
     @pytest.mark.xfail(
@@ -489,8 +490,10 @@ def _valid_order_payload(**overrides) -> dict:
         "delivery_time": "12:00",
         "items": [{"itemName": "Widget", "itemPrice": 10.0, "itemQty": 1}],
         "subtotal": 10.0,
-        "tax_rate": 0.13,
-        "tax_amount": 1.3,
+        "gst_rate": 5.0,
+        "gst_amount": 0.5,
+        "pst_rate": 8.0,
+        "pst_amount": 0.8,
         "delivery_fees": 5.0,
         "delivery_tips": 0.0,
         "discount": 0.0,

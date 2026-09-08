@@ -1,7 +1,8 @@
 import uuid
+from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import String, Float, ForeignKey, UniqueConstraint
+from sqlalchemy import String, Float, ForeignKey, Numeric, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
@@ -43,6 +44,9 @@ class State(Base, UUIDMixin, TimestampMixin):
     )
     pricing: Mapped[Optional["StatePricing"]] = relationship(
         "StatePricing", back_populates="state", uselist=False, cascade="all, delete-orphan"
+    )
+    tax: Mapped[Optional["StateTax"]] = relationship(
+        "StateTax", back_populates="state", uselist=False, cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
@@ -117,6 +121,26 @@ class StatePricing(Base, UUIDMixin, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<StatePricing state_id={self.state_id}>"
+
+
+class StateTax(Base, UUIDMixin, TimestampMixin):
+    """PST charged on orders picked up in this province. Null is charged as 0%."""
+    __tablename__ = "state_tax"
+
+    state_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("states.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    # Numeric(6, 3): Quebec's QST is 9.975%.
+    pst_percentage: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 3), nullable=True)
+
+    state: Mapped["State"] = relationship("State", back_populates="tax")
+
+    def __repr__(self) -> str:
+        return f"<StateTax state_id={self.state_id} pst={self.pst_percentage}>"
 
 
 class GlobalPricing(Base, UUIDMixin, TimestampMixin):

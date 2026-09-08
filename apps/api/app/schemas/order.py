@@ -118,8 +118,10 @@ class OrderCreate(BaseModel):
     items: List[OrderItem]
 
     subtotal: float
-    tax_rate: float
-    tax_amount: float
+    gst_rate: float = 0
+    gst_amount: float = 0
+    pst_rate: float = 0
+    pst_amount: float = 0
     delivery_fees: float
     delivery_tips: float
     discount: float
@@ -175,8 +177,10 @@ class OrderUpdate(BaseModel):
     items: Optional[List[OrderItem]] = None
 
     subtotal: Optional[float] = None
-    tax_rate: Optional[float] = None
-    tax_amount: Optional[float] = None
+    gst_rate: Optional[float] = None
+    gst_amount: Optional[float] = None
+    pst_rate: Optional[float] = None
+    pst_amount: Optional[float] = None
     delivery_fees: Optional[float] = None
     delivery_tips: Optional[float] = None
     discount: Optional[float] = None

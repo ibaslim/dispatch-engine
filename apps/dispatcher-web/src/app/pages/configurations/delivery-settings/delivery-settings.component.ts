@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom, Observable } from 'rxjs';
@@ -13,6 +13,8 @@ import {
   DeliveryConfigurationService,
   OperationalZone,
   PartnerPriceOverride,
+  ProvinceTax,
+  ProvinceZone,
   SpecialOccasion,
   Surcharge,
   ZoneBasePrice,
@@ -24,9 +26,10 @@ import {
   State,
 } from '@services/locations/locations.service';
 
-type Section = 'regions' | 'categories' | 'after-hours' | 'base-prices' | 'surcharges';
+type Section = 'regions' | 'categories' | 'after-hours' | 'base-prices' | 'surcharges' | 'taxes';
 type Modal =
   | 'zone'
+  | 'zone-gst'
   | 'category'
   | 'after-hours'
   | 'surcharge'
@@ -51,6 +54,22 @@ interface ZonePricingGroup {
   rows: BasePriceRow[];
   radius_km: number;
   savingRadius: boolean;
+  radiusInvalid: boolean;
+  gst_percentage: number | null;
+  savingTax: boolean;
+  gstInvalid: boolean;
+}
+
+interface ProvinceTaxRow {
+  state_id: string;
+  state_name: string;
+  /** Bound to the input, so it holds whatever is currently typed. */
+  pst_percentage: number | null;
+  /** Last value the server confirmed. Totals read this, never the input. */
+  savedPst: number | null;
+  zones: ProvinceZone[];
+  saving: boolean;
+  pstInvalid: boolean;
 }
 
 interface PartnerMatrixRow {
@@ -99,9 +118,8 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
   selectedCityIds = new Set<string>();
   selectedCityDetails = new Map<string, SelectedZoneCity>();
   allowIntercity = false;
-  defaultTaxPercentage = 0;
   savingPolicy = false;
-  savingDefaultTax = false;
+  provinceTaxes: ProvinceTaxRow[] = [];
   searchQuery = '';
   private readonly autosaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -114,6 +132,7 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
   deleteTarget: { kind: DeleteKind; id: string; name: string } | null = null;
 
   zoneForm = { name: '', stateId: '' };
+  gstForm = { zoneId: '', zoneName: '', gst_percentage: null as number | null };
   categoryForm = { name: '', description: '' };
   afterHoursForm = { start_time: '', end_time: '', extra_amount: 0 };
   surchargeForm = { name: '', extra_amount: 0 };
@@ -126,6 +145,7 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
       'after-hours': 'After-Hours Deliveries',
       'base-prices': 'Base Prices',
       surcharges: 'Surcharges',
+      taxes: 'Taxes',
     }[this.section];
   }
 
@@ -136,13 +156,16 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
       'after-hours': 'Set the additional charge for deliveries within specific time ranges.',
       'base-prices': 'Configure zone/category prices, included distance, and per-kilometre charges beyond that radius.',
       surcharges: 'Manage extra charges and date-based special occasions.',
+      taxes: 'Set PST per province. GST comes from the pickup zone, so each province shows the zones that reach into it.',
     }[this.section];
   }
 
   get modalTitle(): string {
+    if (this.modal === 'zone-gst') return `GST for ${this.gstForm.zoneName}`;
     const action = this.editingId ? 'Edit' : 'Add';
     return `${action} ${{
       zone: 'operational zone',
+      'zone-gst': 'zone GST',
       category: 'delivery category',
       'after-hours': 'after-hours range',
       surcharge: 'surcharge',
@@ -160,7 +183,6 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
         ]);
         this.zones = zones;
         this.allowIntercity = policy.allow_intercity;
-        this.defaultTaxPercentage = Number(policy.default_tax_percentage);
       }
       if (this.section === 'categories') {
         this.categories = await firstValueFrom(this.service.getCategories());
@@ -170,9 +192,14 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
       }
       if (this.section === 'base-prices') {
         await this.loadBasePrices();
-        const policy = await firstValueFrom(this.service.getDeliveryPolicy());
-        this.allowIntercity = policy.allow_intercity;
-        this.defaultTaxPercentage = Number(policy.default_tax_percentage);
+      }
+      if (this.section === 'taxes') {
+        const provinces = await firstValueFrom(this.service.getProvinceTaxes());
+        this.provinceTaxes = provinces.map((province) => {
+          const pst =
+            province.pst_percentage === null ? null : Number(province.pst_percentage);
+          return { ...province, pst_percentage: pst, savedPst: pst, saving: false, pstInvalid: false };
+        });
       }
       if (this.section === 'surcharges') {
         [this.surcharges, this.occasions] = await Promise.all([
@@ -189,6 +216,21 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     for (const timer of this.autosaveTimers.values()) clearTimeout(timer);
+  }
+
+  /** Scrolling over a focused number input changes its value in every browser,
+   * which silently edits a saved rate. Dropping focus lets the page scroll
+   * normally and leaves the value alone. */
+  @HostListener('wheel', ['$event'])
+  onWheel(event: WheelEvent): void {
+    const target = event.target;
+    if (
+      target instanceof HTMLInputElement &&
+      target.type === 'number' &&
+      target === document.activeElement
+    ) {
+      target.blur();
+    }
   }
 
   private get normalizedSearch(): string {
@@ -260,6 +302,15 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
     return `${row.zone.id}:${row.category.id}`;
   }
 
+  openZoneGst(zone: OperationalZone): void {
+    this.resetModal('zone-gst', zone.id);
+    this.gstForm = {
+      zoneId: zone.id,
+      zoneName: zone.name,
+      gst_percentage: zone.gst_percentage === null ? null : Number(zone.gst_percentage),
+    };
+  }
+
   async openZone(zone?: OperationalZone): Promise<void> {
     this.resetModal('zone', zone?.id);
     this.zoneForm = { name: zone?.name || '', stateId: zone?.cities[0]?.state_id || '' };
@@ -285,16 +336,13 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
     this.clearFeedback();
     try {
       const saved = await firstValueFrom(
-        this.service.saveDeliveryPolicy({
-          allow_intercity: this.allowIntercity,
-          default_tax_percentage: this.defaultTaxPercentage,
-        })
+        this.service.saveDeliveryPolicy({ allow_intercity: this.allowIntercity })
       );
       this.allowIntercity = saved.allow_intercity;
       this.toast.success('Inter-city delivery policy saved.');
     } catch (error) {
       this.allowIntercity = !this.allowIntercity;
-      this.errorMessage = this.errorText(error, 'Unable to save the delivery policy.');
+      this.toast.error(this.errorText(error, 'Unable to save the delivery policy.'));
     } finally {
       this.savingPolicy = false;
     }
@@ -306,39 +354,116 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
     void this.saveIntercityPolicy();
   }
 
-  async saveDefaultTax(): Promise<void> {
-    this.clearFeedback();
-    if (this.defaultTaxPercentage < 0 || this.defaultTaxPercentage > 100) {
-      this.errorMessage = 'Default tax must be between 0 and 100 percent.';
-      return;
-    }
-    this.savingDefaultTax = true;
+  async saveZoneGst(group: ZonePricingGroup): Promise<void> {
+    const gst = this.taxValue(group.gst_percentage);
+    if (gst === false) return;
+    group.savingTax = true;
     try {
-      const saved = await firstValueFrom(
-        this.service.saveDeliveryPolicy({
-          allow_intercity: this.allowIntercity,
-          default_tax_percentage: this.defaultTaxPercentage,
-        })
-      );
-      this.defaultTaxPercentage = Number(saved.default_tax_percentage);
-      this.toast.success('Default order tax saved.');
+      const saved = await firstValueFrom(this.service.saveZoneGst(group.zone.id, gst));
+      group.zone.gst_percentage = saved.gst_percentage;
+      this.toast.success(`${group.zone.name} GST saved.`);
     } catch (error) {
-      this.errorMessage = this.errorText(error, 'Unable to save the default tax.');
+      this.toast.error(this.errorText(error, 'Unable to save the zone GST.'));
     } finally {
-      this.savingDefaultTax = false;
+      group.savingTax = false;
     }
   }
 
-  scheduleDefaultTaxSave(): void {
-    this.scheduleAutosave('default-tax', () => void this.saveDefaultTax());
+  async saveProvinceTax(row: ProvinceTaxRow): Promise<void> {
+    const pst = this.taxValue(row.pst_percentage);
+    if (pst === false) return;
+    row.saving = true;
+    try {
+      const saved = await firstValueFrom(this.service.saveProvinceTax(row.state_id, pst));
+      row.pst_percentage = saved.pst_percentage;
+      row.savedPst = saved.pst_percentage;
+      this.toast.success(`${row.state_name} PST saved.`);
+    } catch (error) {
+      this.toast.error(this.errorText(error, 'Unable to save the province PST.'));
+    } finally {
+      row.saving = false;
+    }
+  }
+
+  scheduleProvinceTaxSave(row: ProvinceTaxRow, input?: HTMLInputElement): void {
+    // Mark the field immediately, but hold the toast until typing settles.
+    row.pstInvalid = this.isInvalidTax(row.pst_percentage, input);
+    this.scheduleAutosave(`pst:${row.state_id}`, () => {
+      if (row.pstInvalid) {
+        this.toast.error(`${row.state_name} PST must be a number between 0 and 100.`);
+        return;
+      }
+      void this.saveProvinceTax(row);
+    });
+  }
+
+  /** A number input hands us null for both "empty" and "unparseable" (a lone
+   * "-", "e", "1.2.3"). Only badInput separates them: empty means clear the
+   * rate, unparseable must be rejected rather than silently saved as null. */
+  private isInvalidTax(value: number | null, input?: HTMLInputElement): boolean {
+    if (input?.validity.badInput) return true;
+    return this.taxValue(value) === false;
+  }
+
+  /** Combined rate a zone's orders are charged in this province.
+   * Built from saved values only, so it always reflects what orders will
+   * actually be charged rather than what is currently typed. */
+  provinceZoneTotal(row: ProvinceTaxRow, zone: ProvinceZone): number {
+    return Number(zone.gst_percentage || 0) + Number(row.savedPst || 0);
+  }
+
+  /** The typed rate has not reached the server yet. */
+  hasUnsavedPst(row: ProvinceTaxRow): boolean {
+    return !row.saving && !row.pstInvalid && (row.pst_percentage ?? null) !== (row.savedPst ?? null);
+  }
+
+  /** True when zones in one province carry different GST, which makes their totals differ. */
+  hasMixedGst(row: ProvinceTaxRow): boolean {
+    const rates = new Set(row.zones.map((zone) => Number(zone.gst_percentage || 0)));
+    return rates.size > 1;
+  }
+
+  get filteredProvinceTaxes(): ProvinceTaxRow[] {
+    const query = this.normalizedSearch;
+    return !query ? this.provinceTaxes : this.provinceTaxes.filter((row) =>
+      row.state_name.toLowerCase().includes(query)
+      || row.zones.some((zone) => zone.name.toLowerCase().includes(query))
+    );
+  }
+
+  /** Blank stays null (charged as 0); out-of-range returns false so the caller can reject. */
+  private taxValue(value: number | null): number | null | false {
+    if (value === null || (value as unknown as string) === '') return null;
+    const parsed = Number(value);
+    if (Number.isNaN(parsed) || parsed < 0 || parsed > 100) return false;
+    return parsed;
+  }
+
+  scheduleZoneGstSave(group: ZonePricingGroup, input?: HTMLInputElement): void {
+    // Mark the field immediately, but hold the toast until typing settles.
+    group.gstInvalid = this.isInvalidTax(group.gst_percentage, input);
+    this.scheduleAutosave(`gst:${group.zone.id}`, () => {
+      if (group.gstInvalid) {
+        this.toast.error(`${group.zone.name} GST must be a number between 0 and 100.`);
+        return;
+      }
+      void this.saveZoneGst(group);
+    });
   }
 
   scheduleBasePriceSave(row: BasePriceRow): void {
     this.scheduleAutosave(`base:${row.zone.id}:${row.category.id}`, () => void this.saveBasePrice(row));
   }
 
-  scheduleZoneRadiusSave(group: ZonePricingGroup): void {
-    this.scheduleAutosave(`radius:${group.zone.id}`, () => void this.saveZoneRadius(group));
+  scheduleZoneRadiusSave(group: ZonePricingGroup, input?: HTMLInputElement): void {
+    group.radiusInvalid = !!input?.validity.badInput || !(group.radius_km > 0);
+    this.scheduleAutosave(`radius:${group.zone.id}`, () => {
+      if (group.radiusInvalid) {
+        this.toast.error(`${group.zone.name} radius must be greater than zero.`);
+        return;
+      }
+      void this.saveZoneRadius(group);
+    });
   }
 
   schedulePartnerPriceSave(row: PartnerMatrixRow): void {
@@ -443,6 +568,15 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
             : this.service.createZone(payload)
         );
         this.replaceOrAdd(this.zones, saved);
+      } else if (this.modal === 'zone-gst') {
+        const gst = this.taxValue(this.gstForm.gst_percentage);
+        if (gst === false) {
+          this.formError = 'Enter a GST percentage from 0 to 100.';
+          return;
+        }
+        const saved = await firstValueFrom(this.service.saveZoneGst(this.gstForm.zoneId, gst));
+        const zone = this.zones.find((item) => item.id === this.gstForm.zoneId);
+        if (zone) zone.gst_percentage = saved.gst_percentage;
       } else if (this.modal === 'category') {
         const payload = {
           name: this.categoryForm.name.trim(),
@@ -501,7 +635,7 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
       row.individual_out_of_radius_per_km < 0 ||
       row.partner_out_of_radius_per_km < 0
     ) {
-      this.errorMessage = 'Enter valid non-negative prices.';
+      this.toast.error('Prices must be zero or greater.');
       return;
     }
     row.saving = true;
@@ -518,7 +652,7 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
       row.partner_overrides = saved.partner_overrides;
       this.toast.success(`${row.zone.name} / ${row.category.name} prices saved.`);
     } catch (error) {
-      this.errorMessage = this.errorText(error, 'Unable to save base prices.');
+      this.toast.error(this.errorText(error, 'Unable to save base prices.'));
     } finally {
       row.saving = false;
     }
@@ -537,11 +671,7 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
   }
 
   async saveZoneRadius(group: ZonePricingGroup): Promise<void> {
-    this.clearFeedback();
-    if (group.radius_km <= 0) {
-      this.errorMessage = 'The included radius must be greater than zero.';
-      return;
-    }
+    if (!(group.radius_km > 0)) return;
     group.savingRadius = true;
     try {
       await firstValueFrom(
@@ -550,7 +680,7 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
       group.zone.radius_km = group.radius_km;
       this.toast.success(`${group.zone.name} radius saved.`);
     } catch (error) {
-      this.errorMessage = this.errorText(error, 'Unable to save the zone radius.');
+      this.toast.error(this.errorText(error, 'Unable to save the zone radius.'));
     } finally {
       group.savingRadius = false;
     }
@@ -577,7 +707,7 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
   async savePartnerMatrixRow(row: PartnerMatrixRow): Promise<void> {
     if (!row.base.basePriceId || !this.selectedPartnerId) return;
     if (row.price < 0 || row.out_of_radius_per_km < 0) {
-      this.errorMessage = 'Partner prices must be zero or greater.';
+      this.toast.error('Partner prices must be zero or greater.');
       return;
     }
     row.saving = true;
@@ -597,7 +727,7 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
       row.hasOverride = true;
       this.toast.success(`${saved.partner_name}'s custom rate was saved.`);
     } catch (error) {
-      this.errorMessage = this.errorText(error, 'Unable to save the partner rate.');
+      this.toast.error(this.errorText(error, 'Unable to save the partner rate.'));
     } finally {
       row.saving = false;
     }
@@ -624,7 +754,7 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
       row.hasOverride = false;
       this.toast.success('Partner rate reset to the default.');
     } catch (error) {
-      this.errorMessage = this.errorText(error, 'Unable to reset the partner rate.');
+      this.toast.error(this.errorText(error, 'Unable to reset the partner rate.'));
     } finally {
       row.saving = false;
     }
@@ -650,7 +780,7 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
       this.toast.success(`${target.name} deleted.`);
       this.deleteTarget = null;
     } catch (error) {
-      this.errorMessage = this.errorText(error, 'Unable to delete this configuration.');
+      this.toast.error(this.errorText(error, 'Unable to delete this configuration.'));
       this.deleteTarget = null;
     } finally {
       this.isSaving = false;
@@ -700,6 +830,10 @@ export class DeliverySettingsComponent implements OnInit, OnDestroy {
       rows: this.basePriceRows.filter((row) => row.zone.id === zone.id),
       radius_km: Number(zone.radius_km),
       savingRadius: false,
+      radiusInvalid: false,
+      gst_percentage: zone.gst_percentage === null ? null : Number(zone.gst_percentage),
+      savingTax: false,
+      gstInvalid: false,
     }));
   }
 

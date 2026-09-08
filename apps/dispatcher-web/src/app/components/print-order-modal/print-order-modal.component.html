@@ -48,9 +48,9 @@
                         <span>Subtotal</span>
                         <span>{{ money(order.full.details.subtotal) }}</span>
                     </div>
-                    <div class="flex justify-between text-gray-600 dark:text-gray-400">
-                        <span>Tax ({{ order.full.details.taxRate }}%)</span>
-                        <span>{{ money(order.full.details.taxAmount) }}</span>
+                    <div class="flex justify-between text-gray-600 dark:text-gray-400" *ngFor="let tax of taxLines(order.full.details)">
+                        <span>{{ tax.label }}</span>
+                        <span>{{ money(tax.amount) }}</span>
                     </div>
                     <div class="flex justify-between text-gray-600 dark:text-gray-400">
                         <span>Delivery Fees</span>
