@@ -62,3 +62,46 @@ export function formatDateTime(dateStr: string, time: string): string {
   if (!parsed) return formatTime(time);
   return `${parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${formatTime(time)}`;
 }
+
+// ─── Tax breakdown ──────────────────────────────────────────────────────────
+
+export interface TaxLine {
+  /** "GST" or "PST". */
+  name: string;
+  rate: number;
+  amount: number;
+  /** "GST (5%)" — the label as it appears on a receipt. */
+  label: string;
+}
+
+interface TaxSource {
+  gstRate?: number;
+  gstAmount?: number;
+  pstRate?: number;
+  pstAmount?: number;
+}
+
+/** Trims trailing zeros so 5 reads "5" and Quebec's 9.975 keeps its decimals. */
+export function formatRate(rate: number): string {
+  return String(Number(toNumber(rate).toFixed(3)));
+}
+
+function taxLine(name: string, rate: unknown, amount: unknown): TaxLine | null {
+  const parsedRate = toNumber(rate);
+  const parsedAmount = toNumber(amount);
+  if (!parsedRate && !parsedAmount) return null;
+  return {
+    name,
+    rate: parsedRate,
+    amount: parsedAmount,
+    label: `${name} (${formatRate(parsedRate)}%)`,
+  };
+}
+
+/** Tax rows for a receipt: GST and PST separately, each omitted when it is zero. */
+export function taxLines(details: TaxSource): TaxLine[] {
+  return [
+    taxLine('GST', details.gstRate, details.gstAmount),
+    taxLine('PST', details.pstRate, details.pstAmount),
+  ].filter((line): line is TaxLine => line !== null);
+}

@@ -272,6 +272,30 @@ def _money(value: Any) -> str:
     return f"C$ {amount:,.2f}"
 
 
+def _num(value: Any) -> float:
+    """Coerce a payload field to a number. Missing keys arrive as "" via _field,
+    and a Celery task queued before GST/PST existed has no such key at all."""
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _tax_label(name: str, rate: Any) -> str:
+    """"GST (5%)" — trailing zeros trimmed, so Quebec's 9.975% keeps its decimals."""
+    text = f"{_num(rate):.3f}".rstrip("0").rstrip(".") or "0"
+    return f"{name} ({text}%)"
+
+
+def _tax_lines(order: Any) -> list[tuple[str, Any]]:
+    """(label, amount) per tax charged, skipping any that is zero."""
+    return [
+        (_tax_label(name, _field(order, f"{key}_rate")), _field(order, f"{key}_amount"))
+        for name, key in (("GST", "gst"), ("PST", "pst"))
+        if _num(_field(order, f"{key}_rate")) or _num(_field(order, f"{key}_amount"))
+    ]
+
+
 def _format_order_status(value: Any) -> str:
     raw = getattr(value, "value", value)
     return str(raw or "").replace("_", " ").title()
@@ -534,6 +558,15 @@ def build_order_recipient_email(order: Any, tracking_url: str) -> str:
         has_discount = float(discount_val or 0) > 0
     except (TypeError, ValueError):
         has_discount = False
+    tax_rows = "".join(
+        f"""
+        <tr>
+            <td style="padding: 4px 0; color: #6b7280;">{_html(label)}</td>
+            <td style="padding: 4px 0; text-align: right;">{_html(_money(amount))}</td>
+        </tr>
+        """
+        for label, amount in _tax_lines(order)
+    )
     discount_row = (
         f"""
         <tr>
@@ -613,10 +646,7 @@ def build_order_recipient_email(order: Any, tracking_url: str) -> str:
                 <td style="padding: 4px 0; color: #6b7280;">Subtotal</td>
                 <td style="padding: 4px 0; text-align: right;">{_html(_money(_field(order, 'subtotal')))}</td>
             </tr>
-            <tr>
-                <td style="padding: 4px 0; color: #6b7280;">Tax ({_html(_field(order, 'tax_rate'))}%)</td>
-                <td style="padding: 4px 0; text-align: right;">{_html(_money(_field(order, 'tax_amount')))}</td>
-            </tr>
+            {tax_rows}
             <tr>
                 <td style="padding: 4px 0; color: #6b7280;">Delivery fees</td>
                 <td style="padding: 4px 0; text-align: right;">{_html(_money(_field(order, 'delivery_fees')))}</td>
@@ -783,7 +813,7 @@ def build_order_invoice_pdf(order: Any) -> bytes:
     # --- Totals -------------------------------------------------------
     line_items = [
         ("Subtotal", _money(_field(order, "subtotal")), False),
-        (f"Tax ({_field(order, 'tax_rate')}%)", _money(_field(order, "tax_amount")), False),
+        *((label, _money(amount), False) for label, amount in _tax_lines(order)),
         ("Delivery fees", _money(_field(order, "delivery_fees")), False),
         ("Tips", _money(_field(order, "delivery_tips")), False),
     ]

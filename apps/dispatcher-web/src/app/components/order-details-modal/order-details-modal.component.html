@@ -70,7 +70,7 @@
                 <div class="border-t border-gray-200 dark:border-[#5a5d5a] pt-3 space-y-1">
                     <ng-container *ngIf="!isReadOnlyTenant">
                         <div class="flex justify-between"><span>Subtotal</span><span>{{ order.full.details.subtotal }}</span></div>
-                        <div class="flex justify-between"><span>Tax ({{ order.full.details.taxRate }}%)</span><span>{{ order.full.details.taxAmount }}</span></div>
+                        <div class="flex justify-between" *ngFor="let tax of taxLines(order.full.details)"><span>{{ tax.label }}</span><span>{{ tax.amount }}</span></div>
                         <div class="flex justify-between"><span>Delivery Fees</span><span>{{ order.full.details.deliveryFees }}</span></div>
                         <div class="flex justify-between"><span>Tips</span><span>{{ order.full.details.deliveryTips }}</span></div>
                         <div class="flex justify-between"><span>Discount</span><span>{{ order.full.details.discount }}</span></div>

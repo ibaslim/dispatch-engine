@@ -21,7 +21,7 @@ from app.models.delivery_configuration import (
     Surcharge,
     ZoneCategoryPrice,
 )
-from app.models.location import City, Country, State
+from app.models.location import City, Country, State, StateTax
 
 
 class DeliveryQuoteError(Exception):
@@ -62,6 +62,9 @@ class DeliveryQuote:
     distance_charge: Decimal
     applied_charges: tuple["AppliedCharge", ...]
     delivery_fee: Decimal
+    # GST comes from the pickup zone, PST from the pickup city's province.
+    gst_rate: Decimal = Decimal("0.00")
+    pst_rate: Decimal = Decimal("0.00")
     manual_fallback: bool = False
 
 
@@ -189,6 +192,23 @@ async def _fetch_route(
     route = routes[0]
     duration = str(route.get("duration") or "0s").removesuffix("s")
     return int(route.get("distanceMeters") or 0), int(float(duration or 0))
+
+
+async def resolve_tax_rates(
+    db: AsyncSession, zone: OperationalZone, state_id: UUID | None
+) -> tuple[Decimal, Decimal]:
+    """GST from the pickup zone, PST from the pickup city's province.
+
+    A zone can span provinces, so the two rates deliberately come from
+    different levels. Anything unset is charged as 0%.
+    """
+    gst_rate = Decimal(zone.gst_percentage) if zone and zone.gst_percentage is not None else Decimal("0.00")
+    pst_rate = Decimal("0.00")
+    if state_id is not None:
+        tax = await db.scalar(select(StateTax).where(StateTax.state_id == state_id))
+        if tax is not None and tax.pst_percentage is not None:
+            pst_rate = Decimal(tax.pst_percentage)
+    return gst_rate, pst_rate
 
 
 async def _resolve_location(db: AsyncSession, place: PlaceDetails) -> ResolvedLocation:
@@ -365,6 +385,7 @@ async def build_delivery_quote(
     delivery_fee = (distance_fee + _sum_charges(applied_charges)).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
+    gst_rate, pst_rate = await resolve_tax_rates(db, pickup.zone, pickup.city.state_id)
     return DeliveryQuote(
         pickup=pickup,
         delivery=delivery,
@@ -377,6 +398,8 @@ async def build_delivery_quote(
         distance_charge=(distance_fee - Decimal(base_price)).quantize(Decimal("0.01")),
         applied_charges=tuple(applied_charges),
         delivery_fee=delivery_fee,
+        gst_rate=gst_rate,
+        pst_rate=pst_rate,
     )
 
 
@@ -559,6 +582,7 @@ async def build_manual_delivery_quote(
     delivery_fee = (Decimal(base_price) + _sum_charges(applied_charges)).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
+    gst_rate, pst_rate = await resolve_tax_rates(db, pickup.zone, pickup.city.state_id)
     return DeliveryQuote(
         pickup=pickup,
         delivery=delivery,
@@ -571,5 +595,7 @@ async def build_manual_delivery_quote(
         distance_charge=Decimal("0.00"),
         applied_charges=tuple(applied_charges),
         delivery_fee=delivery_fee,
+        gst_rate=gst_rate,
+        pst_rate=pst_rate,
         manual_fallback=True,
     )

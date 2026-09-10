@@ -17,6 +17,8 @@ class OperationalZone(Base, UUIDMixin, TimestampMixin):
     radius_km: Mapped[Decimal] = mapped_column(
         Numeric(8, 2), nullable=False, default=Decimal("30.00")
     )
+    # PST lives on the province (StateTax), because a zone may span several.
+    gst_percentage: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 3), nullable=True)
     cities: Mapped[List["OperationalZoneCity"]] = relationship(
         "OperationalZoneCity", back_populates="zone", cascade="all, delete-orphan"
     )
@@ -33,9 +35,6 @@ class DeliveryPolicy(Base, UUIDMixin, TimestampMixin):
 
     key: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, default="default")
     allow_intercity: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    default_tax_percentage: Mapped[Decimal] = mapped_column(
-        Numeric(5, 2), nullable=False, default=Decimal("0.00")
-    )
 
 
 class OperationalZoneCity(Base, UUIDMixin, TimestampMixin):

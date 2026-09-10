@@ -21,9 +21,11 @@ from app.models.delivery_configuration import (
     DeliveryCategory,
     DeliveryPolicy,
     OperationalZone,
+    OperationalZoneCity,
     Surcharge,
 )
-from app.models.location import City, Country, State
+from app.models.location import City, Country, State, StateTax
+from app.services.delivery_quote_service import resolve_tax_rates
 from app.models.tenant import TenantRole
 from tests.factories import TenantFactory
 from tests.utils import API
@@ -53,6 +55,9 @@ ROUTES = [
     ("get", "/base-prices"),
     ("put", f"/base-prices/{_ID}/{_ID}"),
     ("put", f"/base-prices/zones/{_ID}/radius"),
+    ("put", f"/base-prices/zones/{_ID}/tax"),
+    ("get", "/taxes"),
+    ("put", f"/taxes/{_ID}"),
     ("put", f"/base-prices/{_ID}/partner-overrides/{_ID}"),
     ("delete", f"/base-prices/{_ID}/partner-overrides/{_ID}"),
     ("get", "/surcharges"),
@@ -101,13 +106,13 @@ class TestDeliveryPolicy:
     async def test_update_persists_the_policy(self, platform_admin_client):
         response = await platform_admin_client.put(
             f"{CFG}/delivery-policy",
-            json={"allow_intercity": True, "default_tax_percentage": "13.00"},
+            json={"allow_intercity": True},
         )
         assert response.status_code == 200
 
         reread = await platform_admin_client.get(f"{CFG}/delivery-policy")
         assert reread.json()["allow_intercity"] is True
-        assert Decimal(str(reread.json()["default_tax_percentage"])) == Decimal("13.00")
+        assert "default_tax_percentage" not in reread.json()
 
 
 # --------------------------------------------------------------------------- #
@@ -309,6 +314,8 @@ class TestOperationalZones:
         body = response.json()
         assert body["name"] == "Downtown"
         assert [c["name"] for c in body["cities"]] == ["Toronto"]
+        # GST is set later via the tax endpoint, never at zone creation.
+        assert body["gst_percentage"] is None
 
     async def test_rejects_a_duplicate_zone_name(self, db, platform_admin_client, cities):
         db.add(OperationalZone(name="Central"))
@@ -455,3 +462,152 @@ class TestBasePrices:
 
         assert response.status_code == 200
         assert Decimal(str(response.json()["radius_km"])) == Decimal("12.50")
+
+    async def test_update_zone_gst(self, platform_admin_client, cities):
+        zone = await platform_admin_client.post(
+            f"{CFG}/operational-zones",
+            json={"name": "Tax Zone", "city_ids": [str(cities["ottawa"].id)]},
+        )
+        zone_id = zone.json()["id"]
+
+        response = await platform_admin_client.put(
+            f"{CFG}/base-prices/zones/{zone_id}/tax", json={"gst_percentage": "5.00"}
+        )
+
+        assert response.status_code == 200
+        assert Decimal(str(response.json()["gst_percentage"])) == Decimal("5.00")
+
+        # Persisted, and readable back through the zone list -- not just echoed.
+        listing = await platform_admin_client.get(f"{CFG}/operational-zones")
+        zone_body = next(z for z in listing.json() if z["id"] == zone_id)
+        assert Decimal(str(zone_body["gst_percentage"])) == Decimal("5.00")
+
+    async def test_zone_gst_rejects_unknown_zone(self, platform_admin_client):
+        response = await platform_admin_client.put(
+            f"{CFG}/base-prices/zones/{uuid.uuid4()}/tax", json={"gst_percentage": "5.00"}
+        )
+
+        assert response.status_code == 404
+
+
+# --------------------------------------------------------------------------- #
+# Province tax (PST)
+# --------------------------------------------------------------------------- #
+
+
+class TestProvinceTaxes:
+    """PST is per province because one zone can cover several of them."""
+
+    async def test_lists_only_provinces_a_zone_reaches(self, platform_admin_client, cities):
+        await platform_admin_client.post(
+            f"{CFG}/operational-zones",
+            json={"name": "Ontario Zone", "city_ids": [str(cities["toronto"].id)]},
+        )
+
+        response = await platform_admin_client.get(f"{CFG}/taxes")
+
+        assert response.status_code == 200
+        provinces = {row["state_name"]: row for row in response.json()}
+        assert "Ontario" in provinces
+        assert [z["name"] for z in provinces["Ontario"]["zones"]] == ["Ontario Zone"]
+        assert provinces["Ontario"]["pst_percentage"] is None
+
+    async def test_update_then_read_back(self, platform_admin_client, cities):
+        await platform_admin_client.post(
+            f"{CFG}/operational-zones",
+            json={"name": "Ontario Zone", "city_ids": [str(cities["toronto"].id)]},
+        )
+        listing = await platform_admin_client.get(f"{CFG}/taxes")
+        state_id = next(r["state_id"] for r in listing.json() if r["state_name"] == "Ontario")
+
+        response = await platform_admin_client.put(
+            f"{CFG}/taxes/{state_id}", json={"pst_percentage": "8.00"}
+        )
+        assert response.status_code == 200
+
+        reread = await platform_admin_client.get(f"{CFG}/taxes")
+        row = next(r for r in reread.json() if r["state_id"] == state_id)
+        assert Decimal(str(row["pst_percentage"])) == Decimal("8.00")
+
+    async def test_update_is_an_upsert(self, platform_admin_client, cities):
+        """A province has no tax row until it is first saved."""
+        await platform_admin_client.post(
+            f"{CFG}/operational-zones",
+            json={"name": "Ontario Zone", "city_ids": [str(cities["toronto"].id)]},
+        )
+        listing = await platform_admin_client.get(f"{CFG}/taxes")
+        state_id = next(r["state_id"] for r in listing.json() if r["state_name"] == "Ontario")
+
+        first = await platform_admin_client.put(
+            f"{CFG}/taxes/{state_id}", json={"pst_percentage": "8.00"}
+        )
+        second = await platform_admin_client.put(
+            f"{CFG}/taxes/{state_id}", json={"pst_percentage": "9.00"}
+        )
+
+        assert first.status_code == 200 and second.status_code == 200
+        reread = await platform_admin_client.get(f"{CFG}/taxes")
+        row = next(r for r in reread.json() if r["state_id"] == state_id)
+        assert Decimal(str(row["pst_percentage"])) == Decimal("9.00")
+
+    async def test_rejects_an_unknown_province(self, platform_admin_client):
+        response = await platform_admin_client.put(
+            f"{CFG}/taxes/{uuid.uuid4()}", json={"pst_percentage": "8.00"}
+        )
+
+        assert response.status_code == 404
+
+
+@pytest.fixture
+async def cross_province_zone(db):
+    """One zone covering both an Ontario and an Alberta city.
+
+    This is the case the whole per-province PST change exists for: a single
+    zone whose orders must be taxed differently depending on pickup province.
+    """
+    country = Country(name="Canada", code="CA")
+    db.add(country)
+    await db.flush()
+    ontario = State(name="Ontario", country_id=country.id)
+    alberta = State(name="Alberta", country_id=country.id)
+    db.add_all([ontario, alberta])
+    await db.flush()
+    toronto = City(name="Toronto", state_id=ontario.id)
+    calgary = City(name="Calgary", state_id=alberta.id)
+    db.add_all([toronto, calgary])
+    await db.flush()
+    zone = OperationalZone(name="Cross Province Zone", gst_percentage=Decimal("5.00"))
+    zone.cities = [
+        OperationalZoneCity(city_id=toronto.id),
+        OperationalZoneCity(city_id=calgary.id),
+    ]
+    db.add(zone)
+    await db.flush()
+    return {"zone": zone, "ontario": ontario, "alberta": alberta}
+
+
+class TestCrossProvinceTaxResolution:
+    async def test_same_zone_is_taxed_differently_per_province(self, db, cross_province_zone):
+        """Ontario totals 13% and Alberta 5%, from the same zone's 5% GST."""
+        zone = cross_province_zone["zone"]
+        ontario = cross_province_zone["ontario"]
+        alberta = cross_province_zone["alberta"]
+        # Ontario's 13% HST is stored as the 5% federal portion plus 8% provincial.
+        db.add(StateTax(state_id=ontario.id, pst_percentage=Decimal("8.00")))
+        db.add(StateTax(state_id=alberta.id, pst_percentage=None))
+        await db.flush()
+
+        on_gst, on_pst = await resolve_tax_rates(db, zone, ontario.id)
+        ab_gst, ab_pst = await resolve_tax_rates(db, zone, alberta.id)
+
+        assert on_gst + on_pst == Decimal("13.00")
+        assert ab_gst + ab_pst == Decimal("5.00")
+
+    async def test_province_without_a_tax_row_charges_no_pst(self, db, cross_province_zone):
+        """An unconfigured province is charged 0% PST, never an error."""
+        gst, pst = await resolve_tax_rates(
+            db, cross_province_zone["zone"], cross_province_zone["ontario"].id
+        )
+
+        assert gst == Decimal("5.00")
+        assert pst == Decimal("0.00")

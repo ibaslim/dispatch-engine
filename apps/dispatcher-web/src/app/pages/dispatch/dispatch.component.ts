@@ -8,6 +8,7 @@ import { OrdersService } from '../../services/orders/orders.service';
 import { PaymentMethodType } from '../../models/new-order-form/new-order-form.model';
 import { AuthService } from '../../core/auth/auth.service';
 import { OrderRealtimeEvent, PusherService } from '../../core/realtime/pusher.service';
+import { formatRate, TaxLine, taxLines } from '../orders/orders-formatting.util';
 
 // ─── Backend types ──────────────────────────────────────────────────────────
 
@@ -29,8 +30,10 @@ type BackendOrder = {
   delivery_time: string;
   items: BackendOrderItem[];
   subtotal: number;
-  tax_rate: number;
-  tax_amount: number;
+  gst_rate?: number | null;
+  gst_amount?: number | null;
+  pst_rate?: number | null;
+  pst_amount?: number | null;
   delivery_fees: number;
   delivery_tips: number;
   discount: number;
@@ -54,7 +57,7 @@ type DispatchOrder = {
   pickup: { name: string; phone: string; address: string; time: string; date: string };
   delivery: { name: string; phone: string; address: string; date: string; time: string };
   items: Array<{ name: string; price: number; qty: number }>;
-  taxRate: number;
+  taxLines: TaxLine[];
   deliveryFee: number;
   tip: number;
   discount: number;
@@ -97,6 +100,8 @@ const WINDOW_SECONDS = WINDOW_MINUTES * 60;
   templateUrl: './dispatch.component.html'
 })
 export class DispatchComponent implements OnInit, OnDestroy {
+  protected readonly formatRate = formatRate;
+
 
   // ─── State ──────────────────────────────────────────────────────────────────
   assignedDrivers: DispatchDriverGroup[] = [];
@@ -347,7 +352,12 @@ export class DispatchComponent implements OnInit, OnDestroy {
         price: this.toNumber(i.itemPrice),
         qty: Math.round(this.toNumber(i.itemQty))
       })),
-      taxRate: order.tax_rate,
+      taxLines: taxLines({
+        gstRate: order.gst_rate ?? 0,
+        gstAmount: order.gst_amount ?? 0,
+        pstRate: order.pst_rate ?? 0,
+        pstAmount: order.pst_amount ?? 0,
+      }),
       deliveryFee: order.delivery_fees,
       tip: order.delivery_tips,
       discount: order.discount,

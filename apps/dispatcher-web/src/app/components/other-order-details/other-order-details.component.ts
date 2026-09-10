@@ -6,6 +6,7 @@ import { PaymentMethodComponent } from '../payment-method/payment-method.compone
 import { TextareaComponent } from '../textarea/textarea.component';
 import { ButtonComponent } from '../button/button.component';
 import { ErrorMessageComponent } from '../error-message/error-message.component';
+import { taxLines } from '@pages/orders/orders-formatting.util';
 
 @Component({
   selector: 'app-other-order-details',
@@ -128,16 +129,21 @@ export class OtherOrderDetailsComponent {
       }, 0)
     );
 
-    const taxRate = this.toNumber(details.taxRate);
+    const gstRate = this.toNumber(details.gstRate);
+    const pstRate = this.toNumber(details.pstRate);
     const deliveryFees = this.toNumber(details.deliveryFees);
     const deliveryTips = this.toNumber(details.deliveryTips);
     const discount = this.toNumber(details.discount);
 
-    const taxAmount = this.round2((subtotal * taxRate) / 100);
+    // Each tax is rounded on its own so the receipt's GST and PST lines add up
+    // to the tax total exactly, rather than to a separately rounded figure.
+    const gstAmount = this.round2((subtotal * gstRate) / 100);
+    const pstAmount = this.round2((subtotal * pstRate) / 100);
 
     const total = this.round2(
       subtotal +
-      taxAmount +
+      gstAmount +
+      pstAmount +
       deliveryFees +
       deliveryTips -
       discount
@@ -147,8 +153,10 @@ export class OtherOrderDetailsComponent {
       ...details,
       items,
       subtotal,
-      taxRate,
-      taxAmount,
+      gstRate,
+      gstAmount,
+      pstRate,
+      pstAmount,
       deliveryFees,
       deliveryTips,
       discount,
@@ -179,6 +187,8 @@ export class OtherOrderDetailsComponent {
     }
     return '';
   }
+
+  protected readonly taxLines = taxLines;
 
   money(v: number): string {
     return `C$ ${this.round2(this.toNumber(v)).toFixed(2)}`;

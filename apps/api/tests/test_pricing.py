@@ -1,7 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from app.api.routers.pricing import PartnerRates, Rates, _apply_partner_rates, _apply_rates
+from app.api.routers.pricing import _apply_partner_rates, _apply_rates
+from app.schemas.pricing import PartnerRates, Rates
 from app.db.canada_official_cities import CANADIAN_PROVINCES_AND_CITIES
 from app.db.seed_locations import GEO_DATA
 from app.models.location import CityPricing, PartnerCityPricing

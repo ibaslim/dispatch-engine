@@ -230,7 +230,7 @@
                 </div>
 
                 <div *ngIf="!isDriver" class="mt-6 grid md:grid-cols-2 gap-4 text-sm text-gray-600 dark:text-gray-400">
-                    <div>Tax Rate: {{ order.taxRate }}%</div>
+                    <div *ngFor="let tax of order.taxLines">{{ tax.name }} Rate: {{ formatRate(tax.rate) }}%</div>
                     <div>Delivery Fee: C$ {{ order.deliveryFee.toFixed(2) }}</div>
                     <div>Tip: C$ {{ order.tip.toFixed(2) }}</div>
                     <div>Discount: C$ {{ order.discount.toFixed(2) }}</div>

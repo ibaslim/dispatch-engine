@@ -51,3 +51,7 @@ class TenantResponse(BaseModel):
     national_id_file_name: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class UsernameCheckResponse(BaseModel):
+    available: bool

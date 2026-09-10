@@ -4,7 +4,7 @@ import { Component, EventEmitter, HostListener, Input, OnInit, Output } from '@a
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 
-import { NewOrderFormValue } from '../../models/new-order-form/new-order-form.model';
+import { DeliveryRouteQuote, NewOrderFormValue } from '../../models/new-order-form/new-order-form.model';
 import {
   DeliveryCategory,
   DeliveryConfigurationService,
@@ -74,22 +74,15 @@ export class NewOrderFormComponent implements OnInit {
 
   async ngOnInit(): Promise<void> {
     try {
-      const [categories, policy, surcharges, operationalZones] = await Promise.all([
+      const [categories, surcharges, operationalZones] = await Promise.all([
         firstValueFrom(this.configurations.getCategories()),
-        firstValueFrom(this.configurations.getDeliveryPolicy()),
         firstValueFrom(this.configurations.getSurcharges()),
         firstValueFrom(this.configurations.getZones()),
       ]);
       this.categories = categories;
       this.surcharges = surcharges;
       this.operationalZones = operationalZones;
-      if (!this.value.orderNumber) {
-        const details = this.withTaxRate(
-          this.value.details,
-          Number(policy.default_tax_percentage)
-        );
-        this.valueChange.emit({ ...this.value, details });
-      }
+      // Tax rates belong to the pickup zone, so they arrive with the delivery quote.
     } catch {
       this.quoteError = 'Unable to load delivery categories.';
     }
@@ -135,12 +128,14 @@ export class NewOrderFormComponent implements OnInit {
             itemQty: ''
           }
         ],
-        taxRate: 0,
+        gstRate: 0,
+        pstRate: 0,
         deliveryFees: 0,
         deliveryTips: 0,
         discount: 0,
         subtotal: 0,
-        taxAmount: 0,
+        gstAmount: 0,
+        pstAmount: 0,
         total: 0,
         instructions: '',
         payment: { method: 'cash_on_delivery' },
@@ -188,7 +183,13 @@ export class NewOrderFormComponent implements OnInit {
       this.quoteError = '';
       this.valueChange.emit({
         ...next,
-        details: this.withDeliveryFee(next.details, 0),
+        details: this.withRecalculatedTotal(next.details, {
+          deliveryFees: 0,
+          gstRate: 0,
+          pstRate: 0,
+          gstAmount: 0,
+          pstAmount: 0,
+        }),
       });
       return;
     }
@@ -212,7 +213,7 @@ export class NewOrderFormComponent implements OnInit {
         delivery_address: value.delivery.address,
       }));
       if (request !== this.quoteRequest) return;
-      const details = this.withDeliveryFee(this.value.details, quote.delivery_fee);
+      const details = this.withQuotedCharges(this.value.details, quote);
       this.valueChange.emit({ ...this.value, details, routeQuote: quote });
     } catch (error: unknown) {
       if (request !== this.quoteRequest) return;
@@ -225,9 +226,16 @@ export class NewOrderFormComponent implements OnInit {
         }
       }
       this.quoteError = this.quoteErrorText(error);
+      // No route means no pickup zone, so neither the fee nor its tax rate applies.
       this.valueChange.emit({
         ...this.value,
-        details: this.withDeliveryFee(this.value.details, 0),
+        details: this.withRecalculatedTotal(this.value.details, {
+          deliveryFees: 0,
+          gstRate: 0,
+          pstRate: 0,
+          gstAmount: 0,
+          pstAmount: 0,
+        }),
         routeQuote: null,
       });
     } finally {
@@ -235,17 +243,22 @@ export class NewOrderFormComponent implements OnInit {
     }
   }
 
-  private withDeliveryFee(
-    details: NewOrderFormValue['details'], deliveryFees: number
+  /** Applies the quoted delivery fee plus the pickup location's GST and PST.
+   * The two taxes are kept apart so receipts can show them as separate lines. */
+  private withQuotedCharges(
+    details: NewOrderFormValue['details'], quote: DeliveryRouteQuote
   ): NewOrderFormValue['details'] {
-    return this.withRecalculatedTotal(details, { deliveryFees });
-  }
-
-  private withTaxRate(
-    details: NewOrderFormValue['details'], taxRate: number
-  ): NewOrderFormValue['details'] {
-    const taxAmount = Math.round(details.subtotal * taxRate) / 100;
-    return this.withRecalculatedTotal(details, { taxRate, taxAmount });
+    const gstRate = Number(quote.gst_rate || 0);
+    const pstRate = Number(quote.pst_rate || 0);
+    const gstAmount = Math.round(details.subtotal * gstRate) / 100;
+    const pstAmount = Math.round(details.subtotal * pstRate) / 100;
+    return this.withRecalculatedTotal(details, {
+      deliveryFees: quote.delivery_fee,
+      gstRate,
+      pstRate,
+      gstAmount,
+      pstAmount,
+    });
   }
 
   private withRecalculatedTotal(
@@ -253,7 +266,7 @@ export class NewOrderFormComponent implements OnInit {
     changes: Partial<NewOrderFormValue['details']>
   ): NewOrderFormValue['details'] {
     const updated = { ...details, ...changes };
-    const total = updated.subtotal + updated.taxAmount + updated.deliveryFees
+    const total = updated.subtotal + updated.gstAmount + updated.pstAmount + updated.deliveryFees
       + Number(updated.deliveryTips || 0) - Number(updated.discount || 0);
     return { ...updated, total: Math.round(total * 100) / 100 };
   }

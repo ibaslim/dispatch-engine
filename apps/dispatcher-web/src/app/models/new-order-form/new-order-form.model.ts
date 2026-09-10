@@ -71,13 +71,15 @@ export interface NewOrderFormValue {
             itemQty: string;
         }[];
 
-        taxRate: number;
+        gstRate: number;
+        pstRate: number;
         deliveryFees: number;
         deliveryTips: number;
         discount: number;
 
         subtotal: number;
-        taxAmount: number;
+        gstAmount: number;
+        pstAmount: number;
         total: number;
         driverPayout?: number;
         driverFeePayout?: number;
@@ -111,6 +113,8 @@ export interface DeliveryRouteQuote {
     distance_charge: number;
     applied_charges: AppliedCharge[];
     delivery_fee: number;
+    gst_rate: number;
+    pst_rate: number;
     manual_fallback?: boolean;
 }
 

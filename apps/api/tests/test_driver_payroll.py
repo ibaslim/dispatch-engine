@@ -1,10 +1,8 @@
 import asyncio
 import uuid
 
-from app.api.routers.driver_payroll import (
-    DriverCompensation,
-    _apply_driver_compensation,
-)
+from app.api.routers.driver_payroll import _apply_driver_compensation
+from app.schemas.driver_payroll import DriverCompensation
 from app.api.routers.onboarding import (
     _ensure_default_driver_payroll,
 )

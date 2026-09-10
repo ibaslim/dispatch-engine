@@ -46,8 +46,10 @@ export type BackendOrder = {
   applied_charges?: AppliedCharge[] | null;
   items: BackendOrderItem[];
   subtotal: number;
-  tax_rate: number;
-  tax_amount: number;
+  gst_rate?: number | null;
+  gst_amount?: number | null;
+  pst_rate?: number | null;
+  pst_amount?: number | null;
   delivery_fees: number;
   delivery_tips: number;
   discount: number;
@@ -243,6 +245,8 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
         distance_charge: 0,
         applied_charges: order.applied_charges || [],
         delivery_fee: order.delivery_fees,
+        gst_rate: order.gst_rate ?? 0,
+        pst_rate: order.pst_rate ?? 0,
       } : null,
       pickup: {
         name: order.pickup_name,
@@ -279,8 +283,10 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
           itemQty: String(item.itemQty)
         })),
         subtotal: order.subtotal,
-        taxRate: order.tax_rate,
-        taxAmount: order.tax_amount,
+        gstRate: order.gst_rate ?? 0,
+        gstAmount: order.gst_amount ?? 0,
+        pstRate: order.pst_rate ?? 0,
+        pstAmount: order.pst_amount ?? 0,
         deliveryFees: order.delivery_fees,
         deliveryTips: order.delivery_tips,
         discount: order.discount,
@@ -337,8 +343,10 @@ export function toOrderPayload(value: NewOrderFormValue): Record<string, unknown
         itemQty: Math.round(toNumber(item.itemQty))
       })),
     subtotal: value.details.subtotal,
-    tax_rate: value.details.taxRate,
-    tax_amount: value.details.taxAmount,
+    gst_rate: value.details.gstRate,
+    gst_amount: value.details.gstAmount,
+    pst_rate: value.details.pstRate,
+    pst_amount: value.details.pstAmount,
     delivery_fees: value.details.deliveryFees,
     delivery_tips: value.details.deliveryTips,
     discount: value.details.discount,
@@ -367,8 +375,8 @@ export function createDefaultNewOrder(): NewOrderFormValue {
     delivery: { name: '', phone: { countryCode: '+1', number: '' }, email: '', address: '', location: null, deliveryDate: todayYYYYMMDD(), deliveryTime: '' },
     details: {
       items: [{ itemName: '', itemPrice: '', itemQty: '' }],
-      taxRate: 0, deliveryFees: 0, deliveryTips: 0, discount: 0,
-      subtotal: 0, taxAmount: 0, total: 0,
+      gstRate: 0, pstRate: 0, deliveryFees: 0, deliveryTips: 0, discount: 0,
+      subtotal: 0, gstAmount: 0, pstAmount: 0, total: 0,
       instructions: '', payment: { method: 'cash_on_delivery' },
       proofOfDelivery: { signature: false, picture: false },
       incidentReport: null
@@ -399,7 +407,7 @@ export function buildDemoDraftValue(): NewOrderFormValue {
       name: 'North Fork Kitchen',
       phone: { countryCode: '+1', number: '4161234567' },
       email: 'sender@dispatch.com',
-      address: '110 King St, Toronto',
+      address: '32315 South Fraser Way, Abbotsford, BC V2T 1W7, Canada',
       location: null,
       pickupDate: formatDateForInput(pickupAt),
       pickupTime: formatTimeForInput(pickupAt)
@@ -408,19 +416,21 @@ export function buildDemoDraftValue(): NewOrderFormValue {
       name: 'Maya Chen',
       phone: { countryCode: '+1', number: '4169876543' },
       email: `demo+${Date.now()}@dispatch.local`,
-      address: '480 Queen Ave, Toronto',
+      address: '1890 McCallum Rd, Abbotsford, BC V2S 3N2, Canada',
       location: null,
       deliveryDate: formatDateForInput(deliveryAt),
       deliveryTime: formatTimeForInput(deliveryAt)
     },
     details: {
       items: [{ itemName: 'Burger Combo', itemPrice: '14', itemQty: '2' }],
-      taxRate: 13,
+      gstRate: 5,
+      pstRate: 8,
       deliveryFees: 4,
       deliveryTips: 1.5,
       discount: 0,
       subtotal: 28,
-      taxAmount: 3.64,
+      gstAmount: 1.4,
+      pstAmount: 2.24,
       total: 37.14,
       instructions: 'Call on arrival.',
       payment: { method: 'cash_on_delivery' },

@@ -7,7 +7,7 @@ import { OrderEntity } from '@models/orders/order-entity.model';
 import { OrdersService } from '@services/orders/orders.service';
 import { OrderDocumentService } from '@services/orders/order-document.service';
 import { ToastService } from '@core/toast/toast.service';
-import { formatPaymentMethod, formatStatusLabel, maskCard, money, toNumber } from '@pages/orders/orders-formatting.util';
+import { formatPaymentMethod, formatStatusLabel, maskCard, money, taxLines, toNumber } from '@pages/orders/orders-formatting.util';
 
 @Component({
   selector: 'app-print-order-modal',
@@ -28,6 +28,7 @@ export class PrintOrderModalComponent {
   protected readonly maskCard = maskCard;
   protected readonly formatPaymentMethod = formatPaymentMethod;
   protected readonly formatStatusLabel = formatStatusLabel;
+  protected readonly taxLines = taxLines;
 
   constructor(
     private readonly ordersService: OrdersService,

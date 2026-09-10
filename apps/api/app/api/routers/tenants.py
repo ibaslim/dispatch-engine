@@ -1,20 +1,15 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from pydantic import BaseModel
 from datetime import datetime, timezone
 
 from app.core.deps import get_db, TenantAdmin
-from app.schemas.tenant import InviteTenantAdminRequest, InviteTenantUserRequest, PendingInvitationResponse, TenantStatusResponse
+from app.schemas.tenant import InviteTenantAdminRequest, InviteTenantUserRequest, PendingInvitationResponse, TenantStatusResponse, UsernameCheckResponse
 from app.services.invitation_service import create_tenant_user_invitation
 from app.models.tenant import Tenant
 from app.models.invitation import Invitation
 
 router = APIRouter()
-
-
-class UsernameCheckResponse(BaseModel):
-    available: bool
 
 
 @router.get("/check-username/{username}", response_model=UsernameCheckResponse)

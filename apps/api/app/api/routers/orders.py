@@ -9,7 +9,6 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +20,8 @@ from app.core.redis import get_redis
 from app.db.session import get_db
 from app.models.order import Order, OrderStatus, ActivityStatus
 from app.models.tenant import Tenant, TenantRole
-from app.models.delivery_configuration import DeliveryPolicy
+from app.models.delivery_configuration import OperationalZone
+from app.models.location import City
 from app.models.driver_payment import DriverPaymentGroupAssignment
 from app.services.driver_active_order_service import DriverActiveOrderService
 from app.services.delivery_quote_service import (
@@ -29,6 +29,7 @@ from app.services.delivery_quote_service import (
     DeliveryQuoteError,
     build_delivery_quote,
     build_manual_delivery_quote,
+    resolve_tax_rates,
 )
 from app.services.driver_payout_service import (
     apply_driver_payout_snapshot,
@@ -42,9 +43,15 @@ from app.schemas.order import (
     OrderResponse,
     OrderUpdate,
     ActivityStatusUpdate,
+    AppliedChargeResponse,
+    AssignDriverRequest,
+    DeliveryQuoteRequest,
+    DeliveryQuoteResponse,
     IncidentReportCreate,
     IncidentReason,
     IncidentStage,
+    ReadyUpdate,
+    StatusUpdate,
     INCIDENT_REASONS_REQUIRING_DESCRIPTION,
 )
 from app.workers.celery_app import celery_app
@@ -105,45 +112,6 @@ def _offer_expires_at(order: Order) -> datetime:
     published_at = order.published_at or datetime.now(APP_TIMEZONE)
     return published_at + timedelta(minutes=PUBLISH_WINDOW_MINUTES)
 
-class DeliveryQuoteRequest(BaseModel):
-    pickup_place_id: str
-    delivery_place_id: str
-    pickup_address: str | None = None
-    delivery_address: str | None = None
-    delivery_category_id: UUID
-    vendor_id: UUID | None = None
-    delivery_date: str | None = None
-    delivery_time: str | None = None
-    surcharge_ids: list[UUID] = Field(default_factory=list)
-
-
-class AppliedChargeResponse(BaseModel):
-    id: UUID | None
-    kind: str
-    label: str
-    amount: float
-
-
-class DeliveryQuoteResponse(BaseModel):
-    eligible: bool = True
-    pickup_city: str
-    pickup_zone_id: UUID
-    pickup_zone_name: str
-    delivery_city: str
-    delivery_zone_id: UUID
-    delivery_zone_name: str
-    distance_meters: int
-    distance_km: float
-    duration_seconds: int
-    radius_km: float
-    extra_distance_km: float
-    base_price: float
-    additional_per_km: float
-    distance_charge: float
-    applied_charges: list[AppliedChargeResponse]
-    delivery_fee: float
-    manual_fallback: bool = False
-
 
 def _quote_response(quote: DeliveryQuote) -> DeliveryQuoteResponse:
     return DeliveryQuoteResponse(
@@ -168,6 +136,8 @@ def _quote_response(quote: DeliveryQuote) -> DeliveryQuoteResponse:
             for item in quote.applied_charges
         ],
         delivery_fee=float(quote.delivery_fee),
+        gst_rate=float(quote.gst_rate),
+        pst_rate=float(quote.pst_rate),
         manual_fallback=quote.manual_fallback,
     )
 
@@ -201,7 +171,8 @@ def _apply_quote(data: dict, quote: DeliveryQuote) -> None:
     )
     total = (
         Decimal(str(data.get("subtotal") or 0))
-        + Decimal(str(data.get("tax_amount") or 0))
+        + Decimal(str(data.get("gst_amount") or 0))
+        + Decimal(str(data.get("pst_amount") or 0))
         + quote.delivery_fee
         + Decimal(str(data.get("delivery_tips") or 0))
         - Decimal(str(data.get("discount") or 0))
@@ -209,13 +180,20 @@ def _apply_quote(data: dict, quote: DeliveryQuote) -> None:
     data["total"] = float(total.quantize(Decimal("0.01")))
 
 
-async def _apply_default_tax(db: AsyncSession, data: dict) -> None:
-    policy = await db.scalar(select(DeliveryPolicy).where(DeliveryPolicy.key == "default"))
-    tax_rate = Decimal(policy.default_tax_percentage) if policy else Decimal("0.00")
+def _apply_tax(data: dict, gst_rate: Decimal, pst_rate: Decimal) -> None:
+    """Charge the resolved GST/PST against the order subtotal.
+
+    Rates are resolved elsewhere -- GST from the pickup zone, PST from the
+    pickup city's province -- because a zone can span several provinces.
+    Anything unset is charged as 0%; there is no fallback rate.
+    """
     subtotal = Decimal(str(data.get("subtotal") or 0))
-    tax_amount = (subtotal * tax_rate / Decimal("100")).quantize(Decimal("0.01"))
-    data["tax_rate"] = float(tax_rate)
-    data["tax_amount"] = float(tax_amount)
+    gst_amount = (subtotal * gst_rate / Decimal("100")).quantize(Decimal("0.01"))
+    pst_amount = (subtotal * pst_rate / Decimal("100")).quantize(Decimal("0.01"))
+    data["gst_rate"] = float(gst_rate)
+    data["gst_amount"] = float(gst_amount)
+    data["pst_rate"] = float(pst_rate)
+    data["pst_amount"] = float(pst_amount)
 
 
 async def _get_quote_or_http_error(
@@ -282,8 +260,10 @@ def _driver_order_response(order: Order, payment_group) -> dict:
     response = OrderResponse.model_validate(order).model_dump()
     response.update(
         subtotal=0,
-        tax_rate=0,
-        tax_amount=0,
+        gst_rate=0,
+        gst_amount=0,
+        pst_rate=0,
+        pst_amount=0,
         delivery_fees=0,
         delivery_tips=0,
         discount=0,
@@ -446,8 +426,6 @@ async def create_order(
     try:
         data = payload.model_dump()
 
-        await _apply_default_tax(db, data)
-
         quote = await _get_quote_or_http_error(
             db,
             data.get("pickup_place_id"),
@@ -460,6 +438,8 @@ async def create_order(
             data.get("pickup_address"),
             data.get("delivery_address"),
         )
+        # Must run before _apply_quote, which folds the tax into the total.
+        _apply_tax(data, quote.gst_rate, quote.pst_rate)
         _apply_quote(data, quote)
         data["surcharge_ids"] = [str(value) for value in data.get("surcharge_ids", [])]
 
@@ -540,11 +520,10 @@ async def update_order(
     # The charge breakdown is always recalculated by the server.
     update_data.pop("applied_charges", None)
 
-    if {"subtotal", "items", "tax_rate", "tax_amount"}.intersection(update_data):
-        tax_data = {"subtotal": update_data.get("subtotal", order.subtotal)}
-        await _apply_default_tax(db, tax_data)
-        update_data.update(tax_data)
-
+    tax_trigger_fields = {
+        "subtotal", "items",
+        "gst_rate", "gst_amount", "pst_rate", "pst_amount",
+    }
     quote_fields = {
         "pickup_address",
         "delivery_address",
@@ -556,6 +535,7 @@ async def update_order(
         "delivery_time",
         "surcharge_ids",
     }
+
     if quote_fields.intersection(update_data):
         quote = await _get_quote_or_http_error(
             db,
@@ -569,14 +549,32 @@ async def update_order(
             update_data.get("pickup_address", order.pickup_address),
             update_data.get("delivery_address", order.delivery_address),
         )
+        # The pickup zone/province may have changed with the address, so the
+        # new quote's rates win over whatever the order was taxed at before.
+        tax_data = {"subtotal": update_data.get("subtotal", order.subtotal)}
+        _apply_tax(tax_data, quote.gst_rate, quote.pst_rate)
+        update_data.update(tax_data)
         merged_totals = {
-            "subtotal": update_data.get("subtotal", order.subtotal),
-            "tax_amount": update_data.get("tax_amount", order.tax_amount),
+            "subtotal": tax_data["subtotal"],
+            "gst_amount": tax_data["gst_amount"],
+            "pst_amount": tax_data["pst_amount"],
             "delivery_tips": update_data.get("delivery_tips", order.delivery_tips),
             "discount": update_data.get("discount", order.discount),
         }
         _apply_quote(merged_totals, quote)
         update_data.update(merged_totals)
+    elif tax_trigger_fields.intersection(update_data):
+        # No new quote here, so re-resolve from what the order already points at.
+        zone = await db.get(OperationalZone, order.pickup_zone_id) if order.pickup_zone_id else None
+        city = await db.get(City, order.pickup_city_id) if order.pickup_city_id else None
+        gst_rate, pst_rate = (
+            await resolve_tax_rates(db, zone, city.state_id if city else None)
+            if zone
+            else (Decimal("0.00"), Decimal("0.00"))
+        )
+        tax_data = {"subtotal": update_data.get("subtotal", order.subtotal)}
+        _apply_tax(tax_data, gst_rate, pst_rate)
+        update_data.update(tax_data)
 
     if "surcharge_ids" in update_data:
         update_data["surcharge_ids"] = [
@@ -680,10 +678,6 @@ async def delete_order(
 # -------------------------
 # STATUS UPDATE
 # -------------------------
-class StatusUpdate(BaseModel):
-    status: OrderStatus
-
-
 @router.patch("/{order_id}/status")
 async def update_status(
     order_id: str,
@@ -804,8 +798,10 @@ def _notify_sender_order_delivered(order: Order) -> None:
         "delivery_time": order.delivery_time,
         "items": order.items or [],
         "subtotal": order.subtotal,
-        "tax_rate": order.tax_rate,
-        "tax_amount": order.tax_amount,
+        "gst_rate": order.gst_rate,
+        "gst_amount": order.gst_amount,
+        "pst_rate": order.pst_rate,
+        "pst_amount": order.pst_amount,
         "delivery_fees": order.delivery_fees,
         "delivery_tips": order.delivery_tips,
         "discount": order.discount,
@@ -1097,10 +1093,6 @@ async def get_proof_of_delivery_image(
 # -------------------------
 # READY FOR PICKUP
 # -------------------------
-class ReadyUpdate(BaseModel):
-    ready: bool
-
-
 @router.patch("/{order_id}/ready")
 async def toggle_ready(
     order_id: str,
@@ -1184,8 +1176,10 @@ async def send_sender_invoice(
         "delivery_time": order.delivery_time,
         "items": order.items or [],
         "subtotal": order.subtotal,
-        "tax_rate": order.tax_rate,
-        "tax_amount": order.tax_amount,
+        "gst_rate": order.gst_rate,
+        "gst_amount": order.gst_amount,
+        "pst_rate": order.pst_rate,
+        "pst_amount": order.pst_amount,
         "delivery_fees": order.delivery_fees,
         "delivery_tips": order.delivery_tips,
         "discount": order.discount,
@@ -1255,8 +1249,10 @@ async def send_recipient_notification(
         "delivery_time": order.delivery_time,
         "items": order.items or [],
         "subtotal": order.subtotal,
-        "tax_rate": order.tax_rate,
-        "tax_amount": order.tax_amount,
+        "gst_rate": order.gst_rate,
+        "gst_amount": order.gst_amount,
+        "pst_rate": order.pst_rate,
+        "pst_amount": order.pst_amount,
         "delivery_fees": order.delivery_fees,
         "delivery_tips": order.delivery_tips,
         "discount": order.discount,
@@ -1283,10 +1279,6 @@ async def send_recipient_notification(
 # -------------------------
 # ASSIGN DRIVER
 # -------------------------
-class AssignDriverRequest(BaseModel):
-    driver_id: UUID
-
-
 @router.patch("/{order_id}/assign-driver", response_model=OrderResponse)
 async def assign_driver(
     order_id: str,

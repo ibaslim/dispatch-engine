@@ -4,13 +4,15 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from app.api.routers.delivery_configuration import (
+from app.schemas.delivery_configuration import (
     AfterHoursInput,
     BasePriceInput,
     CategoryInput,
     DeliveryPolicyInput,
     SpecialOccasionInput,
     SurchargeInput,
+    ProvinceTaxInput,
+    ZoneGstInput,
     ZoneInput,
     ZoneRadiusInput,
 )
@@ -135,17 +137,45 @@ def test_repeating_special_occasion_matches_month_and_day() -> None:
     assert _occasion_matches(occasion, date(2026, 7, 2)) is False
 
 
-def test_delivery_policy_validates_default_tax_percentage() -> None:
-    value = DeliveryPolicyInput(
-        allow_intercity=True,
-        default_tax_percentage="13.00",
-    )
+def test_delivery_policy_no_longer_carries_a_tax_field() -> None:
+    value = DeliveryPolicyInput(allow_intercity=True)
 
     assert value.allow_intercity is True
-    assert value.default_tax_percentage == Decimal("13.00")
+    assert not hasattr(value, "default_tax_percentage")
 
+
+def test_zone_gst_defaults_to_unset() -> None:
+    assert ZoneGstInput().gst_percentage is None
+
+
+def test_zone_gst_accepts_a_rate() -> None:
+    assert ZoneGstInput(gst_percentage="5.00").gst_percentage == Decimal("5.00")
+
+
+def test_province_pst_defaults_to_unset() -> None:
+    assert ProvinceTaxInput().pst_percentage is None
+
+
+def test_province_pst_accepts_quebecs_three_decimal_rate() -> None:
+    """QST is exactly 9.975%, so the third decimal must survive unrounded."""
+    assert ProvinceTaxInput(pst_percentage="9.975").pst_percentage == Decimal("9.975")
+
+
+def test_province_pst_accepts_a_full_hundred_percent() -> None:
+    """100.000 is six digits, so max_digits has to allow for it."""
+    assert ProvinceTaxInput(pst_percentage="100.000").pst_percentage == Decimal("100.000")
+
+
+def test_province_pst_rejects_a_fourth_decimal() -> None:
     with pytest.raises(ValidationError):
-        DeliveryPolicyInput(allow_intercity=False, default_tax_percentage=101)
+        ProvinceTaxInput(pst_percentage="9.9751")
+
+
+@pytest.mark.parametrize("schema, field", [(ZoneGstInput, "gst_percentage"), (ProvinceTaxInput, "pst_percentage")])
+@pytest.mark.parametrize("value", [-1, 101])
+def test_tax_rates_reject_out_of_range_percentages(schema, field, value) -> None:
+    with pytest.raises(ValidationError):
+        schema(**{field: value})
 
 
 def test_manual_address_matches_zone_or_city_case_insensitively() -> None:

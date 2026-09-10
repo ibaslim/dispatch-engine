@@ -5,7 +5,8 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from app.api.routers.driver_payroll import PaymentGroupInput, _save_payment_group
+from app.api.routers.driver_payroll import _save_payment_group
+from app.schemas.driver_payroll import PaymentGroupInput
 from app.api.routers.orders import _driver_order_response
 from app.models.driver_payment import DriverPaymentGroup
 from app.models.order import ActivityStatus, Order, OrderStatus
@@ -64,8 +65,10 @@ def _priced_order() -> Order:
         surcharge_ids=[],
         applied_charges=[],
         subtotal=100,
-        tax_rate=5,
-        tax_amount=5,
+        gst_rate=5,
+        gst_amount=5,
+        pst_rate=0,
+        pst_amount=0,
         delivery_fees=20,
         delivery_tips=5,
         discount=0,
