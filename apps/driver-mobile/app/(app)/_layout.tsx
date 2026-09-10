@@ -41,6 +41,7 @@ export default function AppLayout() {
               <Stack.Screen name="order/[id]" />
               <Stack.Screen name="offer/[id]" />
               <Stack.Screen name="receipt/[id]" />
+              <Stack.Screen name="pickup/[id]/photo" />
               <Stack.Screen name="pod/[id]/photo" />
               <Stack.Screen name="pod/[id]/signature" />
               <Stack.Screen name="appearance" />

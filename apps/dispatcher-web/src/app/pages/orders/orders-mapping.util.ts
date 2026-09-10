@@ -3,6 +3,7 @@ import {
   NewOrderFormValue,
   OrderIncidentReport,
   PaymentMethodType,
+  PickupVerification,
   ProofOfDeliverySubmission,
 } from '@models/new-order-form/new-order-form.model';
 import { OrderActivityStatus, OrderEntity, OrderTab } from '@models/orders/order-entity.model';
@@ -62,6 +63,7 @@ export type BackendOrder = {
   payment_method: PaymentMethodType;
   payment_details?: Record<string, unknown> | null;
   proof_of_delivery?: Record<string, unknown> | null;
+  pickup_verification?: Record<string, unknown> | null;
   incident_report?: OrderIncidentReport | null;
   status: OrderTab;
   published?: boolean;
@@ -183,7 +185,24 @@ export function normalizePodSubmission(value: unknown): ProofOfDeliverySubmissio
     hasSignature,
     hasPhoto,
     signatureUploadedAt: record['signature_uploaded_at'] ? String(record['signature_uploaded_at']) : null,
-    photoUploadedAt: record['photo_uploaded_at'] ? String(record['photo_uploaded_at']) : null
+    photoUploadedAt: record['photo_uploaded_at'] ? String(record['photo_uploaded_at']) : null,
+    note: record['note'] ? String(record['note']) : null
+  };
+}
+
+/** Normalizes the pickup verification JSON. The stored file path stays server-side —
+ * the parcel photo is fetched through the API, same as the POD images. */
+export function normalizePickupVerification(value: unknown): PickupVerification | null {
+  if (!value || typeof value !== 'object') return null;
+
+  const record = value as Record<string, unknown>;
+  const method = record['method'] === 'photo' ? 'photo' : 'qr';
+
+  return {
+    method,
+    verifiedAt: record['verified_at'] ? String(record['verified_at']) : '',
+    note: record['note'] ? String(record['note']) : null,
+    hasPhoto: Boolean(record['photo_path'])
   };
 }
 
@@ -299,6 +318,7 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
         payment,
         proofOfDelivery: normalizeProofOfDelivery(order.proof_of_delivery),
         podSubmission: normalizePodSubmission(order.proof_of_delivery),
+        pickupVerification: normalizePickupVerification(order.pickup_verification),
         incidentReport: order.incident_report ?? null
       }
     },

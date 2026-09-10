@@ -49,6 +49,7 @@ export function PodCaptureSheet({
   const photoDone = Boolean(submission?.photo_path);
   const signatureDone = Boolean(submission?.signature_path);
   const recipient = submission?.recipient_name?.trim();
+  const photoNote = submission?.note?.trim();
   const canMarkDelivered = photoDone && (!signatureRequired || signatureDone);
 
   return (
@@ -63,7 +64,13 @@ export function PodCaptureSheet({
         <BottomSheetItem
           icon={photoDone ? 'image' : 'camera'}
           title="Delivery photo"
-          subtitle={photoDone ? 'Uploaded — tap to replace' : 'Photograph the parcel where you left it'}
+          subtitle={
+            photoDone
+              ? photoNote
+                ? `“${photoNote}” — tap to replace`
+                : 'Uploaded — tap to replace'
+              : 'Photograph the parcel where you left it'
+          }
           onPress={onCapturePhoto}
           trailing={<RowState done={photoDone} color={palette.muted} />}
           last={!signatureRequired}

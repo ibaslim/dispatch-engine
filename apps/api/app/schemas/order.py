@@ -205,6 +205,12 @@ class ActivityStatusUpdate(BaseModel):
 
 
 # -------------------------
+# PICKUP VERIFICATION
+# -------------------------
+class PickupQrConfirm(BaseModel):
+    code: str
+    
+# -------------------------
 # RESPONSE
 # -------------------------
 class OrderResponse(OrderCreate):
@@ -216,6 +222,7 @@ class OrderResponse(OrderCreate):
     published_at: Optional[datetime] = None
     order_placed_time: Optional[str] = None
     proof_of_delivery: Optional[Dict[str, Any]] = None
+    pickup_verification: Optional[Dict[str, Any]] = None
     incident_report: Optional[Dict[str, Any]] = None
     driver: Optional[DriverInfo] = None
     created_at: Optional[datetime] = None

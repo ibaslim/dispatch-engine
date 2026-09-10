@@ -23,6 +23,15 @@ export interface ProofOfDeliverySubmission {
     hasPhoto: boolean;
     signatureUploadedAt: string | null;
     photoUploadedAt: string | null;
+    note: string | null;
+}
+
+
+export interface PickupVerification {
+    method: 'qr' | 'photo';
+    verifiedAt: string;
+    note: string | null;
+    hasPhoto: boolean;
 }
 
 export interface OrderIncidentReport {
@@ -91,6 +100,7 @@ export interface NewOrderFormValue {
 
         proofOfDelivery: ProofOfDeliveryValue;
         podSubmission?: ProofOfDeliverySubmission | null;
+        pickupVerification?: PickupVerification | null;
         incidentReport: OrderIncidentReport | null;
     };
 }

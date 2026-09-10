@@ -43,9 +43,10 @@ export class OrdersService {
     return this.http.patch(`${this.baseUrl}/${id}/activity-status`, { activity_status: activityStatus });
   }
 
-  uploadDeliveryPhoto(orderId: string, photo: Blob): Observable<any> {
+  uploadDeliveryPhoto(orderId: string, photo: Blob, note = ''): Observable<any> {
     const formData = new FormData();
     formData.append('file', photo, 'photo.jpg');
+    formData.append('note', note);
     return this.http.post(`${this.baseUrl}/${orderId}/proof-of-delivery/photo`, formData);
   }
 
@@ -54,6 +55,27 @@ export class OrdersService {
     formData.append('file', signature, 'signature.png');
     formData.append('recipient_name', recipientName);
     return this.http.post(`${this.baseUrl}/${orderId}/proof-of-delivery/signature`, formData);
+  }
+
+  /**
+   * Records a QR-verified pickup. The API re-checks the code against the order
+   * number, so a mismatch that slipped past the scanner still fails here.
+   */
+  verifyPickupByQr(orderId: string, code: string): Observable<any> {
+    return this.http.post(`${this.baseUrl}/${orderId}/pickup-verification/qr`, { code });
+  }
+
+  /** Records a photo-verified pickup, for senders with no printed label. */
+  verifyPickupByPhoto(orderId: string, photo: Blob, note = ''): Observable<any> {
+    const formData = new FormData();
+    formData.append('file', photo, 'parcel.jpg');
+    formData.append('note', note);
+    return this.http.post(`${this.baseUrl}/${orderId}/pickup-verification/photo`, formData);
+  }
+
+  /** Downloads the parcel photo taken when a pickup was verified without a label. */
+  getPickupVerificationPhoto(orderId: string): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/${orderId}/pickup-verification/photo`, { responseType: 'blob' });
   }
 
   /** Downloads a captured proof-of-delivery image (driver signature or delivery photo). */

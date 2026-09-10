@@ -687,8 +687,16 @@ export class OrdersComponent implements OnInit, OnDestroy {
   // ─── QR scan modal ─────────────────────────────────────────────────────────
 
   private openQrScanModal(id: string, next: OrderActivityStatus): void {
-    const orderNo = this.orders.find((o) => o.id === id)?.view.current.orderNo ?? null;
-    this.qrScanContext = { id, next, orderNo };
+    const order = this.orders.find((o) => o.id === id);
+
+    // A parcel already verified by the driver -- by scan or by photo -- needs no
+    // second proof; the API rejects one anyway.
+    if (order?.full.details.pickupVerification) {
+      this.applyActivityStatus(id, next);
+      return;
+    }
+
+    this.qrScanContext = { id, next, orderNo: order?.view.current.orderNo ?? null };
     this.isQrScanOpen = true;
   }
 

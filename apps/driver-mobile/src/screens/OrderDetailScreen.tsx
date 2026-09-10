@@ -14,7 +14,12 @@ import {
   ReportSheet,
 } from '@components/orders';
 import { DANGER, DANGER_BORDER } from '@constants/colors';
-import { reportIncident, updateActivityStatus, sendRecipientNotification } from '@services/orders';
+import {
+  reportIncident,
+  updateActivityStatus,
+  sendRecipientNotification,
+  verifyPickupByQr,
+} from '@services/orders';
 import type { DriverOrder, IncidentReason } from '@types';
 import { incidentStageFor, nextStep } from '@utils/orderProgress';
 import { callNumber, openDirections } from '@utils/linking';
@@ -23,6 +28,8 @@ import {PrimaryColor} from "@expo/config-plugins/build/android";
 interface Props {
   order: DriverOrder | undefined;
   onBack: () => void;
+  /** Open the parcel-photo capture screen, the fallback for an unlabelled parcel. */
+  onCapturePickupPhoto: () => void;
   /** Open the delivery-photo capture screen for this order. */
   onCapturePhoto: () => void;
   /** Open the recipient-signature capture screen for this order. */
@@ -129,6 +136,7 @@ function NavigateRow({
 export function OrderDetailScreen({
   order,
   onBack,
+  onCapturePickupPhoto,
   onCapturePhoto,
   onCaptureSignature,
 }: Props) {
@@ -144,23 +152,42 @@ export function OrderDetailScreen({
   const [reporting, setReporting] = useState(false);
   /** Set when a capture screen is opened, so the checklist comes back with it. */
   const resumePod = useRef(false);
+  /** Set when the parcel-photo fallback is opened, to advance on the way back. */
+  const resumePickup = useRef(false);
 
-  // The POD sheet is a native Modal: a pushed route renders *behind* it, so a
-  // capture screen can only be opened after the sheet is closed. Reopening on
-  // focus keeps it feeling like one flow — sign, come back, mark delivered.
+  // The gate sheets are native Modals: a pushed route renders *behind* them, so
+  // a capture screen can only be opened after the sheet is closed. Picking the
+  // flow back up on focus keeps it feeling like one move — capture, come back,
+  // and the job advances.
   useFocusEffect(
     useCallback(() => {
       if (resumePod.current) {
         resumePod.current = false;
         setPodOpen(true);
       }
-    }, []),
+      if (resumePickup.current && order) {
+        resumePickup.current = false;
+        // The upload only counts if it landed; otherwise reopen the scanner.
+        if (order.pickup_verification) {
+          advance();
+        } else {
+          setQrOpen(true);
+        }
+      }
+    }, [order?.pickup_verification]),
   );
 
   function openCapture(open: () => void) {
     resumePod.current = true;
     setPodOpen(false);
     open();
+  }
+
+  /** Hand off to the parcel-photo screen; `useFocusEffect` resumes from there. */
+  function openPickupCapture() {
+    resumePickup.current = true;
+    setQrOpen(false);
+    onCapturePickupPhoto();
   }
 
   if (!order) {
@@ -210,14 +237,41 @@ export function OrderDetailScreen({
   }
 
   /**
+   * Records the scan server-side before advancing — the API re-checks the code
+   * and refuses `picked_up` without a stored verification.
+   */
+  async function onQrMatched(code: string) {
+    if (!order) return;
+    setAdvancing(true);
+    try {
+      const { pickup_verification } = await verifyPickupByQr(order.id, code);
+      patchOrder(order.id, { pickup_verification });
+    } catch (err: unknown) {
+      show(err instanceof Error ? err.message : 'Could not verify the parcel.', {
+        variant: 'error',
+      });
+      setQrOpen(false);
+      setAdvancing(false);
+      return;
+    }
+    await advance();
+  }
+
+  /**
    * Two steps are gated behind proof, same as dispatcher-web: marking picked up
-   * requires scanning the parcel's QR code, and marking delivered requires the
-   * POD capture flow. Everything else advances directly.
+   * requires verifying the parcel (QR scan, or a photo when there is no label),
+   * and marking delivered requires the POD capture flow. Everything else
+   * advances directly.
    */
   function onPrimaryAction() {
     if (!step) return;
     if (step.status === 'picked_up') {
-      setQrOpen(true);
+      // A parcel photographed on an earlier attempt still counts as verified.
+      if (order?.pickup_verification) {
+        advance();
+      } else {
+        setQrOpen(true);
+      }
     } else if (step.status === 'delivered') {
       setPodOpen(true);
     } else {
@@ -400,7 +454,8 @@ export function OrderDetailScreen({
         visible={qrOpen}
         orderNo={order.order_number}
         onClose={() => setQrOpen(false)}
-        onMatched={advance}
+        onMatched={onQrMatched}
+        onUsePhoto={openPickupCapture}
       />
 
       <PodCaptureSheet

@@ -1,5 +1,7 @@
-<app-popup [open]="open" title="Scan QR Code" widthClass="max-w-md" (close)="onClose()">
-    <div class="flex flex-col items-center gap-4 py-4">
+<app-popup [open]="open" [title]="popupTitle" widthClass="max-w-md" (close)="onClose()">
+
+    <!-- Scanning the shipping label -->
+    <div *ngIf="mode === 'scan'" class="flex flex-col items-center gap-4 py-4">
         <div class="relative w-full aspect-square max-w-xs rounded-lg overflow-hidden bg-black">
             <video #qrVideo class="w-full h-full object-cover" muted playsinline autoplay></video>
             <div class="pointer-events-none absolute inset-6 rounded-lg border-2 border-[#3ddc97]"></div>
@@ -11,11 +13,60 @@
         <p *ngIf="!qrScanMatched" class="text-sm text-gray-500 dark:text-gray-400 text-center">
             Point the camera at the order's QR code to confirm this step{{ context?.orderNo ? ' (' + context?.orderNo + ')' : '' }}.
         </p>
+
+        <!-- The fallback stays visible throughout: an unlabelled parcel should
+             never leave the pickup blocked. -->
+        <button *ngIf="!qrScanMatched" type="button" (click)="usePhotoInstead()"
+            class="w-full flex items-center gap-3 rounded-xl border border-gray-200 dark:border-[#3a3d3a] px-4 py-3 text-left hover:border-gray-300 dark:hover:border-[#5a5d5a] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3ddc97]">
+            <i class="ph ph-camera text-xl text-gray-500 dark:text-gray-400"></i>
+            <span class="flex-1">
+                <span class="block text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    Photograph the parcel instead
+                </span>
+                <span class="block text-xs text-gray-500 dark:text-gray-400">
+                    Use this when the sender has no label to scan.
+                </span>
+            </span>
+            <i class="ph ph-caret-right text-base text-gray-400"></i>
+        </button>
     </div>
 
-<!--        <div modal-footer class="flex items-center justify-end gap-3">-->
-<!--            <app-button variant="ghost-outline" label="Cancel" (onClick)="onClose()"></app-button>-->
-<!--            <app-button variant="ghost-success" label="Continue" [disabled]="!qrScanMatched"-->
-<!--                (onClick)="continueQrScan()"></app-button>-->
-<!--        </div>-->
+    <!-- Photographing the parcel, for senders with no printed label.
+         Actions live in the body, not the popup footer: that footer's slot is
+         measured once on open and would stay hidden for a mode entered later. -->
+    <div *ngIf="mode === 'photo'" class="flex flex-col gap-4 py-2">
+        <p class="text-sm text-gray-500 dark:text-gray-400">
+            Photograph the whole parcel, address side up{{ context?.orderNo ? ', for order ' + context?.orderNo : '' }}.
+        </p>
+
+        <div *ngIf="!photoTaken" class="relative w-full aspect-video rounded-lg overflow-hidden bg-black">
+            <video #parcelVideo class="w-full h-full object-cover" muted playsinline autoplay></video>
+        </div>
+
+        <img *ngIf="photoTaken && photoPreviewUrl" [src]="photoPreviewUrl"
+            class="w-full aspect-video object-cover rounded-lg" alt="Photo of the parcel at pickup" />
+
+        <div *ngIf="photoTaken" class="space-y-1">
+            <label for="pickupNote" class="block text-xs text-gray-500 dark:text-gray-400">
+                Note for dispatch (optional)
+            </label>
+            <input id="pickupNote" type="text" [(ngModel)]="photoNote" [maxlength]="noteMaxLength"
+                placeholder="Sender had no printer"
+                class="w-full rounded-lg border border-gray-300 dark:border-[#5a5d5a] dark:bg-[#1d201d] px-3 py-2 text-sm" />
+        </div>
+
+        <div class="flex items-center justify-between gap-3 pt-1">
+            <app-button variant="ghost-outline" label="Back to scanning" [disabled]="verifying"
+                (onClick)="backToScanning()"></app-button>
+
+            <div class="flex items-center gap-3">
+                <app-button *ngIf="photoTaken" variant="ghost-outline" label="Retake" [disabled]="verifying"
+                    (onClick)="retakeParcelPhoto()"></app-button>
+                <app-button *ngIf="!photoTaken" variant="ghost-success" label="Take photo"
+                    (onClick)="takeParcelPhoto()"></app-button>
+                <app-button *ngIf="photoTaken" variant="ghost-success" label="Confirm pickup" [loading]="verifying"
+                    [disabled]="verifying" (onClick)="confirmParcelPhoto()"></app-button>
+            </div>
+        </div>
+    </div>
 </app-popup>

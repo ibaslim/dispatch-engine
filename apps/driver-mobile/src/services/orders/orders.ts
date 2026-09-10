@@ -16,6 +16,7 @@ import type {
   IncidentStage,
   LocalFile,
   OrderStatus,
+  PickupVerification,
 } from '@types';
 
 const BASE_URL = '/api/v1/orders';
@@ -76,10 +77,46 @@ function appendFile(form: FormData, file: LocalFile): void {
   form.append('file', file as unknown as Blob);
 }
 
-/** Upload a proof-of-delivery photo. Max 10 MB; jpeg, png or webp. */
-export function uploadDeliveryPhoto(orderId: string, photo: LocalFile): Promise<void> {
+interface PickupVerificationResult {
+  success: boolean;
+  pickup_verification: PickupVerification;
+}
+
+/**
+ * Record a QR-verified pickup. The server re-checks the code against the order
+ * number, so a mismatch that slipped past the scanner still fails here.
+ */
+export function verifyPickupByQr(orderId: string, code: string): Promise<PickupVerificationResult> {
+  return postWithAuth(`${BASE_URL}/${orderId}/pickup-verification/qr`, { code });
+}
+
+/**
+ * Record a photo-verified pickup, for senders with no printed label. Max 10 MB;
+ * jpeg, png or webp. An order accepts one verification — a second call is a 400.
+ */
+export function verifyPickupByPhoto(
+  orderId: string,
+  photo: LocalFile,
+  note = '',
+): Promise<PickupVerificationResult> {
   const form = new FormData();
   appendFile(form, photo);
+  form.append('note', note);
+  return uploadWithAuth(`${BASE_URL}/${orderId}/pickup-verification/photo`, form);
+}
+
+/**
+ * Upload a proof-of-delivery photo, with an optional line of context for
+ * dispatch. Max 10 MB; jpeg, png or webp.
+ */
+export function uploadDeliveryPhoto(
+  orderId: string,
+  photo: LocalFile,
+  note = '',
+): Promise<void> {
+  const form = new FormData();
+  appendFile(form, photo);
+  form.append('note', note);
   return uploadWithAuth(`${BASE_URL}/${orderId}/proof-of-delivery/photo`, form);
 }
 

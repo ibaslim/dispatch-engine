@@ -74,10 +74,6 @@ export interface DriverInfo {
   contact_phone_country_code: string | null;
 }
 
-/**
- * `signature` / `picture` are the *requirements* set when the order was
- * created; `submission` is what the driver has captured so far.
- */
 export interface ProofOfDelivery {
   signature?: boolean;
   picture?: boolean;
@@ -87,7 +83,17 @@ export interface ProofOfDelivery {
     signature_uploaded_at?: string;
     photo_path?: string;
     photo_uploaded_at?: string;
+    note?: string | null;
   };
+}
+
+
+export interface PickupVerification {
+  method: 'qr' | 'photo';
+  verified_at: string;
+  verified_by: string | null;
+  photo_path?: string | null;
+  note?: string | null;
 }
 
 export interface IncidentReport {
@@ -132,6 +138,7 @@ export interface DriverOrder {
   driver_payment_rule: string | null;
 
   proof_of_delivery: ProofOfDelivery | null;
+  pickup_verification: PickupVerification | null;
   incident_report: IncidentReport | null;
   driver: DriverInfo | null;
 

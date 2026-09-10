@@ -16,6 +16,7 @@ export const ORDER_REALTIME_EVENTS = [
   'order-accepted',
   'order-incident-reported',
   'order-pod-updated',
+  'order-pickup-verified',
 ] as const;
 
 export type OrderRealtimeEventName = typeof ORDER_REALTIME_EVENTS[number];

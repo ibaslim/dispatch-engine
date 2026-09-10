@@ -135,6 +135,39 @@
                 </ng-container>
             </div>
 
+            <div *ngIf="order.full.details.pickupVerification as pickup"
+                class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
+                <h3 class="text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">Pickup Verification</h3>
+
+                <div class="flex items-center gap-2">
+                    <i class="ph text-base text-[#2fbf82]"
+                        [ngClass]="pickup.method === 'qr' ? 'ph-qr-code' : 'ph-camera'"></i>
+                    <span class="font-medium text-gray-900 dark:text-gray-100">
+                        {{ pickup.method === 'qr' ? 'Label scanned' : 'Parcel photographed' }}
+                    </span>
+                    <span *ngIf="pickup.verifiedAt" class="text-xs text-gray-500 dark:text-gray-400">
+                        {{ pickup.verifiedAt | date:'medium' }}
+                    </span>
+                </div>
+
+                <p *ngIf="pickup.method === 'photo'" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    The sender had no label to scan, so the driver photographed the parcel instead.
+                </p>
+
+                <p *ngIf="pickup.note" class="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                    “{{ pickup.note }}”
+                </p>
+
+                <div *ngIf="pickup.hasPhoto" class="mt-3 max-w-sm">
+                    <img *ngIf="pickupPhotoUrl" [src]="pickupPhotoUrl" alt="Parcel photographed at pickup"
+                        class="w-full max-h-56 object-contain rounded-md border border-gray-200 dark:border-[#5a5d5a] bg-white" />
+                    <p *ngIf="!pickupPhotoUrl && !pickupPhotoLoadError" class="text-xs text-gray-400">Loading parcel photo…</p>
+                    <p *ngIf="pickupPhotoLoadError" class="text-xs text-red-600 dark:text-red-400">
+                        Failed to load the parcel photo.
+                    </p>
+                </div>
+            </div>
+
             <div class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
                 <h3 class="text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">Proof of Delivery</h3>
                 <div class="grid grid-cols-2 gap-2">
@@ -153,6 +186,10 @@
                     class="mt-4 border-t border-gray-200 dark:border-[#5a5d5a] pt-3 space-y-3">
                     <p *ngIf="pod.recipientName">
                         Received by <span class="font-medium text-gray-900 dark:text-gray-100">{{ pod.recipientName }}</span>
+                    </p>
+
+                    <p *ngIf="pod.note" class="text-sm text-gray-700 dark:text-gray-300">
+                        “{{ pod.note }}”
                     </p>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

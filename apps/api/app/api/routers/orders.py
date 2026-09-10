@@ -50,6 +50,7 @@ from app.schemas.order import (
     IncidentReportCreate,
     IncidentReason,
     IncidentStage,
+    PickupQrConfirm,
     ReadyUpdate,
     StatusUpdate,
     INCIDENT_REASONS_REQUIRING_DESCRIPTION,
@@ -68,6 +69,14 @@ logger = logging.getLogger(__name__)
 
 APP_TIMEZONE = ZoneInfo("Asia/Karachi")
 PUBLISH_WINDOW_MINUTES = 15
+POD_MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+POD_CHUNK_SIZE = 1024 * 1024  # 1 MB
+POD_ALLOWED_CONTENT_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+PROOF_NOTE_MAX_LENGTH = 280
 
 ACTIVITY_STATUS_TIMESTAMP_FIELDS: dict[ActivityStatus, str] = {
     ActivityStatus.pickup_initiated: "pickup_initiated_at",
@@ -76,6 +85,9 @@ ACTIVITY_STATUS_TIMESTAMP_FIELDS: dict[ActivityStatus, str] = {
     ActivityStatus.delivery_in_progress: "delivery_in_progress_at",
     ActivityStatus.delivered: "delivered_at",
 }
+
+def _clean_note(note: str | None) -> str | None:
+    return (note or "").strip()[:PROOF_NOTE_MAX_LENGTH] or None
 
 
 async def _publish_order_event(
@@ -296,14 +308,6 @@ async def _driver_order_responses(
 ) -> list[dict]:
     payment_group = await get_driver_payment_group(db, driver_id)
     return [_driver_order_response(order, payment_group) for order in orders]
-
-POD_MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
-POD_CHUNK_SIZE = 1024 * 1024  # 1 MB
-POD_ALLOWED_CONTENT_TYPES = {
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-}
 
 
 def parse_order_datetime(date_value: str, time_value: str) -> datetime:
@@ -741,6 +745,17 @@ async def update_activity_status(
             )
 
     previous_activity_status = order.activity_status
+    
+    if (
+        payload.activity_status == ActivityStatus.picked_up
+        and previous_activity_status != ActivityStatus.picked_up
+        and not order.pickup_verification
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verify the parcel before marking it picked up.",
+        )
+
     _stamp_activity_status(order, payload.activity_status)
 
     is_new_delivery = (
@@ -916,7 +931,12 @@ def _safe_pod_filename_stem(value: str) -> str:
     return stem or "delivery"
 
 
-async def _save_pod_image(order_id: str, upload: UploadFile, filename_stem: str) -> str:
+async def _save_order_image(
+    order_id: str,
+    upload: UploadFile,
+    filename_stem: str,
+    subdir: str = "proof-of-delivery",
+) -> str:
     content_type = (upload.content_type or "").lower().strip()
     extension = POD_ALLOWED_CONTENT_TYPES.get(content_type)
     if not extension:
@@ -925,7 +945,7 @@ async def _save_pod_image(order_id: str, upload: UploadFile, filename_stem: str)
             detail="Only JPG, PNG, or WebP images are allowed.",
         )
 
-    upload_dir = Path(settings.uploads_dir) / "proof-of-delivery" / str(order_id)
+    upload_dir = Path(settings.uploads_dir) / subdir / str(order_id)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     safe_stem = _safe_pod_filename_stem(filename_stem)
@@ -974,6 +994,7 @@ async def upload_proof_of_delivery_photo(
     order_id: str,
     current_user: CurrentUser,
     file: UploadFile = File(...),
+    note: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Order).where(Order.id == order_id))
@@ -984,12 +1005,13 @@ async def upload_proof_of_delivery_photo(
 
     _authorize_pod_upload(order, current_user)
 
-    filepath = await _save_pod_image(order_id, file, order.order_number or order_id)
+    filepath = await _save_order_image(order_id, file, order.order_number or order_id)
 
     proof = dict(order.proof_of_delivery or {})
     submission = dict(proof.get("submission") or {})
     submission["photo_path"] = filepath
     submission["photo_uploaded_at"] = datetime.utcnow().isoformat()
+    submission["note"] = _clean_note(note)
     proof["submission"] = submission
     order.proof_of_delivery = proof
 
@@ -1024,7 +1046,7 @@ async def upload_proof_of_delivery_signature(
     if not recipient_name.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Recipient name is required.")
 
-    filepath = await _save_pod_image(order_id, file, f"{order.order_number or order_id}-signature")
+    filepath = await _save_order_image(order_id, file, f"{order.order_number or order_id}-signature")
 
     proof = dict(order.proof_of_delivery or {})
     submission = dict(proof.get("submission") or {})
@@ -1086,6 +1108,140 @@ async def get_proof_of_delivery_image(
 
     if not filepath or not Path(filepath).is_file():
         raise HTTPException(status_code=404, detail="Proof of delivery file not found.")
+
+    return FileResponse(filepath, filename=Path(filepath).name)
+
+
+# -------------------------
+# PICKUP VERIFICATION
+# -------------------------
+def _authorize_pickup_verification(order: Order, current_user: CurrentUser) -> None:
+    if current_user.is_platform_admin:
+        return
+    if not current_user.tenant_id or order.driver_id != current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the assigned driver can verify this pickup.",
+        )
+
+
+def _reject_verified_pickup(order: Order) -> None:
+    if order.pickup_verification:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This pickup has already been verified.",
+        )
+
+
+@router.post("/{order_id}/pickup-verification/qr")
+async def verify_pickup_by_qr(
+    order_id: str,
+    payload: PickupQrConfirm,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Record a QR-verified pickup, re-checking the scanned code server-side."""
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    _authorize_pickup_verification(order, current_user)
+    _reject_verified_pickup(order)
+
+    scanned = (payload.code or "").strip()
+    if not scanned:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Scanned code is required.")
+
+    # Older orders carry no number; the clients let any code through for those.
+    if order.order_number and scanned != order.order_number:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Scanned code doesn't match this order (expected {order.order_number}).",
+        )
+
+    order.pickup_verification = {
+        "method": "qr",
+        "verified_at": datetime.utcnow().isoformat(),
+        "verified_by": str(current_user.tenant_id) if current_user.tenant_id else None,
+    }
+
+    await db.commit()
+
+    await _publish_order_event(
+        "order-pickup-verified",
+        order,
+        current_user,
+        data={"method": "qr"},
+    )
+
+    return {"success": True, "pickup_verification": order.pickup_verification}
+
+
+@router.post("/{order_id}/pickup-verification/photo")
+async def verify_pickup_by_photo(
+    order_id: str,
+    current_user: CurrentUser,
+    file: UploadFile = File(...),
+    note: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    """Fallback for senders with no printed label: a photo of the parcel."""
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    _authorize_pickup_verification(order, current_user)
+    _reject_verified_pickup(order)
+
+    filepath = await _save_order_image(
+        order_id,
+        file,
+        order.order_number or order_id,
+        subdir="pickup-verification",
+    )
+
+    order.pickup_verification = {
+        "method": "photo",
+        "photo_path": filepath,
+        "note": _clean_note(note),
+        "verified_at": datetime.utcnow().isoformat(),
+        "verified_by": str(current_user.tenant_id) if current_user.tenant_id else None,
+    }
+
+    await db.commit()
+
+    await _publish_order_event(
+        "order-pickup-verified",
+        order,
+        current_user,
+        data={"method": "photo"},
+    )
+
+    return {"success": True, "pickup_verification": order.pickup_verification}
+
+
+@router.get("/{order_id}/pickup-verification/photo")
+async def get_pickup_verification_photo(
+    order_id: str,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> FileResponse:
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    await _authorize_pod_view(order, current_user, db)
+
+    filepath = (order.pickup_verification or {}).get("photo_path")
+
+    if not filepath or not Path(filepath).is_file():
+        raise HTTPException(status_code=404, detail="Pickup photo not found.")
 
     return FileResponse(filepath, filename=Path(filepath).name)
 

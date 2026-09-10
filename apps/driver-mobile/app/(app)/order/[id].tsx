@@ -12,6 +12,7 @@ export default function OrderDetailRoute() {
     <OrderDetailScreen
       order={getOrder(id)}
       onBack={() => router.back()}
+      onCapturePickupPhoto={() => router.push({ pathname: '/pickup/[id]/photo', params: { id } })}
       onCapturePhoto={() => router.push({ pathname: '/pod/[id]/photo', params: { id } })}
       onCaptureSignature={() => router.push({ pathname: '/pod/[id]/signature', params: { id } })}
     />
