@@ -1,0 +1,93 @@
+<button type="button" (click)="calculate()" [disabled]="loading"
+    aria-label="Calculate efficient route"
+    title="Calculate efficient route"
+    class="fixed bottom-6 right-6 z-40 flex h-14 items-center gap-2 rounded-full bg-[#FFD150] px-5 text-sm font-semibold text-black shadow-lg transition hover:bg-yellow-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-black/40 disabled:cursor-wait disabled:opacity-70">
+    <i class="ph ph-path text-xl" [class.animate-pulse]="loading"></i>
+    <span class="hidden sm:inline">Best route</span>
+</button>
+
+<app-popup [open]="open" title="Your run" widthClass="max-w-lg" (close)="close()">
+    <!-- Loading -->
+    <div *ngIf="loading" class="flex flex-col items-center justify-center gap-3 py-12 text-sm text-gray-500 dark:text-gray-400">
+        <i class="ph ph-spinner-gap animate-spin text-3xl"></i>
+        Ordering your stops…
+    </div>
+
+    <!-- Error -->
+    <div *ngIf="!loading && error" class="px-2 py-10 text-center">
+        <p class="font-semibold text-gray-900 dark:text-gray-100">Couldn't plan the route</p>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ error }}</p>
+        <app-button class="mt-4 inline-block" variant="ghost-outline" label="Try again" (onClick)="calculate()"></app-button>
+    </div>
+
+    <!-- Empty -->
+    <div *ngIf="!loading && !error && plan && stops.length === 0" class="px-2 py-10 text-center">
+        <p class="font-semibold text-gray-900 dark:text-gray-100">Nothing to route</p>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Accept a job and its stops appear here in driving order.</p>
+    </div>
+
+    <!-- Plan -->
+    <div *ngIf="!loading && !error && stops.length > 0" class="space-y-4 px-2 py-2">
+        <p *ngIf="totalLabel" class="text-sm text-gray-600 dark:text-gray-300">
+            {{ stops.length }} stops, {{ totalLabel }}
+        </p>
+
+        <ol class="relative">
+            <li *ngFor="let stop of stops; let last = last; let i = index"
+                class="relative flex gap-3" [class.opacity-50]="i >= maxStopsPerLink">
+                <!-- Rail: shape tells pickup from drop -->
+                <div class="flex flex-col items-center">
+                    <span class="flex h-7 w-7 shrink-0 items-center justify-center text-xs font-bold"
+                        [ngClass]="stop.kind === 'pickup'
+                            ? 'rounded-full bg-[#FFD150] text-black'
+                            : 'rounded-md bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'">
+                        {{ stop.sequence }}
+                    </span>
+                    <span *ngIf="!last" class="mt-1 w-px flex-1 bg-gray-200 dark:bg-[#3a3d3a]"></span>
+                </div>
+
+                <div class="min-w-0 flex-1" [class.pb-5]="!last">
+                    <p class="text-sm">
+                        <span class="font-semibold text-gray-900 dark:text-gray-100">{{ stop.kind === 'pickup' ? 'Pick up' : 'Drop' }}</span>
+                        <span class="ml-2 text-gray-500 dark:text-gray-400">#{{ stop.order_number || '—' }}</span>
+                    </p>
+                    <p class="mt-0.5 text-sm text-gray-800 dark:text-gray-200">{{ stop.address || '—' }}</p>
+                    <p *ngIf="stop.name" class="text-xs text-gray-500 dark:text-gray-400">{{ stop.name }}</p>
+                    <p *ngIf="legLabel(stop) as leg" class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ leg }} to get here</p>
+                </div>
+            </li>
+        </ol>
+
+        <div *ngIf="plan?.unplaceable?.length" class="rounded-lg border border-gray-200 p-3 dark:border-[#3a3d3a]">
+            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Left out of the run</p>
+            <p *ngFor="let item of plan?.unplaceable" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                #{{ item.order_number || '—' }}: {{ item.address ? item.address + ' has no map location.' : 'no address.' }}
+            </p>
+        </div>
+
+        <p *ngIf="plan?.optimized_by === 'local'" class="text-xs text-gray-500 dark:text-gray-400">
+            Times are rough estimates. Live traffic was unavailable when this was planned.
+        </p>
+        <div *ngIf="!origin" class="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+            <p class="min-w-0 flex-1">
+                Planned from your last tracked position. {{ locationIssue }}
+            </p>
+            <app-button *ngIf="location.status() === 'prompt'" variant="ghost-outline" label="Allow location"
+                (onClick)="calculate()"></app-button>
+        </div>
+        <p *ngIf="overflow > 0" class="text-xs text-gray-500 dark:text-gray-400">
+            Google Maps takes {{ maxStopsPerLink }} stops at a time. Calculate again after stop {{ maxStopsPerLink }} for the last {{ overflow }}.
+        </p>
+    </div>
+
+    <!-- Always rendered: the popup only checks for footer content once, when it opens. -->
+    <div modal-footer class="flex flex-wrap items-center justify-end gap-2">
+        <ng-container *ngIf="!loading && stops.length > 0; else closeOnly">
+            <app-button variant="ghost-outline" label="Copy link" (onClick)="copyLink()"></app-button>
+            <app-button variant="primary" label="Open in Google Maps" (onClick)="openInMaps()"></app-button>
+        </ng-container>
+        <ng-template #closeOnly>
+            <app-button variant="ghost-outline" label="Close" (onClick)="close()"></app-button>
+        </ng-template>
+    </div>
+</app-popup>

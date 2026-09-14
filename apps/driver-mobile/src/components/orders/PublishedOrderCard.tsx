@@ -63,7 +63,12 @@ export function PublishedOrderCard({ order, accepting, onPress, onAccept }: Prop
             </Text>
           </View>
 
-          <RouteLine pickup={order.pickup_address} drop={order.delivery_address} />
+          <RouteLine
+            pickup={order.pickup_address}
+            drop={order.delivery_address}
+            distanceMeters={order.route_distance_meters}
+            durationSeconds={order.route_duration_seconds}
+          />
 
           <View className="gap-1.5">
             <View className="flex-row items-center justify-between">

@@ -5,15 +5,17 @@ import { filter, startWith, Subject, takeUntil } from 'rxjs';
 import { AuthService } from './core/auth/auth.service';
 import { NavbarComponent } from './components/navbar/navbar.component';
 import { ToastContainerComponent } from './components/toast-container/toast-container.component';
+import { LocationPermissionBannerComponent } from './components/location-permission-banner/location-permission-banner.component';
 import { PusherService } from './core/realtime/pusher.service';
 import { RealtimeNotificationsService } from './core/realtime/realtime-notifications.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, NavbarComponent, ToastContainerComponent],
+  imports: [CommonModule, RouterOutlet, NavbarComponent, ToastContainerComponent, LocationPermissionBannerComponent],
   template: `
     <app-navbar *ngIf="auth.currentUser() && !hideNavbar"></app-navbar>
+    <app-location-permission-banner *ngIf="auth.isDriver() && !hideNavbar"></app-location-permission-banner>
     <router-outlet></router-outlet>
     <app-toast-container></app-toast-container>
   `,

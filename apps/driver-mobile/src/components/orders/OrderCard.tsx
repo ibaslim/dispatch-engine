@@ -82,10 +82,10 @@ export function OrderCard({ order, driverPosition, onPress, onContact, onReport 
 
   return (
     <Card>
-      <CardBody className="gap-4">
-        <View className="flex-row items-start justify-between gap-3">
+      <CardBody className="gap-3">
+        <View className="flex-row items-start justify-between gap-1 flex-wrap">
           <Ref>{order.order_number ?? '—'}</Ref>
-          <View className="flex-row items-center gap-2">
+          <View className="flex-row items-center gap-1">
             <Badge label={activityLabel(order.activity_status)} dot={false} />
             {distanceKm != null && <DistanceBadge km={distanceKm} />}
           </View>

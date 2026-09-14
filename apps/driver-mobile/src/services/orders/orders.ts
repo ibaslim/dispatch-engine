@@ -18,6 +18,7 @@ import type {
   OrderStatus,
   PickupVerification,
 } from '@types';
+import type { RoutePlan } from '@dispatch/shared/contracts';
 
 const BASE_URL = '/api/v1/orders';
 
@@ -36,6 +37,19 @@ export function getMyOrders(): Promise<DriverOrder[]> {
  */
 export function getPublishedOrders(): Promise<DriverOrder[]> {
   return fetchWithAuth<DriverOrder[]>(`${BASE_URL}/published`);
+}
+
+/**
+ * The driver's outstanding stops, ordered into an efficient run. Pass the
+ * current fix; the server falls back to the tracker's last known one and
+ * answers 422 when it has neither.
+ */
+export function getRoutePlan(latitude?: number, longitude?: number): Promise<RoutePlan> {
+  const query =
+    latitude != null && longitude != null
+      ? `?latitude=${latitude}&longitude=${longitude}`
+      : '';
+  return fetchWithAuth<RoutePlan>(`${BASE_URL}/route-plan${query}`);
 }
 
 /**

@@ -1,15 +1,34 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 
+import { formatDistance } from '@utils/distance';
+import { formatDuration } from '@utils/duration';
+
 interface Props {
   pickup: string;
   drop: string;
+  /** Quoted pickup-to-drop leg. Both are optional — older orders carry neither. */
+  distanceMeters?: number | null;
+  durationSeconds?: number | null;
 }
 
 /** Centres a 10px node on the first 20px line of text beside it. */
 const NODE_OFFSET = { marginTop: 5 };
 
-export function RouteLine({ pickup, drop }: Props) {
+/** One phrase rather than two figures, so it can't be read as a pair of unrelated stats. */
+function legLabel(
+  distanceMeters?: number | null,
+  durationSeconds?: number | null,
+): string | null {
+  const time = durationSeconds != null ? formatDuration(durationSeconds) : null;
+  const span = distanceMeters != null ? formatDistance(distanceMeters / 1000) : null;
+  if (time && span) return `${time} over ${span}`;
+  return time ?? span;
+}
+
+export function RouteLine({ pickup, drop, distanceMeters, durationSeconds }: Props) {
+  const leg = legLabel(distanceMeters, durationSeconds);
+
   return (
     <View>
       <View className="flex-row gap-3">
@@ -19,6 +38,21 @@ export function RouteLine({ pickup, drop }: Props) {
         </View>
         <Text className="flex-1 pb-3 text-sm leading-5 text-foreground">{pickup}</Text>
       </View>
+
+      {leg ? (
+        // Rides the connector: its position states that it measures pickup to drop, not the run out to pickup.
+        <View className="flex-row gap-3">
+          <View className="w-2.5 items-center">
+            <View className="w-px flex-1 bg-border" />
+          </View>
+          <Text
+            className="flex-1 pb-3 text-[12px] leading-4 text-muted"
+            accessibilityLabel={`Pickup to drop, ${leg}`}
+          >
+            {leg}
+          </Text>
+        </View>
+      ) : null}
 
       <View className="flex-row gap-3">
         <View className="items-center">

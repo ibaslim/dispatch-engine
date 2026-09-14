@@ -17,6 +17,7 @@ import { OrderDetailsModalComponent } from '@components/order-details-modal/orde
 import { PrintOrderModalComponent } from '@components/print-order-modal/print-order-modal.component';
 import { ShippingLabelModalComponent } from '@components/shipping-label-modal/shipping-label-modal.component';
 import { PublishedOrdersFeedComponent } from '@components/published-orders-feed/published-orders-feed.component';
+import { RoutePlanFabComponent } from '@components/route-plan-fab/route-plan-fab.component';
 import { TableColumn } from '@models/table.model';
 import { NewOrderFormValue } from '@models/new-order-form/new-order-form.model';
 import {OrderActivityStatus, OrderEntity, OrderTab} from '@models/orders/order-entity.model';
@@ -110,7 +111,8 @@ const INCIDENT_REASON_LABELS: Record<string, string> = Object.fromEntries(
     OrderDetailsModalComponent,
     PrintOrderModalComponent,
     ShippingLabelModalComponent,
-    PublishedOrdersFeedComponent
+    PublishedOrdersFeedComponent,
+    RoutePlanFabComponent
   ],
   templateUrl: './orders.component.html'
 })

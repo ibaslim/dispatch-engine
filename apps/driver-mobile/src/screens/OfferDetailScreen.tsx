@@ -142,7 +142,12 @@ export function OfferDetailScreen({ order, accepting, onAccept, onBack }: Props)
           <CardBody className="gap-5">
             <View>
               <SectionLabel>Route</SectionLabel>
-              <RouteLine pickup={order.pickup_address} drop={order.delivery_address} />
+              <RouteLine
+                pickup={order.pickup_address}
+                drop={order.delivery_address}
+                distanceMeters={order.route_distance_meters}
+                durationSeconds={order.route_duration_seconds}
+              />
             </View>
             <View className="h-px bg-border" />
             <View className="flex-row gap-4">

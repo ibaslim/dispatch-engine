@@ -5,6 +5,7 @@ import { PageComponent } from '../../components/page/page.component';
 import { ButtonComponent } from '../../components/button/button.component';
 import { AuthService } from '../../core/auth/auth.service';
 import { GoogleMapsService } from '../../services/google-maps/google-maps.service';
+import { LocationPermissionService } from '../../core/location/location-permission.service';
 
 declare const google: any;
 
@@ -34,6 +35,7 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly googleMaps = inject(GoogleMapsService);
+  private readonly location = inject(LocationPermissionService);
 
   private map: any;
   private routePolyline: any;
@@ -123,7 +125,11 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.watchId = navigator.geolocation.watchPosition(
       (pos) => this.onPositionUpdate(pos),
-      (err) => console.error('watchPosition error:', err),
+      (err) => {
+        this.directionsError = this.location.explain(this.location.statusFor(err));
+        if (err.code === err.PERMISSION_DENIED) this.stopNavigation();
+        void this.location.refresh();
+      },
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
     );
   }
@@ -180,7 +186,11 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
         }
         this.isRecalculating = false;
       },
-      () => { this.isRecalculating = false; },
+      (err) => {
+        this.isRecalculating = false;
+        this.directionsError = this.location.explain(this.location.statusFor(err));
+        void this.location.refresh();
+      },
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
     );
   }
@@ -360,7 +370,11 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
           destination
         );
       },
-      () => this.centerOnDestination(destination)
+      (err) => {
+        this.directionsError = this.location.explain(this.location.statusFor(err));
+        void this.location.refresh();
+        this.centerOnDestination(destination);
+      }
     );
   }
 

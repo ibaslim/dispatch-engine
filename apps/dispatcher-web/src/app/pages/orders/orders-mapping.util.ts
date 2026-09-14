@@ -1,84 +1,19 @@
 import {
-  AppliedCharge,
   NewOrderFormValue,
-  OrderIncidentReport,
   PaymentMethodType,
   PickupVerification,
   ProofOfDeliverySubmission,
 } from '@models/new-order-form/new-order-form.model';
-import { OrderActivityStatus, OrderEntity, OrderTab } from '@models/orders/order-entity.model';
+import { OrderEntity } from '@models/orders/order-entity.model';
 import { OrderView } from '@models/orders/order-tabs.model';
+import type { OrderItem, OrderResponse } from '@dispatch/shared/contracts';
 import { driverEarningsLabel, formatDateTime, formatStatusLabel, formatTime, money } from './orders-formatting.util';
 
 // ─── Pure backend<->frontend order mapping helpers extracted from OrdersComponent ──
 
-export type BackendOrderItem = {
-  itemName: string;
-  itemPrice: number;
-  itemQty: number;
-};
-
-export type BackendOrder = {
-  id: string;
-  created_at: string;
-  order_number: string;
-  pickup_name: string;
-  pickup_phone: string;
-  pickup_email: string;
-  pickup_address: string;
-  pickup_date: string;
-  pickup_time: string;
-  delivery_name: string;
-  delivery_phone: string;
-  delivery_email: string;
-  delivery_address: string;
-  delivery_date: string;
-  delivery_time: string;
-  delivery_category_id?: string | null;
-  pickup_place_id?: string | null;
-  pickup_latitude?: number | null;
-  pickup_longitude?: number | null;
-  delivery_place_id?: string | null;
-  delivery_latitude?: number | null;
-  delivery_longitude?: number | null;
-  route_distance_meters?: number | null;
-  route_duration_seconds?: number | null;
-  surcharge_ids?: string[] | null;
-  applied_charges?: AppliedCharge[] | null;
-  items: BackendOrderItem[];
-  subtotal: number;
-  gst_rate?: number | null;
-  gst_amount?: number | null;
-  pst_rate?: number | null;
-  pst_amount?: number | null;
-  delivery_fees: number;
-  delivery_tips: number;
-  discount: number;
-  total: number;
-  driver_payout?: number | null;
-  driver_fee_payout?: number | null;
-  driver_tip_payout?: number | null;
-  driver_payment_rule?: string | null;
-  instructions?: string | null;
-  payment_method: PaymentMethodType;
-  payment_details?: Record<string, unknown> | null;
-  proof_of_delivery?: Record<string, unknown> | null;
-  pickup_verification?: Record<string, unknown> | null;
-  incident_report?: OrderIncidentReport | null;
-  status: OrderTab;
-  published?: boolean;
-  published_at?: string | null;
-  ready_for_pickup: boolean;
-  order_placed_time?: string | null;
-  activity_status: OrderActivityStatus;
-  driver?: {
-    id: string;
-    name: string;
-    contact_name?: string | null;
-    contact_phone_country_code?: string | null;
-    contact_phone_number?: string | null;
-  } | null;
-};
+// Backend order shape comes from the shared contract; aliases keep existing imports working.
+export type BackendOrderItem = OrderItem;
+export type BackendOrder = OrderResponse;
 
 export type AssignableDriver = {
   id: string;
@@ -240,7 +175,7 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
 
   return {
     id: order.id,
-    createdAt: order.created_at,
+    createdAt: order.created_at ?? undefined,
     isExpiredUnassigned,
     full: {
       orderNumber: order.order_number,

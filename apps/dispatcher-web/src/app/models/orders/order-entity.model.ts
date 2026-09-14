@@ -1,15 +1,11 @@
 import { NewOrderFormValue } from '../new-order-form/new-order-form.model';
 import { OrderView } from './order-tabs.model';
+import type { ActivityStatus, OrderStatus } from '@dispatch/shared/contracts';
 
-export type OrderTab =
-    | 'current'
-    | 'scheduled'
-    | 'completed'
-    | 'incomplete'
-    | 'history'
-    |'disputed';
+// 'disputed' is a UI-only tab; the rest are the API's order statuses.
+export type OrderTab = OrderStatus | 'disputed';
 
-export type OrderActivityStatus ='driver_not_assigned'| 'pickup_initiated'|'picked_up'|'delivery_initiated'|'delivery_in_progress'|'delivered'
+export type OrderActivityStatus = ActivityStatus;
 
 export interface OrderEntity {
     id: string;

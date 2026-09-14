@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { DeliveryRouteQuote } from '../../models/new-order-form/new-order-form.model';
+import type { RoutePlan } from '@dispatch/shared/contracts';
 
 @Injectable({ providedIn: 'root' })
 export class OrdersService {
@@ -11,6 +12,16 @@ export class OrdersService {
 
   getOrders(): Observable<any> {
     return this.http.get(this.baseUrl);
+  }
+
+  // Driver's outstanding stops in efficient order; server falls back to last known fix without coords.
+  getRoutePlan(latitude?: number, longitude?: number): Observable<RoutePlan> {
+    const params: Record<string, number> = {};
+    if (latitude != null && longitude != null) {
+      params['latitude'] = latitude;
+      params['longitude'] = longitude;
+    }
+    return this.http.get<RoutePlan>(`${this.baseUrl}/route-plan`, { params });
   }
 
   createOrder(data: any): Observable<any> {

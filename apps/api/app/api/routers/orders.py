@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
@@ -24,6 +24,8 @@ from app.models.delivery_configuration import OperationalZone
 from app.models.location import City
 from app.models.driver_payment import DriverPaymentGroupAssignment
 from app.services.driver_active_order_service import DriverActiveOrderService
+from app.services.driver_location_service import DriverLocationService
+from app.services.route_plan_service import Coords, build_route_plan
 from app.services.delivery_quote_service import (
     DeliveryQuote,
     DeliveryQuoteError,
@@ -52,6 +54,9 @@ from app.schemas.order import (
     IncidentStage,
     PickupQrConfirm,
     ReadyUpdate,
+    RoutePlanResponse,
+    RouteStopResponse,
+    UnplaceableStopResponse,
     StatusUpdate,
     INCIDENT_REASONS_REQUIRING_DESCRIPTION,
 )
@@ -1538,6 +1543,93 @@ async def assign_driver(
             status_code=400,
             detail=f"Error assigning driver: {str(e)}"
         )
+
+
+# -------------------------
+# GET ROUTE PLAN
+# -------------------------
+@router.get("/route-plan", response_model=RoutePlanResponse)
+async def get_route_plan(
+    current_user: CurrentUser,
+    latitude: float | None = Query(default=None, ge=-90, le=90),
+    longitude: float | None = Query(default=None, ge=-180, le=180),
+    db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
+):
+    """
+    Order the driver's outstanding stops into an efficient run.
+
+    Stops are the pickups of every undelivered order plus the drops of the ones
+    already picked up. Sequencing only — nothing here affects pricing or payout.
+    """
+    if not current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only driver tenants can request a route plan.",
+        )
+
+    tenant_result = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
+    tenant = tenant_result.scalar_one_or_none()
+    if not tenant or tenant.role != TenantRole.driver:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only driver tenants can request a route plan.",
+        )
+
+    origin: Coords | None = None
+    if latitude is not None and longitude is not None:
+        origin = Coords(latitude=latitude, longitude=longitude)
+    elif redis:
+        # The app has no fix yet; the tracker's last one is better than nothing.
+        last_known = await DriverLocationService(redis).get(tenant.id)
+        if last_known:
+            origin = Coords(latitude=last_known.lat, longitude=last_known.lng)
+    if origin is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Your location is needed to order the stops. Turn location on and retry.",
+        )
+
+    result = await db.execute(
+        select(Order).where(
+            Order.driver_id == tenant.id,
+            Order.activity_status != ActivityStatus.delivered,
+        )
+    )
+    plan = await build_route_plan(origin, list(result.scalars().all()))
+
+    return RoutePlanResponse(
+        origin_latitude=plan.origin.latitude,
+        origin_longitude=plan.origin.longitude,
+        stops=[
+            RouteStopResponse(
+                sequence=index + 1,
+                order_id=stop.order_id,
+                order_number=stop.order_number,
+                kind=stop.kind,
+                name=stop.name,
+                address=stop.address,
+                latitude=stop.latitude,
+                longitude=stop.longitude,
+                place_id=stop.place_id,
+                leg_distance_meters=stop.leg_distance_meters,
+                leg_duration_seconds=stop.leg_duration_seconds,
+            )
+            for index, stop in enumerate(plan.stops)
+        ],
+        unplaceable=[
+            UnplaceableStopResponse(
+                order_id=item.order_id,
+                order_number=item.order_number,
+                kind=item.kind,
+                address=item.address,
+            )
+            for item in plan.unplaceable
+        ],
+        total_distance_meters=plan.total_distance_meters,
+        total_duration_seconds=plan.total_duration_seconds,
+        optimized_by=plan.optimized_by,
+    )
 
 
 # -------------------------

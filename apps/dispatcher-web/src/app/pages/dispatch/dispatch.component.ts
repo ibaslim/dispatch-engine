@@ -5,50 +5,14 @@ import { finalize, firstValueFrom, Subject, takeUntil } from 'rxjs';
 import { PageComponent } from '../../components/page/page.component';
 import { ButtonComponent } from '../../components/button/button.component';
 import { OrdersService } from '../../services/orders/orders.service';
-import { PaymentMethodType } from '../../models/new-order-form/new-order-form.model';
+import type { OrderResponse } from '@dispatch/shared/contracts';
 import { AuthService } from '../../core/auth/auth.service';
 import { OrderRealtimeEvent, PusherService } from '../../core/realtime/pusher.service';
 import { formatRate, TaxLine, taxLines } from '../orders/orders-formatting.util';
 
 // ─── Backend types ──────────────────────────────────────────────────────────
 
-type BackendOrderItem = { itemName: string; itemPrice: number; itemQty: number };
-
-type BackendOrder = {
-  id: string;
-  order_number: string;
-  pickup_name: string;
-  pickup_phone: string;
-  pickup_address: string;
-  pickup_date: string;
-  pickup_time: string;
-  delivery_name: string;
-  delivery_phone: string;
-  delivery_email: string;
-  delivery_address: string;
-  delivery_date: string;
-  delivery_time: string;
-  items: BackendOrderItem[];
-  subtotal: number;
-  gst_rate?: number | null;
-  gst_amount?: number | null;
-  pst_rate?: number | null;
-  pst_amount?: number | null;
-  delivery_fees: number;
-  delivery_tips: number;
-  discount: number;
-  total: number;
-  driver_payout?: number | null;
-  instructions?: string | null;
-  driver?: { id: string; name: string } | null;
-  payment_method: PaymentMethodType;
-  status: 'current' | 'scheduled' | 'completed' | 'incomplete' | 'history';
-  ready_for_pickup: boolean;
-  order_placed_time?: string | null;
-  proof_of_delivery?: { signature: boolean; picture: boolean };
-  published?: boolean;
-  published_at?: string | null;
-};
+type BackendOrder = OrderResponse;
 
 type DispatchOrder = {
   id: string;
