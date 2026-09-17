@@ -1,0 +1,52 @@
+<fieldset class="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+    <legend class="sr-only">{{ label }} schedule</legend>
+
+    <!-- Date -->
+    <div>
+        <label [attr.for]="name + '-date'" class="mb-1 flex h-5 items-center gap-1.5 text-sm text-gray-600 dark:text-gray-200">
+            {{ label }} date <span class="text-xs text-red-500" aria-hidden="true">*</span>
+        </label>
+        <input #dateInput [id]="name + '-date'" type="date" [attr.name]="name + 'Date'" [min]="minDate" [value]="date" required
+            (change)="onDate(dateInput.value)"
+            [attr.aria-invalid]="visibleDateError ? 'true' : null"
+            [attr.aria-describedby]="visibleDateError ? name + '-date-error' : null"
+            class="h-10 w-full rounded-md border bg-white px-3 text-sm text-gray-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[#3ddc97]/30 dark:bg-[#1E201E] dark:text-gray-100"
+            [ngClass]="visibleDateError
+                ? 'border-red-400 dark:border-red-500'
+                : 'border-gray-300 focus:border-[#3ddc97] dark:border-[#5a5d5a]'" />
+        <p *ngIf="visibleDateError" [id]="name + '-date-error'" class="mt-1.5 text-xs text-red-500">{{ visibleDateError }}</p>
+    </div>
+
+    <!-- Time: the checkbox lives in this field's label row, and the field swaps in place -->
+    <div>
+        <div class="mb-1 flex h-5 items-center justify-between gap-3">
+            <label [attr.for]="name + '-time'" class="text-sm text-gray-600 dark:text-gray-200">
+                {{ label }} time
+            </label>
+            <label class="flex cursor-pointer select-none items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+                <input type="checkbox" class="h-3.5 w-3.5 cursor-pointer accent-[#3ddc97]" [checked]="timeSpecified"
+                    (change)="onTimeSpecified($any($event.target).checked)" />
+                Set a specific time
+            </label>
+        </div>
+
+        <input *ngIf="timeSpecified; else anyTime" #timeInput [id]="name + '-time'" type="time"
+            [attr.name]="name + 'Time'" [min]="minTime" [value]="time" (change)="onTime(timeInput.value)"
+            [attr.aria-invalid]="visibleTimeError ? 'true' : null"
+            [attr.aria-describedby]="visibleTimeError ? name + '-time-error' : null"
+            class="h-10 w-full rounded-md border bg-white px-3 text-sm text-gray-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[#3ddc97]/30 dark:bg-[#1E201E] dark:text-gray-100"
+            [ngClass]="visibleTimeError
+                ? 'border-red-400 dark:border-red-500'
+                : 'border-gray-300 focus:border-[#3ddc97] dark:border-[#5a5d5a]'" />
+
+        <ng-template #anyTime>
+            <button type="button" [id]="name + '-time'" (click)="onTimeSpecified(true)"
+                class="flex h-10 w-full items-center gap-2 rounded-md border border-dashed border-gray-300 px-3 text-left text-sm text-gray-500 transition-colors hover:border-[#3ddc97] hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#3ddc97]/30 dark:border-[#5a5d5a] dark:text-gray-400 dark:hover:text-gray-200">
+                <i class="ph ph-clock text-base" aria-hidden="true"></i>
+                Any time
+            </button>
+        </ng-template>
+
+        <p *ngIf="visibleTimeError" [id]="name + '-time-error'" class="mt-1.5 text-xs text-red-500">{{ visibleTimeError }}</p>
+    </div>
+</fieldset>

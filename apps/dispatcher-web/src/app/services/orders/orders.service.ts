@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { DeliveryRouteQuote } from '../../models/new-order-form/new-order-form.model';
-import type { RoutePlan } from '@dispatch/shared/contracts';
+import type { DriverOrder, RoutePlan } from '@dispatch/shared/contracts';
 
 @Injectable({ providedIn: 'root' })
 export class OrdersService {
@@ -33,8 +33,8 @@ export class OrdersService {
     delivery_place_id: string;
     delivery_category_id: string;
     vendor_id?: string | null;
-    delivery_date?: string | null;
-    delivery_time?: string | null;
+    delivery_planned_at?: string | null;
+    delivery_time_specified?: boolean;
     surcharge_ids?: string[];
     pickup_address?: string;
     delivery_address?: string;
@@ -135,8 +135,8 @@ export class OrdersService {
   }
 
   /** Get all currently live published orders (within 15-min window, no driver). */
-  getPublishedOrders(): Observable<any[]> {
-    return this.http.get<any[]>(`${this.baseUrl}/published`);
+  getPublishedOrders(): Observable<DriverOrder[]> {
+    return this.http.get<DriverOrder[]>(`${this.baseUrl}/published`);
   }
 
   /** Driver reports an exception at pickup/delivery (e.g. sender/recipient absent). */

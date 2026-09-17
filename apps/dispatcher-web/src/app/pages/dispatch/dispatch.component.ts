@@ -5,10 +5,13 @@ import { finalize, firstValueFrom, Subject, takeUntil } from 'rxjs';
 import { PageComponent } from '../../components/page/page.component';
 import { ButtonComponent } from '../../components/button/button.component';
 import { OrdersService } from '../../services/orders/orders.service';
-import type { OrderResponse } from '@dispatch/shared/contracts';
+import { plannedDate, plannedTime, type OrderResponse } from '@dispatch/shared/contracts';
 import { AuthService } from '../../core/auth/auth.service';
 import { OrderRealtimeEvent, PusherService } from '../../core/realtime/pusher.service';
 import { formatRate, TaxLine, taxLines } from '../orders/orders-formatting.util';
+import { toOfferCard, type OfferCard } from '../orders/offer.util';
+import { OfferCardComponent } from '../../components/offer-card/offer-card.component';
+import { OfferDetailsModalComponent } from '../../components/offer-details-modal/offer-details-modal.component';
 
 // ─── Backend types ──────────────────────────────────────────────────────────
 
@@ -41,26 +44,11 @@ type DispatchDriverGroup = {
   orders: Array<{ id: string; label: string; pickup: string; dropoff: string; time: string }>;
 };
 
-/** A published order card shown to drivers in the New Orders panel. */
-export type PublishedOrderCard = {
-  id: string;
-  orderNumber: string;
-  pickupAddress: string;
-  deliveryAddress: string;
-  driverFee: number;
-  publishedAt: Date;
-  remainingSeconds: number; // countdown (0 = expired)
-  accepting: boolean;       // in-flight API call
-  accepted: boolean;        // accepted by this client (hide immediately)
-};
-
-const WINDOW_MINUTES = 15;
-const WINDOW_SECONDS = WINDOW_MINUTES * 60;
 
 @Component({
   selector: 'app-dispatch',
   standalone: true,
-  imports: [CommonModule, PageComponent, ButtonComponent],
+  imports: [CommonModule, PageComponent, ButtonComponent, OfferCardComponent, OfferDetailsModalComponent],
   templateUrl: './dispatch.component.html'
 })
 export class DispatchComponent implements OnInit, OnDestroy {
@@ -74,7 +62,7 @@ export class DispatchComponent implements OnInit, OnDestroy {
   newOrders: Array<{ id: string; realId: string; pickup: string; dropoff: string; eta: string; total: string }> = [];
 
   /** Published orders shown in the "New Orders" driver panel */
-  publishedOrders: PublishedOrderCard[] = [];
+  publishedOrders: OfferCard[] = [];
 
   feedbackMessage = '';
   isLoading = false;
@@ -136,22 +124,7 @@ export class DispatchComponent implements OnInit, OnDestroy {
       next: (orders) => {
         const now = Date.now();
         this.publishedOrders = orders
-          .map(o => {
-            const publishedAt = o.published_at ? new Date(o.published_at) : new Date();
-            const elapsed = Math.floor((now - publishedAt.getTime()) / 1000);
-            const remaining = Math.max(0, WINDOW_SECONDS - elapsed);
-            return {
-              id: String(o.id),
-              orderNumber: String(o.order_number ?? ''),
-              pickupAddress: String(o.pickup_address ?? ''),
-              deliveryAddress: String(o.delivery_address ?? ''),
-              driverFee: Number(o.driver_payout ?? 0),
-              publishedAt,
-              remainingSeconds: remaining,
-              accepting: false,
-              accepted: false,
-            } as PublishedOrderCard;
-          })
+          .map((o) => toOfferCard(o, now))
           .filter(o => o.remainingSeconds > 0);
       },
       error: () => { /* silently ignore — not critical */ }
@@ -175,7 +148,7 @@ export class DispatchComponent implements OnInit, OnDestroy {
     }
   }
 
-  async acceptOrder(card: PublishedOrderCard): Promise<void> {
+  async acceptOrder(card: OfferCard): Promise<void> {
     if (card.accepting || card.accepted || card.remainingSeconds <= 0) return;
     card.accepting = true;
 
@@ -183,6 +156,7 @@ export class DispatchComponent implements OnInit, OnDestroy {
       const acceptedOrder = await firstValueFrom(this.ordersService.acceptOrder(card.id));
       this.selectedOrder = this.mapBackendOrder(acceptedOrder as BackendOrder);
       card.accepted = true;
+      if (this.selectedOfferId === card.id) this.selectedOfferId = null;
       // Remove immediately from the list
       this.publishedOrders = this.publishedOrders.filter(p => p.id !== card.id);
       this.loadDispatchState();
@@ -198,25 +172,24 @@ export class DispatchComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Countdown bar width as percentage (0-100) */
-  countdownPercent(card: PublishedOrderCard): number {
-    return Math.round((card.remainingSeconds / WINDOW_SECONDS) * 100);
+  // ─── Offer details ───────────────────────────────────────────────────────────
+
+  selectedOfferId: string | null = null;
+
+  /** The offer open in the details modal; null once it leaves the list. */
+  get selectedOffer(): OfferCard | null {
+    return this.publishedOrders.find((card) => card.id === this.selectedOfferId) ?? null;
   }
 
-  /** Formatted MM:SS countdown */
-  countdownLabel(card: PublishedOrderCard): string {
-    const m = Math.floor(card.remainingSeconds / 60);
-    const s = card.remainingSeconds % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  openOfferDetails(card: OfferCard): void {
+    this.selectedOfferId = card.id;
   }
 
-  /** Color class for the countdown bar */
-  countdownColor(card: PublishedOrderCard): string {
-    const pct = this.countdownPercent(card);
-    if (pct > 50) return 'bg-emerald-500';
-    if (pct > 20) return 'bg-amber-400';
-    return 'bg-red-500';
+  closeOfferDetails(): void {
+    this.selectedOfferId = null;
   }
+
+  trackOffer = (_: number, card: OfferCard): string => card.id;
 
   // ─── Dispatch board loading ───────────────────────────────────────────────────
 
@@ -301,15 +274,15 @@ export class DispatchComponent implements OnInit, OnDestroy {
         name: order.pickup_name,
         phone: order.pickup_phone,
         address: order.pickup_address,
-        time: order.pickup_time,
-        date: order.pickup_date
+        time: plannedTime(order.pickup_planned_at, order.pickup_time_specified) ?? '',
+        date: plannedDate(order.pickup_planned_at)
       },
       delivery: {
         name: order.delivery_name,
         phone: order.delivery_phone,
         address: order.delivery_address,
-        date: order.delivery_date,
-        time: order.delivery_time
+        date: plannedDate(order.delivery_planned_at),
+        time: plannedTime(order.delivery_planned_at, order.delivery_time_specified) ?? ''
       },
       items: (order.items || []).map(i => ({
         name: i.itemName,

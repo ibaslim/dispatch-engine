@@ -3,6 +3,7 @@ import { View, Text } from 'react-native';
 
 import { formatDistance } from '@utils/distance';
 import { formatDuration } from '@utils/duration';
+import { StopTime } from './StopTime';
 
 interface Props {
   pickup: string;
@@ -10,6 +11,11 @@ interface Props {
   /** Quoted pickup-to-drop leg. Both are optional — older orders carry neither. */
   distanceMeters?: number | null;
   durationSeconds?: number | null;
+  /** Planned stop times. Omit both to leave the address lines bare, as before. */
+  pickupPlannedAt?: string;
+  pickupTimeSpecified?: boolean;
+  deliveryPlannedAt?: string;
+  deliveryTimeSpecified?: boolean;
 }
 
 /** Centres a 10px node on the first 20px line of text beside it. */
@@ -26,7 +32,16 @@ function legLabel(
   return time ?? span;
 }
 
-export function RouteLine({ pickup, drop, distanceMeters, durationSeconds }: Props) {
+export function RouteLine({
+  pickup,
+  drop,
+  distanceMeters,
+  durationSeconds,
+  pickupPlannedAt,
+  pickupTimeSpecified,
+  deliveryPlannedAt,
+  deliveryTimeSpecified,
+}: Props) {
   const leg = legLabel(distanceMeters, durationSeconds);
 
   return (
@@ -36,7 +51,12 @@ export function RouteLine({ pickup, drop, distanceMeters, durationSeconds }: Pro
           <View className="h-2.5 w-2.5 rounded-full bg-primary" style={NODE_OFFSET} />
           <View className="mt-1 w-px flex-1 bg-border" />
         </View>
-        <Text className="flex-1 pb-3 text-sm leading-5 text-foreground">{pickup}</Text>
+        <View className="flex-1 pb-3">
+          <Text className="text-sm leading-5 text-foreground">{pickup}</Text>
+          {pickupPlannedAt != null && (
+            <StopTime plannedAt={pickupPlannedAt} timeSpecified={Boolean(pickupTimeSpecified)} />
+          )}
+        </View>
       </View>
 
       {leg ? (
@@ -58,7 +78,12 @@ export function RouteLine({ pickup, drop, distanceMeters, durationSeconds }: Pro
         <View className="items-center">
           <View className="h-2.5 w-2.5 rounded-[3px] bg-foreground" style={NODE_OFFSET} />
         </View>
-        <Text className="flex-1 text-sm leading-5 text-muted">{drop}</Text>
+        <View className="flex-1">
+          <Text className="text-sm leading-5 text-muted">{drop}</Text>
+          {deliveryPlannedAt != null && (
+            <StopTime plannedAt={deliveryPlannedAt} timeSpecified={Boolean(deliveryTimeSpecified)} />
+          )}
+        </View>
       </View>
     </View>
   );

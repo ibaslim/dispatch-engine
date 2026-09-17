@@ -21,7 +21,7 @@
                         <p>{{ order.full.pickup.phone.countryCode }} {{ order.full.pickup.phone.number }}</p>
                         <p class="mt-1 break-words">{{ order.full.pickup.email }}</p>
                         <p class="mt-1 break-words">{{ order.full.pickup.address }}</p>
-                        <p class="mt-2 text-xs text-gray-500">Date: {{ order.full.pickup.pickupDate }} {{ order.full.pickup.pickupTime }}</p>
+                        <p class="mt-2 text-xs text-gray-500">Date: {{ order.full.pickup.pickupDate }} {{ order.full.pickup.pickupTime || 'Any time' }}</p>
                     </div>
                     <div>
                         <h3 class="font-bold text-xs uppercase tracking-wider text-gray-400 mb-2">Delivery Information</h3>
@@ -29,7 +29,7 @@
                         <p>{{ order.full.delivery.phone.countryCode }} {{ order.full.delivery.phone.number }}</p>
                         <p class="break-words">{{ order.full.delivery.email }}</p>
                         <p class="mt-1 break-words">{{ order.full.delivery.address }}</p>
-                        <p class="mt-2 text-xs text-gray-500">Date: {{ order.full.delivery.deliveryDate }} {{ order.full.delivery.deliveryTime }}</p>
+                        <p class="mt-2 text-xs text-gray-500">Date: {{ order.full.delivery.deliveryDate }} {{ order.full.delivery.deliveryTime || 'Any time' }}</p>
                     </div>
                 </div>
 

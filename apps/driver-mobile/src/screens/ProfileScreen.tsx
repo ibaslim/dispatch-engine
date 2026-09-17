@@ -4,12 +4,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@theme';
 import { Card, CardBody, Badge, Ref } from '@components/ui';
-import { useMuteBroadcasts } from '@hooks';
+import { useMuteBroadcasts, useReminderLead } from '@hooks';
+import { formatReminderLead } from '@services/reminders';
 import type { AuthUser } from '@contexts';
 
 interface Props {
   user: AuthUser | null;
   onOpenAppearance: () => void;
+  onOpenReminders: () => void;
   onOpenIpConfig?: () => void;
   onSignOut: () => void;
 }
@@ -36,9 +38,10 @@ function IconChip({ name }: { name: keyof typeof Ionicons.glyphMap }) {
 }
 
 /** Driver account hub: identity, appearance, notification prefs, sign out. */
-export function ProfileScreen({ user, onOpenAppearance, onOpenIpConfig, onSignOut }: Props) {
+export function ProfileScreen({ user, onOpenAppearance, onOpenReminders, onOpenIpConfig, onSignOut }: Props) {
   const { palette } = useTheme();
   const { muted, setMuted } = useMuteBroadcasts();
+  const [reminderLead] = useReminderLead();
 
   function confirmSignOut() {
     Alert.alert('Sign out', 'Are you sure you want to sign out?', [
@@ -120,6 +123,28 @@ export function ProfileScreen({ user, onOpenAppearance, onOpenIpConfig, onSignOu
                     <Text className="text-base font-semibold text-foreground">Appearance</Text>
                     <Text className="mt-0.5 text-xs leading-5 text-muted">
                       Theme, colors, light and dark mode.
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={palette.muted} />
+                </CardBody>
+              </Card>
+            </TouchableOpacity>
+
+            {/* Reminders — navigates to the dedicated screen */}
+            <TouchableOpacity
+              onPress={onOpenReminders}
+              accessibilityRole="button"
+              accessibilityLabel="Reminders"
+            >
+              <Card>
+                <CardBody className="flex-row items-center gap-4">
+                  <IconChip name="alarm-outline" />
+                  <View className="flex-1">
+                    <Text className="text-base font-semibold text-foreground">Reminders</Text>
+                    <Text className="mt-0.5 text-xs leading-5 text-muted">
+                      {reminderLead === 0
+                        ? 'Off. No reminders before your stops.'
+                        : `${formatReminderLead(reminderLead)} before each pickup and drop.`}
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={palette.muted} />

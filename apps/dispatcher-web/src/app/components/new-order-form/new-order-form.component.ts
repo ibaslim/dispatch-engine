@@ -3,8 +3,10 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, EventEmitter, HostListener, Input, OnInit, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
+import { toPlannedAt } from '@dispatch/shared/contracts';
 
 import { DeliveryRouteQuote, NewOrderFormValue } from '../../models/new-order-form/new-order-form.model';
+import { localDate, localTime, scheduleErrors, type ScheduleBaseline, type ScheduleErrors } from '@pages/orders/order-schedule.util';
 import {
   DeliveryCategory,
   DeliveryConfigurationService,
@@ -35,6 +37,8 @@ import { ToastService } from '../../core/toast/toast.service';
 export class NewOrderFormComponent implements OnInit {
   @Input() value: NewOrderFormValue = this.createDefaultValue();
   @Input() showSubmitValidation = false;
+  // The schedule when editing began; stops left unchanged skip the past-date check.
+  @Input() scheduleBaseline: ScheduleBaseline | null = null;
 
   @Output() valueChange = new EventEmitter<NewOrderFormValue>();
   @Output() pinPickup = new EventEmitter<void>();
@@ -109,7 +113,8 @@ export class NewOrderFormComponent implements OnInit {
         address: '',
         location: null,
         pickupDate: this.todayYYYYMMDD(),
-        pickupTime: ''
+        pickupTime: '',
+        pickupTimeSpecified: false
       },
       delivery: {
         name: '',
@@ -118,7 +123,8 @@ export class NewOrderFormComponent implements OnInit {
         address: '',
         location: null,
         deliveryDate: this.todayYYYYMMDD(),
-        deliveryTime: ''
+        deliveryTime: '',
+        deliveryTimeSpecified: false
       },
       details: {
         items: [
@@ -160,7 +166,8 @@ export class NewOrderFormComponent implements OnInit {
   onDeliveryChange(delivery: NewOrderFormValue['delivery']): void {
     const changed = delivery.location?.placeId !== this.value.delivery.location?.placeId
       || delivery.deliveryDate !== this.value.delivery.deliveryDate
-      || delivery.deliveryTime !== this.value.delivery.deliveryTime;
+      || delivery.deliveryTime !== this.value.delivery.deliveryTime
+      || delivery.deliveryTimeSpecified !== this.value.delivery.deliveryTimeSpecified;
     changed ? this.patchAndQuote({ delivery }) : this.patch({ delivery });
   }
 
@@ -206,8 +213,15 @@ export class NewOrderFormComponent implements OnInit {
         pickup_place_id: value.pickup.location!.placeId,
         delivery_place_id: value.delivery.location!.placeId,
         delivery_category_id: value.deliveryCategoryId,
-        delivery_date: value.delivery.deliveryDate || null,
-        delivery_time: value.delivery.deliveryTime || null,
+        delivery_planned_at: value.delivery.deliveryDate
+          ? toPlannedAt(
+              value.delivery.deliveryDate,
+              value.delivery.deliveryTimeSpecified ? value.delivery.deliveryTime : null,
+            ).plannedAt
+          : null,
+        delivery_time_specified: Boolean(
+          value.delivery.deliveryDate && value.delivery.deliveryTimeSpecified && value.delivery.deliveryTime,
+        ),
         surcharge_ids: value.surchargeIds,
         pickup_address: value.pickup.address,
         delivery_address: value.delivery.address,
@@ -289,39 +303,31 @@ export class NewOrderFormComponent implements OnInit {
     });
   }
 
-  private toMinutes(t: string): number {
-    const [hh, mm] = t.split(':').map(Number);
-    if (Number.isNaN(hh) || Number.isNaN(mm)) return NaN;
-    return hh * 60 + mm;
+  get schedule(): ScheduleErrors {
+    return scheduleErrors(this.value, this.scheduleBaseline);
   }
 
-  private get pickupTime(): string {
-    return this.value.pickup?.pickupTime || '';
+  get today(): string {
+    return localDate();
   }
 
-  private get deliveryTime(): string {
-    return this.value.delivery?.deliveryTime || '';
+  get deliveryMinDate(): string {
+    const pickupDate = this.value.pickup.pickupDate;
+    return pickupDate && pickupDate > this.today ? pickupDate : this.today;
   }
 
-  get showDeliveryTimeError(): boolean {
-    if (!this.pickupTime || !this.deliveryTime) return false;
-
-    const pickupDate = this.value.pickup?.pickupDate || '';
-    const deliveryDate = this.value.delivery?.deliveryDate || '';
-
-    if (pickupDate && deliveryDate && pickupDate !== deliveryDate) return false;
-
-    return this.isDeliveryBeforeOrEqualPickup;
+  get pickupMinTime(): string | null {
+    return this.value.pickup.pickupDate === this.today ? localTime() : null;
   }
 
-  get deliveryTimeError(): string {
-    return this.showDeliveryTimeError ? 'Delivery time must be after pickup time.' : '';
+  get deliveryMinTime(): string | null {
+    const { pickup, delivery } = this.value;
+    const floors: string[] = [];
+    if (delivery.deliveryDate === this.today) floors.push(localTime());
+    if (delivery.deliveryDate === pickup.pickupDate && pickup.pickupTimeSpecified && pickup.pickupTime) {
+      floors.push(pickup.pickupTime);
+    }
+    return floors.length ? floors.sort()[floors.length - 1] : null;
   }
 
-  private get isDeliveryBeforeOrEqualPickup(): boolean {
-    const p = this.toMinutes(this.pickupTime);
-    const d = this.toMinutes(this.deliveryTime);
-    if (Number.isNaN(p) || Number.isNaN(d)) return false;
-    return d <= p;
-  }
 }

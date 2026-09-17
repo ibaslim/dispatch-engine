@@ -1,6 +1,6 @@
 import asyncio
 from dataclasses import dataclass
-from datetime import date, time
+from datetime import date, datetime, time
 from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import quote
 from uuid import UUID
@@ -240,8 +240,8 @@ async def build_delivery_quote(
     delivery_place_id: str,
     category_id: UUID,
     vendor_id: UUID | None = None,
-    delivery_date: str | None = None,
-    delivery_time: str | None = None,
+    delivery_planned_at: datetime | None = None,
+    delivery_time_specified: bool = False,
     surcharge_ids: list[UUID] | None = None,
 ) -> DeliveryQuote:
     timeout = httpx.Timeout(12.0)
@@ -310,11 +310,8 @@ async def build_delivery_quote(
         Decimal(additional_per_km),
     )
     applied_charges: list[AppliedCharge] = []
-    if delivery_time:
-        try:
-            requested_time = time.fromisoformat(delivery_time)
-        except ValueError as exc:
-            raise DeliveryQuoteError("Enter a valid delivery time.") from exc
+    if delivery_planned_at and delivery_time_specified:
+        requested_time = delivery_planned_at.time()
         after_hours = (
             await db.scalars(select(AfterHoursDelivery).order_by(AfterHoursDelivery.start_time))
         ).all()
@@ -356,11 +353,8 @@ async def build_delivery_quote(
         )
 
     chargeable_delivery_fee = distance_fee + _sum_charges(applied_charges)
-    if delivery_date:
-        try:
-            requested_date = date.fromisoformat(delivery_date)
-        except ValueError as exc:
-            raise DeliveryQuoteError("Enter a valid delivery date.") from exc
+    if delivery_planned_at:
+        requested_date = delivery_planned_at.date()
         occasions = (
             await db.scalars(
                 select(SpecialOccasion).order_by(
@@ -472,8 +466,8 @@ async def build_manual_delivery_quote(
     delivery_address: str,
     category_id: UUID,
     vendor_id: UUID | None = None,
-    delivery_date: str | None = None,
-    delivery_time: str | None = None,
+    delivery_planned_at: datetime | None = None,
+    delivery_time_specified: bool = False,
     surcharge_ids: list[UUID] | None = None,
 ) -> DeliveryQuote:
     pickup = await _resolve_manual_location(db, pickup_address)
@@ -511,11 +505,8 @@ async def build_manual_delivery_quote(
     # Manual fallback intentionally uses fixed base pricing. Configured
     # after-hours, selected surcharge and special-occasion charges still apply.
     applied_charges: list[AppliedCharge] = []
-    if delivery_time:
-        try:
-            requested_time = time.fromisoformat(delivery_time)
-        except ValueError as exc:
-            raise DeliveryQuoteError("Enter a valid delivery time.") from exc
+    if delivery_planned_at and delivery_time_specified:
+        requested_time = delivery_planned_at.time()
         after_hours = (
             await db.scalars(select(AfterHoursDelivery).order_by(AfterHoursDelivery.start_time))
         ).all()
@@ -555,11 +546,8 @@ async def build_manual_delivery_quote(
         )
 
     chargeable_delivery_fee = Decimal(base_price) + _sum_charges(applied_charges)
-    if delivery_date:
-        try:
-            requested_date = date.fromisoformat(delivery_date)
-        except ValueError as exc:
-            raise DeliveryQuoteError("Enter a valid delivery date.") from exc
+    if delivery_planned_at:
+        requested_date = delivery_planned_at.date()
         occasions = list((await db.scalars(
             select(SpecialOccasion).order_by(
                 SpecialOccasion.occasion_date, SpecialOccasion.name

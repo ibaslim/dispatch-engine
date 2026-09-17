@@ -1,0 +1,71 @@
+<article class="relative flex h-full flex-col overflow-hidden rounded-xl border-2 transition-all"
+    [ngClass]="expired
+        ? 'border-gray-300 opacity-50 dark:border-[#3a3d3a]'
+        : 'border-[#3ddc97]/40 bg-white shadow-md hover:shadow-lg dark:border-[#3ddc97]/30 dark:bg-[#1a1d1a]'">
+
+    <div class="h-1 w-full bg-gray-200 dark:bg-[#2a2d2a]">
+        <div class="h-1 rounded-full transition-all duration-1000 ease-linear" [ngClass]="barClass" [style.width.%]="percent"></div>
+    </div>
+
+    <div class="flex flex-1 flex-col p-4">
+        <div class="mb-3 flex items-start justify-between gap-2">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-wider text-[#3ddc97]">New Order</p>
+                <p class="mt-0.5 text-sm font-semibold text-gray-900 dark:text-gray-100">#{{ card.orderNumber }}</p>
+            </div>
+            <div class="flex shrink-0 flex-col items-end">
+                <span class="font-mono text-xl font-bold tabular-nums" [ngClass]="timerClass">{{ countdown }}</span>
+                <span class="mt-0.5 text-[10px] text-gray-400">remaining</span>
+            </div>
+        </div>
+
+        <ol class="mb-3 space-y-3">
+            <li class="flex items-start gap-2 text-xs">
+                <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">P</span>
+                <div class="min-w-0">
+                    <p class="leading-snug text-gray-700 dark:text-gray-300">{{ card.pickupAddress }}</p>
+                    <p class="mt-1 flex items-center gap-1 text-[11px]"
+                        [ngClass]="card.pickupTimeSpecified ? 'font-medium text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'">
+                        <i class="ph ph-clock" aria-hidden="true"></i>
+                        <span><span class="sr-only">Pickup </span>{{ card.pickupWhen }}</span>
+                    </p>
+                </div>
+            </li>
+            <li class="flex items-start gap-2 text-xs">
+                <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">D</span>
+                <div class="min-w-0">
+                    <p class="leading-snug text-gray-700 dark:text-gray-300">{{ card.deliveryAddress }}</p>
+                    <p class="mt-1 flex items-center gap-1 text-[11px]"
+                        [ngClass]="card.deliveryTimeSpecified ? 'font-medium text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'">
+                        <i class="ph ph-clock" aria-hidden="true"></i>
+                        <span><span class="sr-only">Drop </span>{{ card.deliveryWhen }}</span>
+                    </p>
+                </div>
+            </li>
+        </ol>
+
+        <div class="mb-4 rounded-lg bg-gray-50 px-3 py-2 dark:bg-[#232623]">
+            <p class="text-[10px] uppercase tracking-wider text-gray-400">Your Earnings</p>
+            <p class="text-base font-bold text-[#3ddc97]">C$ {{ card.driverFee | number:'1.2-2' }}</p>
+        </div>
+
+        <div class="mt-auto flex gap-2">
+            <button type="button" (click)="details.emit()"
+                class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3ddc97]/40 dark:border-[#5a5d5a] dark:text-gray-200 dark:hover:bg-[#2a2d2a]">
+                Details
+            </button>
+            <button type="button" [disabled]="expired || card.accepting || card.accepted" (click)="accept.emit()"
+                class="flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3ddc97]/40"
+                [ngClass]="expired || card.accepted
+                    ? 'cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-[#2a2d2a]'
+                    : card.accepting
+                        ? 'cursor-wait bg-[#3ddc97]/70 text-black'
+                        : 'bg-[#3ddc97] text-black hover:bg-[#2fbf82] active:scale-[0.98]'">
+                <span *ngIf="!card.accepting && !card.accepted && !expired">Accept Order</span>
+                <span *ngIf="card.accepting">Accepting...</span>
+                <span *ngIf="card.accepted">Accepted ✓</span>
+                <span *ngIf="expired && !card.accepted">Expired</span>
+            </button>
+        </div>
+    </div>
+</article>

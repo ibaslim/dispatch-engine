@@ -12,6 +12,7 @@ import {
   ProgressTimeline,
   QrScanSheet,
   ReportSheet,
+  ScheduleCard,
 } from '@components/orders';
 import { DANGER, DANGER_BORDER } from '@constants/colors';
 import {
@@ -23,7 +24,7 @@ import {
 import type { DriverOrder, IncidentReason } from '@types';
 import { incidentStageFor, nextStep } from '@utils/orderProgress';
 import { callNumber, openDirections } from '@utils/linking';
-import {PrimaryColor} from "@expo/config-plugins/build/android";
+import { formatStopWhen } from '@utils/schedule';
 
 interface Props {
   order: DriverOrder | undefined;
@@ -44,23 +45,35 @@ function SectionLabel({ children }: { children: string }) {
   );
 }
 
-/** A named party with their address and a tappable phone number. */
+/** A named party with their address, planned stop time, and a tappable phone number. */
 function Party({
   role,
   name,
   address,
   phone,
+  when,
+  timeSpecified,
 }: {
   role: string;
   name: string;
   address: string;
   phone: string;
+  /** e.g. "Pickup Sat, Sep 20, 2:30 PM". */
+  when: string;
+  timeSpecified: boolean;
 }) {
+  const { palette } = useTheme();
   return (
     <View>
       <SectionLabel>{role}</SectionLabel>
       <Text className="text-base font-semibold text-foreground">{name}</Text>
       <Text className="mt-0.5 text-sm text-muted">{address}</Text>
+      <View className="mt-1.5 flex-row items-center gap-1.5">
+        <Ionicons name="time-outline" size={14} color={timeSpecified ? palette.foreground : palette.muted} />
+        <Text className={`text-sm ${timeSpecified ? 'font-semibold text-foreground' : 'text-muted'}`}>
+          {when}
+        </Text>
+      </View>
       <Text
         className="mt-1 text-sm text-primary"
         accessibilityRole="link"
@@ -340,6 +353,13 @@ export function OrderDetailScreen({
           </CardBody>
         </Card>
 
+        <ScheduleCard
+          pickupPlannedAt={order.pickup_planned_at}
+          pickupTimeSpecified={order.pickup_time_specified}
+          deliveryPlannedAt={order.delivery_planned_at}
+          deliveryTimeSpecified={order.delivery_time_specified}
+        />
+
         <Card>
           <CardBody className="gap-5">
             <Party
@@ -347,6 +367,8 @@ export function OrderDetailScreen({
               name={order.pickup_name}
               address={order.pickup_address}
               phone={order.pickup_phone}
+              when={`Pickup ${formatStopWhen(order.pickup_planned_at, order.pickup_time_specified)}`}
+              timeSpecified={order.pickup_time_specified}
             />
             <View className="h-px bg-border" />
             <Party
@@ -354,6 +376,8 @@ export function OrderDetailScreen({
               name={order.delivery_name}
               address={order.delivery_address}
               phone={order.delivery_phone}
+              when={`Drop ${formatStopWhen(order.delivery_planned_at, order.delivery_time_specified)}`}
+              timeSpecified={order.delivery_time_specified}
             />
             <View className="h-px bg-border" />
             <View>

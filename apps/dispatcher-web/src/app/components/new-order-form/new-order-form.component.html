@@ -4,14 +4,14 @@
 
             <app-pickup-from [value]="value.pickup" (valueChange)="onPickupChange($event)"
                 [operationalZones]="operationalZones"
-                (pinClick)="pinPickup.emit()" [pickupTimeError]="deliveryTimeError"
-                [showPickupTimeError]="showDeliveryTimeError" [showSubmitValidation]="showSubmitValidation">
+                (pinClick)="pinPickup.emit()" [dateError]="schedule.pickupDate" [timeError]="schedule.pickupTime"
+                [minDate]="today" [minTime]="pickupMinTime" [showSubmitValidation]="showSubmitValidation">
             </app-pickup-from>
 
             <app-deliver-to [value]="value.delivery" (valueChange)="onDeliveryChange($event)"
                 [operationalZones]="operationalZones"
-                (pinClick)="pinDelivery.emit()" [deliveryTimeError]="deliveryTimeError"
-                [showDeliveryTimeError]="showDeliveryTimeError" [showSubmitValidation]="showSubmitValidation">
+                (pinClick)="pinDelivery.emit()" [dateError]="schedule.deliveryDate" [timeError]="schedule.deliveryTime"
+                [minDate]="deliveryMinDate" [minTime]="deliveryMinTime" [showSubmitValidation]="showSubmitValidation">
             </app-deliver-to>
 
             <app-proof-of-delivery

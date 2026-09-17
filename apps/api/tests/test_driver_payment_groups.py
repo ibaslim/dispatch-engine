@@ -1,3 +1,4 @@
+from datetime import datetime
 import asyncio
 import uuid
 from decimal import Decimal
@@ -53,14 +54,14 @@ def _priced_order() -> Order:
         pickup_phone="111",
         pickup_email="pickup@example.com",
         pickup_address="Pickup address",
-        pickup_date="2026-07-19",
-        pickup_time="10:00",
+        pickup_planned_at=datetime(2026, 7, 19, 10, 0),
+        pickup_time_specified=True,
         delivery_name="Delivery",
         delivery_phone="222",
         delivery_email="delivery@example.com",
         delivery_address="Delivery address",
-        delivery_date="2026-07-19",
-        delivery_time="11:00",
+        delivery_planned_at=datetime(2026, 7, 19, 11, 0),
+        delivery_time_specified=True,
         items=[{"itemName": "Parcel", "itemPrice": 100, "itemQty": 1}],
         surcharge_ids=[],
         applied_charges=[],

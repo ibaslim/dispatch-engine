@@ -6,17 +6,20 @@ import { OrdersService } from '@services/orders/orders.service';
 import { AuthService } from '@core/auth/auth.service';
 import { ToastService } from '@core/toast/toast.service';
 import { BackendOrder, mapBackendOrder } from '@pages/orders/orders-mapping.util';
+import { toOfferCard, type OfferCard } from '@pages/orders/offer.util';
 import { OrderRealtimeEvent, PusherService } from '@core/realtime/pusher.service';
+import { OfferCardComponent } from '@components/offer-card/offer-card.component';
+import { OfferDetailsModalComponent } from '@components/offer-details-modal/offer-details-modal.component';
 
 /**
- * Driver-facing real-time "New Orders" feed: subscribes through Pusher Channels,
- * lists newly published orders with a 15-minute accept countdown, and lets the
- * driver accept one. Extracted from OrdersComponent.
+ * Driver-facing real-time "New Orders" feed: refetches on Pusher order events,
+ * lists live offers with a 15-minute accept countdown, and lets the driver open
+ * one in full or accept it.
  */
 @Component({
   selector: 'app-published-orders-feed',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, OfferCardComponent, OfferDetailsModalComponent],
   templateUrl: './published-orders-feed.component.html'
 })
 export class PublishedOrdersFeedComponent implements OnInit, OnDestroy {
@@ -24,7 +27,8 @@ export class PublishedOrdersFeedComponent implements OnInit, OnDestroy {
   /** Emitted when the websocket reports another accept, so the parent can refresh its order list. */
   @Output() refresh = new EventEmitter<void>();
 
-  publishedOrders: any[] = [];
+  publishedOrders: OfferCard[] = [];
+  selectedOfferId: string | null = null;
 
   private readonly destroy$ = new Subject<void>();
   private countdownHandle: ReturnType<typeof setInterval> | null = null;
@@ -52,6 +56,21 @@ export class PublishedOrdersFeedComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
+  /** The offer open in the details modal; null once it leaves the list. */
+  get selectedOffer(): OfferCard | null {
+    return this.publishedOrders.find((card) => card.id === this.selectedOfferId) ?? null;
+  }
+
+  openOfferDetails(card: OfferCard): void {
+    this.selectedOfferId = card.id;
+  }
+
+  closeOfferDetails(): void {
+    this.selectedOfferId = null;
+  }
+
+  trackOffer = (_: number, card: OfferCard): string => card.id;
+
   private handleRealtimeEvent(event: OrderRealtimeEvent): void {
     if (event.event === 'order-accepted') {
       this.publishedOrders = this.publishedOrders.filter(p => p.id !== event.order_id);
@@ -70,21 +89,7 @@ export class PublishedOrdersFeedComponent implements OnInit, OnDestroy {
     this.ordersService.getPublishedOrders().subscribe({
       next: (orders) => {
         const now = Date.now();
-        this.publishedOrders = orders.map(o => {
-          const publishedAt = o.published_at ? new Date(o.published_at) : new Date();
-          const elapsed = Math.floor((now - publishedAt.getTime()) / 1000);
-          return {
-            id: String(o.id),
-            orderNumber: String(o.order_number ?? ''),
-            pickupAddress: String(o.pickup_address ?? ''),
-            deliveryAddress: String(o.delivery_address ?? ''),
-            driverFee: Number(o.driver_payout ?? 0),
-            publishedAt,
-            remainingSeconds: Math.max(0, 900 - elapsed),
-            accepting: false,
-            accepted: false,
-          };
-        }).filter(o => o.remainingSeconds > 0);
+        this.publishedOrders = orders.map((order) => toOfferCard(order, now)).filter(o => o.remainingSeconds > 0);
       }
     });
   }
@@ -104,13 +109,14 @@ export class PublishedOrdersFeedComponent implements OnInit, OnDestroy {
     }
   }
 
-  async acceptOrder(card: any): Promise<void> {
+  async acceptOrder(card: OfferCard): Promise<void> {
     if (card.accepting || card.accepted || card.remainingSeconds <= 0) return;
     card.accepting = true;
     try {
       const acceptedOrder = await firstValueFrom(this.ordersService.acceptOrder(card.id));
       const mappedOrder = mapBackendOrder(acceptedOrder as BackendOrder, this.auth.isDriver());
       card.accepted = true;
+      if (this.selectedOfferId === card.id) this.selectedOfferId = null;
       this.publishedOrders = this.publishedOrders.filter(p => p.id !== card.id);
       this.accepted.emit(mappedOrder);
     } catch (err: any) {
@@ -121,20 +127,5 @@ export class PublishedOrdersFeedComponent implements OnInit, OnDestroy {
     } finally {
       card.accepting = false;
     }
-  }
-
-  countdownPercent(card: any): number { return Math.round((card.remainingSeconds / 900) * 100); }
-
-  countdownLabel(card: any): string {
-    const m = Math.floor(card.remainingSeconds / 60);
-    const s = card.remainingSeconds % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  }
-
-  countdownColor(card: any): string {
-    const pct = this.countdownPercent(card);
-    if (pct > 50) return 'bg-emerald-500';
-    if (pct > 20) return 'bg-amber-400';
-    return 'bg-red-500';
   }
 }

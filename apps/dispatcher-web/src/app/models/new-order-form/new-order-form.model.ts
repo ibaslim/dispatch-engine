@@ -61,6 +61,8 @@ export interface NewOrderFormValue {
         location: SelectedGooglePlace | null;
         pickupDate: string;
         pickupTime: string;
+        // Ticked "Set a specific time"; pickupTime is ignored when false.
+        pickupTimeSpecified: boolean;
     };
 
     delivery: {
@@ -71,6 +73,7 @@ export interface NewOrderFormValue {
         location: SelectedGooglePlace | null;
         deliveryDate: string;
         deliveryTime: string;
+        deliveryTimeSpecified: boolean;
     };
 
     details: {

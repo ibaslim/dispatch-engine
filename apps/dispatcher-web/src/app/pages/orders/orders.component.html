@@ -57,13 +57,14 @@
     <!-- ───────────────────────────────────────────
          NEW ORDER MODAL
     ─────────────────────────────────────────── -->
-    <app-popup *ngIf="!isReadOnlyTenant" [open]="isNewOrderOpen" title="New Order" (close)="closeNewOrder()">
+    <app-popup *ngIf="!isReadOnlyTenant" [open]="isNewOrderOpen" [title]="editingOrderId ? 'Edit order' : 'New order'" (close)="closeNewOrder()">
 
         <app-new-order-form *ngIf="isNewOrderOpen"
             [value]="newOrderValue"
             (valueChange)="newOrderValue = $event"
             (pinPickup)="onPickupPin()"
             (pinDelivery)="onDeliveryPin()"
+            [scheduleBaseline]="scheduleBaseline"
             [showSubmitValidation]="formSubmitted()">
         </app-new-order-form>
 

@@ -23,18 +23,10 @@
         [value]="value.address" (valueChange)="onAddressInput($event)" (placeChange)="onPlaceSelected($event)" (pinClick)="pinClick.emit()"
         name="pickupAddress" [operationalZones]="operationalZones" [showSubmitValidation]="showSubmitValidation"></app-address-input>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
-
-        <app-date-picker label="Pickup Date" [required]="true" [value]="value.pickupDate"
-            (valueChange)="patch({ pickupDate: $event })" name="pickupDate"
-            [showSubmitValidation]="showSubmitValidation">
-        </app-date-picker>
-
-        <app-time-picker label="Pickup Time" [required]="true" [value]="value.pickupTime"
-            (valueChange)="patch({ pickupTime: $event })" name="pickupTime" [externalError]="pickupTimeError"
-            [showExternalError]="showPickupTimeError" [showSubmitValidation]="showSubmitValidation">
-        </app-time-picker>
-
-    </div>
+    <app-stop-schedule label="Pickup" name="pickup" [date]="value.pickupDate" [time]="value.pickupTime"
+        [timeSpecified]="value.pickupTimeSpecified" [minDate]="minDate" [minTime]="minTime"
+        [dateError]="dateError" [timeError]="timeError" [showSubmitValidation]="showSubmitValidation"
+        (scheduleChange)="patch({ pickupDate: $event.date, pickupTime: $event.time, pickupTimeSpecified: $event.timeSpecified })">
+    </app-stop-schedule>
 </div>
 </section>

@@ -1,7 +1,7 @@
 """Pure helpers behind order scheduling and proof-of-delivery.
 
 Damage if these are wrong:
-  parse_order_datetime     -> orders land in the wrong timezone
+  normalize_planned_at     -> a date-only stop keeps a stray time and breaks the midnight CHECK
   get_order_status         -> a delivery due now is filed as "scheduled" and missed
   _stamp_activity_status   -> a checkpoint timestamp is overwritten, losing the
                               real time the driver reached that stage
@@ -16,62 +16,87 @@ from app.api.routers.orders import (
     _safe_pod_filename_stem,
     _stamp_activity_status,
     get_order_status,
-    parse_order_datetime,
+    schedule_error,
 )
+from app.schemas.order import normalize_planned_at
 from app.models.order import ActivityStatus, Order, OrderStatus
 
 pytestmark = pytest.mark.unit
 
 
-def _at(offset: timedelta) -> tuple[str, str]:
-    """Return (date, time) strings for now + offset, in the app's timezone."""
-    moment = datetime.now(APP_TIMEZONE) + offset
-    return moment.strftime("%Y-%m-%d"), moment.strftime("%H:%M")
+def _planned(offset: timedelta) -> datetime:
+    """Naive wall-clock planned time for now + offset, as the database stores it."""
+    return (datetime.now(APP_TIMEZONE) + offset).replace(tzinfo=None, second=0, microsecond=0)
 
 
-class TestParseOrderDatetime:
-    def test_parses_date_and_time_into_the_app_timezone(self):
-        parsed = parse_order_datetime("2026-08-27", "14:30")
+class TestNormalizePlannedAt:
+    def test_a_specified_time_keeps_its_minute(self):
+        assert normalize_planned_at(datetime(2026, 8, 27, 14, 30, 45), True) == datetime(2026, 8, 27, 14, 30)
 
-        assert (parsed.year, parsed.month, parsed.day) == (2026, 8, 27)
-        assert (parsed.hour, parsed.minute) == (14, 30)
-        assert parsed.tzinfo is APP_TIMEZONE
+    def test_a_date_only_stop_is_pinned_to_midnight(self):
+        assert normalize_planned_at(datetime(2026, 8, 27, 14, 30), False) == datetime(2026, 8, 27)
 
-    @pytest.mark.parametrize("date_value,time_value", [("27-08-2026", "14:30"), ("2026-08-27", "2:30 PM"), ("", "")])
-    def test_rejects_input_it_cannot_parse(self, date_value, time_value):
-        with pytest.raises(ValueError):
-            parse_order_datetime(date_value, time_value)
+    def test_a_real_midnight_stays_specified_midnight(self):
+        assert normalize_planned_at(datetime(2026, 8, 27), True) == datetime(2026, 8, 27)
 
 
 class TestGetOrderStatus:
     def test_a_delivery_due_within_three_hours_is_current(self):
-        pickup_date, pickup_time = _at(timedelta(minutes=30))
-        delivery_date, delivery_time = _at(timedelta(hours=1))
-
-        status = get_order_status(pickup_date, pickup_time, delivery_date, delivery_time)
-
-        assert status is OrderStatus.current
+        assert get_order_status(_planned(timedelta(hours=1)), True) is OrderStatus.current
 
     def test_a_delivery_far_in_the_future_is_scheduled(self):
-        pickup_date, pickup_time = _at(timedelta(days=2))
-        delivery_date, delivery_time = _at(timedelta(days=2, hours=1))
-
-        status = get_order_status(pickup_date, pickup_time, delivery_date, delivery_time)
-
-        assert status is OrderStatus.scheduled
+        assert get_order_status(_planned(timedelta(days=2)), True) is OrderStatus.scheduled
 
     def test_a_delivery_already_past_is_current(self):
-        pickup_date, pickup_time = _at(timedelta(hours=-3))
-        delivery_date, delivery_time = _at(timedelta(hours=-1))
+        assert get_order_status(_planned(timedelta(hours=-1)), True) is OrderStatus.current
 
-        status = get_order_status(pickup_date, pickup_time, delivery_date, delivery_time)
+    def test_a_date_only_delivery_is_current_on_its_date(self):
+        """Without a time it may be due any moment that day, so it must not wait in Scheduled."""
+        today = _planned(timedelta()).replace(hour=0, minute=0)
+        assert get_order_status(today, False) is OrderStatus.current
 
-        assert status is OrderStatus.current
+    def test_a_date_only_delivery_on_a_later_date_is_scheduled(self):
+        tomorrow = _planned(timedelta(days=1)).replace(hour=0, minute=0)
+        assert get_order_status(tomorrow, False) is OrderStatus.scheduled
 
-    def test_falls_back_to_a_time_only_comparison_when_the_date_is_unparseable(self):
-        """Older clients post times without a usable date; the gap still decides."""
-        assert get_order_status("n/a", "09:00", "n/a", "10:00") is OrderStatus.current
-        assert get_order_status("n/a", "09:00", "n/a", "17:00") is OrderStatus.scheduled
+
+
+class TestScheduleError:
+    NOW = datetime(2026, 9, 15, 12, 0)
+
+    def check(self, pickup, pickup_timed, delivery, delivery_timed, **kwargs):
+        return schedule_error(pickup, pickup_timed, delivery, delivery_timed, now=self.NOW, **kwargs)
+
+    def test_an_upcoming_schedule_passes(self):
+        assert self.check(datetime(2026, 9, 15, 14, 0), True, datetime(2026, 9, 15, 16, 0), True) is None
+
+    def test_a_date_only_stop_today_passes_even_though_midnight_is_behind_us(self):
+        assert self.check(datetime(2026, 9, 15), False, datetime(2026, 9, 15), False) is None
+
+    def test_a_pickup_earlier_today_is_rejected(self):
+        problem = self.check(datetime(2026, 9, 15, 9, 0), True, datetime(2026, 9, 15, 16, 0), True)
+        assert problem == "Pickup can't be in the past."
+
+    def test_a_time_just_behind_now_is_within_grace(self):
+        assert self.check(datetime(2026, 9, 15, 11, 57), True, datetime(2026, 9, 15, 16, 0), True) is None
+
+    def test_a_past_delivery_date_is_rejected(self):
+        problem = self.check(datetime(2026, 9, 15), False, datetime(2026, 9, 14), False, check_pickup_past=False)
+        assert problem == "Delivery can't be in the past."
+
+    def test_delivery_before_the_pickup_date_is_rejected(self):
+        problem = self.check(datetime(2026, 9, 20), False, datetime(2026, 9, 19), False)
+        assert problem == "Delivery can't be before the pickup date."
+
+    def test_delivery_at_or_before_the_pickup_time_is_rejected(self):
+        problem = self.check(datetime(2026, 9, 20, 14, 0), True, datetime(2026, 9, 20, 14, 0), True)
+        assert problem == "Delivery must be after the pickup time."
+
+    def test_an_unmoved_past_stop_is_not_rechecked(self):
+        """Editing an old order must not force its original dates forward."""
+        assert self.check(
+            datetime(2026, 8, 27, 10, 0), True, datetime(2026, 9, 20, 10, 0), True, check_pickup_past=False
+        ) is None
 
 
 class TestStampActivityStatus:

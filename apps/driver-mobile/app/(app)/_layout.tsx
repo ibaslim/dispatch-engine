@@ -10,7 +10,7 @@ import {
   useAuth,
 } from '@contexts';
 import { useTheme } from '@theme';
-import { useDriverLocation } from '@hooks';
+import { useDriverLocation, useOrderReminders } from '@hooks';
 
 export default function AppLayout() {
   const { session, isLoading } = useAuth();
@@ -35,6 +35,7 @@ export default function AppLayout() {
           <PublishedOrdersProvider>
             {/* Mount the location heartbeat once for the whole authenticated session */}
             <LocationHeartbeat />
+            <OrderReminders />
             <PendingRouteReplay />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
@@ -45,6 +46,7 @@ export default function AppLayout() {
               <Stack.Screen name="pod/[id]/photo" />
               <Stack.Screen name="pod/[id]/signature" />
               <Stack.Screen name="appearance" />
+              <Stack.Screen name="reminders" />
             </Stack>
           </PublishedOrdersProvider>
         </RealtimeProvider>
@@ -60,6 +62,12 @@ export default function AppLayout() {
  */
 function LocationHeartbeat(): null {
   useDriverLocation();
+  return null;
+}
+
+/** Keeps on-device order reminders in step with the order list; clears them on sign-out. */
+function OrderReminders(): null {
+  useOrderReminders();
   return null;
 }
 

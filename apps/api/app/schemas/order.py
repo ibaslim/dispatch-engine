@@ -1,10 +1,26 @@
 import enum
 from datetime import datetime
 
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from pydantic import AfterValidator, BaseModel, Field, model_validator
+from typing import Annotated, List, Optional, Dict, Any
 from app.models.order import OrderStatus, ActivityStatus
 from uuid import UUID
+
+
+def normalize_planned_at(planned_at: datetime, time_specified: bool) -> datetime:
+    """Minute precision, and midnight for a date-only stop, matching the orders CHECK constraints."""
+    planned_at = planned_at.replace(second=0, microsecond=0)
+    return planned_at if time_specified else planned_at.replace(hour=0, minute=0)
+
+
+def _wall_clock(value: datetime) -> datetime:
+    if value.tzinfo is not None:
+        raise ValueError("Send local wall-clock time without a timezone offset.")
+    return value
+
+
+# Planned stop time as entered, with no timezone.
+PlannedAt = Annotated[datetime, AfterValidator(_wall_clock)]
 
 
 class IncidentStage(str, enum.Enum):
@@ -59,13 +75,13 @@ class PublicOrderTracking(BaseModel):
 
     pickup_name: Optional[str] = None
     pickup_address: Optional[str] = None
-    pickup_date: Optional[str] = None
-    pickup_time: Optional[str] = None
+    pickup_planned_at: Optional[datetime] = None
+    pickup_time_specified: Optional[bool] = None
 
     delivery_name: Optional[str] = None
     delivery_address: Optional[str] = None
-    delivery_date: Optional[str] = None
-    delivery_time: Optional[str] = None
+    delivery_planned_at: Optional[datetime] = None
+    delivery_time_specified: Optional[bool] = None
 
     items_count: int = 0
     created_at: Optional[datetime] = None
@@ -89,15 +105,16 @@ class OrderCreate(BaseModel):
     pickup_phone: str
     pickup_email:str
     pickup_address: str
-    pickup_date: str
-    pickup_time: str
+    pickup_planned_at: PlannedAt
+    # False means date-only; the time part is then stored as 00:00.
+    pickup_time_specified: bool
 
     delivery_name: str
     delivery_phone: str
     delivery_email: str
     delivery_address: str
-    delivery_date: str
-    delivery_time: str
+    delivery_planned_at: PlannedAt
+    delivery_time_specified: bool
 
     delivery_category_id: Optional[UUID] = None
     pickup_place_id: Optional[str] = None
@@ -135,6 +152,12 @@ class OrderCreate(BaseModel):
     payment_details: Optional[Dict[str, Any]] = None
     proof_of_delivery: Optional[Dict[str, Any]] = None
 
+    @model_validator(mode="after")
+    def _normalize_schedule(self):
+        self.pickup_planned_at = normalize_planned_at(self.pickup_planned_at, self.pickup_time_specified)
+        self.delivery_planned_at = normalize_planned_at(self.delivery_planned_at, self.delivery_time_specified)
+        return self
+
 
 # -------------------------
 # UPDATE ORDER (NEW)
@@ -148,15 +171,15 @@ class OrderUpdate(BaseModel):
     pickup_phone: Optional[str] = None
     pickup_email: Optional[str] = None
     pickup_address: Optional[str] = None
-    pickup_date: Optional[str] = None
-    pickup_time: Optional[str] = None
+    pickup_planned_at: Optional[PlannedAt] = None
+    pickup_time_specified: Optional[bool] = None
 
     delivery_name: Optional[str] = None
     delivery_phone: Optional[str] = None
     delivery_email: Optional[str] = None
     delivery_address: Optional[str] = None
-    delivery_date: Optional[str] = None
-    delivery_time: Optional[str] = None
+    delivery_planned_at: Optional[PlannedAt] = None
+    delivery_time_specified: Optional[bool] = None
 
     delivery_category_id: Optional[UUID] = None
     pickup_place_id: Optional[str] = None
@@ -264,8 +287,8 @@ class DeliveryQuoteRequest(BaseModel):
     delivery_address: str | None = None
     delivery_category_id: UUID
     vendor_id: UUID | None = None
-    delivery_date: str | None = None
-    delivery_time: str | None = None
+    delivery_planned_at: Optional[PlannedAt] = None
+    delivery_time_specified: bool = False
     surcharge_ids: list[UUID] = Field(default_factory=list)
 
 

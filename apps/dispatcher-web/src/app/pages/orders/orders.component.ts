@@ -21,6 +21,7 @@ import { RoutePlanFabComponent } from '@components/route-plan-fab/route-plan-fab
 import { TableColumn } from '@models/table.model';
 import { NewOrderFormValue } from '@models/new-order-form/new-order-form.model';
 import {OrderActivityStatus, OrderEntity, OrderTab} from '@models/orders/order-entity.model';
+import { baselineFrom, hasScheduleErrors, scheduleErrors, type ScheduleBaseline } from './order-schedule.util';
 import { OrdersService } from '@services/orders/orders.service';
 import { OrderDocumentService } from '@services/orders/order-document.service';
 import { ScheduledOrderPromotionService } from '@services/orders/scheduled-order-promotion.service';
@@ -139,6 +140,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   // ─── Orders state ──────────────────────────────────────────────────────────
   orders: OrderEntity[] = [];
   editingOrderId: string | null = null;
+  scheduleBaseline: ScheduleBaseline | null = null;
   readyForPickupMap = new Map<string, boolean>();
 
   // ─── New order modal ───────────────────────────────────────────────────────
@@ -758,6 +760,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     }
     this.newOrderValue = createDefaultNewOrder();
     this.editingOrderId = null;
+    this.scheduleBaseline = null;
     this.formSubmitted.set(false);
     this.isNewOrderOpen = true;
   }
@@ -842,6 +845,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     }
     this.newOrderValue = structuredClone(order.full);
     this.editingOrderId = order.id;
+    this.scheduleBaseline = baselineFrom(order.full);
     this.formSubmitted.set(false);
     this.isNewOrderOpen = true;
   }
@@ -954,15 +958,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (!value.pickup.address.trim()) return true;
     if (!value.pickup.location) return true;
     if (!value.pickup.email.trim()) return true;
-    if (!value.pickup.pickupDate || !value.pickup.pickupTime) return true;
+    if (hasScheduleErrors(scheduleErrors(value, this.scheduleBaseline))) return true;
     if (!this.isValidPhone(value.pickup.phone.number)) return true;
     if (!value.delivery.name.trim()) return true;
     if (!value.delivery.email.trim() || !this.isValidEmail(value.delivery.email)) return true;
     if (!value.delivery.address.trim()) return true;
     if (!value.delivery.location) return true;
-    if (!value.delivery.deliveryDate || !value.delivery.deliveryTime) return true;
     if (!this.isValidPhone(value.delivery.phone.number)) return true;
-    if (this.isDeliveryBeforeOrEqualPickup(value)) return true;
     if (!value.deliveryCategoryId || !value.routeQuote) return true;
 
     const hasValidItem = (value.details.items || []).some((item) =>
@@ -988,14 +990,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   private isValidEmail(email: string): boolean {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  }
-
-  private isDeliveryBeforeOrEqualPickup(value: NewOrderFormValue): boolean {
-    if (value.pickup.pickupDate !== value.delivery.deliveryDate) return false;
-    const pickupDT = parseDateTime(value.pickup.pickupDate, value.pickup.pickupTime);
-    const deliveryDT = parseDateTime(value.delivery.deliveryDate, value.delivery.deliveryTime);
-    if (!pickupDT || !deliveryDT) return false;
-    return deliveryDT.getTime() <= pickupDT.getTime();
   }
 
   private isExpiredUnassignedOrder(order: OrderEntity): boolean {

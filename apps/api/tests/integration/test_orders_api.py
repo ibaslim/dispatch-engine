@@ -480,14 +480,14 @@ def _valid_order_payload(**overrides) -> dict:
         "pickup_phone": "+15550000001",
         "pickup_email": "pickup@example.test",
         "pickup_address": "1 Test Street, Toronto, ON",
-        "pickup_date": "2026-08-27",
-        "pickup_time": "10:00",
+        "pickup_planned_at": "2026-08-27T10:00:00",
+        "pickup_time_specified": True,
         "delivery_name": "Delivery Contact",
         "delivery_phone": "+15550000002",
         "delivery_email": "delivery@example.test",
         "delivery_address": "2 Test Avenue, Toronto, ON",
-        "delivery_date": "2026-08-27",
-        "delivery_time": "12:00",
+        "delivery_planned_at": "2026-08-27T12:00:00",
+        "delivery_time_specified": True,
         "items": [{"itemName": "Widget", "itemPrice": 10.0, "itemQty": 1}],
         "subtotal": 10.0,
         "gst_rate": 5.0,
@@ -1172,6 +1172,129 @@ class TestPickedUpRequiresVerification:
         response = await driver_client.patch(
             f"{ORDERS}/{unverified_pickup.id}/activity-status",
             json={"activity_status": "delivery_in_progress"},
+        )
+
+        assert response.status_code == 200
+
+
+
+
+FUTURE_PICKUP = "2030-01-10T10:00:00"
+FUTURE_DELIVERY = "2030-01-10T12:00:00"
+
+
+@pytest.fixture
+async def upcoming_order(db, tenant):
+    """An order whose stops are still ahead, so moving the pickup is allowed."""
+    return await OrderFactory.create(
+        db,
+        vendor=tenant,
+        pickup_planned_at=datetime(2030, 1, 10, 10, 0),
+        delivery_planned_at=datetime(2030, 1, 10, 12, 0),
+    )
+
+
+class TestPlannedSchedule:
+    """Stops store a wall-clock planned_at plus whether a time was actually given."""
+
+    async def test_marking_a_stop_date_only_pins_it_to_midnight(self, platform_admin_client, upcoming_order):
+        response = await platform_admin_client.patch(
+            f"{ORDERS}/{upcoming_order.id}", json={"pickup_time_specified": False}
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert (body["pickup_planned_at"], body["pickup_time_specified"]) == ("2030-01-10T00:00:00", False)
+
+    async def test_setting_a_time_on_a_date_only_stop(self, platform_admin_client, upcoming_order):
+        await platform_admin_client.patch(
+            f"{ORDERS}/{upcoming_order.id}", json={"pickup_time_specified": False}
+        )
+
+        response = await platform_admin_client.patch(
+            f"{ORDERS}/{upcoming_order.id}",
+            json={"pickup_planned_at": "2030-01-10T09:15:00", "pickup_time_specified": True},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert (body["pickup_planned_at"], body["pickup_time_specified"]) == ("2030-01-10T09:15:00", True)
+
+    async def test_a_timezone_offset_is_rejected(self, platform_admin_client, order):
+        response = await platform_admin_client.patch(
+            f"{ORDERS}/{order.id}", json={"pickup_planned_at": "2030-01-10T10:00:00+05:00"}
+        )
+
+        assert response.status_code == 422
+
+    async def test_create_pins_a_date_only_stop_to_midnight(self):
+        from app.schemas.order import OrderCreate
+
+        payload = OrderCreate(
+            **_valid_order_payload(delivery_planned_at="2026-08-27T18:20:00", delivery_time_specified=False)
+        )
+
+        assert payload.delivery_planned_at == datetime(2026, 8, 27)
+
+    async def test_create_requires_the_planned_time(self):
+        from pydantic import ValidationError
+        from app.schemas.order import OrderCreate
+
+        body = _valid_order_payload()
+        body.pop("delivery_planned_at")
+        with pytest.raises(ValidationError):
+            OrderCreate(**body)
+
+
+class TestScheduleValidation:
+    """Past or out-of-order schedules are refused, but an old order stays editable."""
+
+    async def test_creating_an_order_in_the_past_is_rejected(self, platform_admin_client):
+        response = await platform_admin_client.post(ORDERS, json=_valid_order_payload())
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == "Pickup can't be in the past."
+
+    async def test_moving_a_stop_into_the_past_is_rejected(self, platform_admin_client, order):
+        response = await platform_admin_client.patch(
+            f"{ORDERS}/{order.id}",
+            json={"pickup_planned_at": "2020-01-01T10:00:00", "pickup_time_specified": True},
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == "Pickup can't be in the past."
+
+    async def test_delivery_before_the_pickup_date_is_rejected(self, platform_admin_client, order):
+        response = await platform_admin_client.patch(
+            f"{ORDERS}/{order.id}",
+            json={
+                "pickup_planned_at": FUTURE_PICKUP,
+                "pickup_time_specified": True,
+                "delivery_planned_at": "2030-01-09T12:00:00",
+                "delivery_time_specified": True,
+            },
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == "Delivery can't be before the pickup date."
+
+    async def test_delivery_at_or_before_the_pickup_time_is_rejected(self, platform_admin_client, order):
+        response = await platform_admin_client.patch(
+            f"{ORDERS}/{order.id}",
+            json={
+                "pickup_planned_at": "2030-01-10T12:00:00",
+                "pickup_time_specified": True,
+                "delivery_planned_at": "2030-01-10T11:00:00",
+                "delivery_time_specified": True,
+            },
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == "Delivery must be after the pickup time."
+
+    async def test_an_untouched_past_order_can_still_be_edited(self, platform_admin_client, order):
+        response = await platform_admin_client.patch(
+            f"{ORDERS}/{order.id}", json={"instructions": "Leave at the front desk."}
         )
 
         assert response.status_code == 200

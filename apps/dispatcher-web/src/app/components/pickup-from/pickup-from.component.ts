@@ -4,22 +4,23 @@ import { NewOrderFormValue } from '@models/new-order-form/new-order-form.model';
 import { AddressInputComponent } from '../address-input/address-input.component';
 import { BaseInputComponent } from '../base-input/base-input.component';
 import { PhoneInputComponent } from '../phone-input/phone-input.component';
-import { TimePickerComponent } from '../time-picker/time-picker.component';
-import { DatePickerComponent } from '../date-picker/date-picker.component';
+import { StopScheduleComponent } from '../stop-schedule/stop-schedule.component';
 import { SelectedGooglePlace } from '../../services/google-maps/google-maps.service';
 import { OperationalZone } from '../../services/delivery-configuration/delivery-configuration.service';
 
 @Component({
   selector: 'app-pickup-from',
   standalone: true,
-  imports: [CommonModule, BaseInputComponent, AddressInputComponent, PhoneInputComponent, TimePickerComponent, DatePickerComponent],
+  imports: [CommonModule, BaseInputComponent, AddressInputComponent, PhoneInputComponent, StopScheduleComponent],
   templateUrl: './pickup-from.component.html',
   styles: [`:host { display: block; }`]
 })
 export class PickupFromComponent {
   @Input() value!: NewOrderFormValue['pickup'];
-  @Input() pickupTimeError = '';
-  @Input() showPickupTimeError = false;
+  @Input() dateError = '';
+  @Input() timeError = '';
+  @Input() minDate = '';
+  @Input() minTime: string | null = null;
   @Input() showSubmitValidation = false;
   @Input() operationalZones: OperationalZone[] = [];
 

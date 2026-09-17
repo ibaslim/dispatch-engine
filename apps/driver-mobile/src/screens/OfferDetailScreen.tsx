@@ -8,6 +8,7 @@ import { RouteLine } from '@components/orders';
 import { countdownColor } from '@constants/colors';
 import { PUBLISH_WINDOW_SECONDS, type PublishedOrder } from '@contexts';
 import { useTheme } from '@theme';
+import { plannedDate, plannedTime } from '@dispatch/shared/contracts';
 
 interface Props {
   /** Undefined once the offer leaves the pool — claimed, expired or withdrawn. */
@@ -35,12 +36,12 @@ function countdownLabel(seconds: number): string {
 }
 
 /** One stop's schedule, as dispatch entered it. */
-function Schedule({ role, date, time }: { role: string; date: string; time: string }) {
+function Schedule({ role, date, time }: { role: string; date: string; time: string | null }) {
   return (
     <View className="flex-1">
       <Text className="text-[11px] font-bold uppercase tracking-wider text-muted">{role}</Text>
       <Text className="mt-1 text-[15px] font-semibold text-foreground">{date || '—'}</Text>
-      <Text className="text-[13px] text-muted">{time || '—'}</Text>
+      <Text className="text-[13px] text-muted">{time || 'Any time'}</Text>
     </View>
   );
 }
@@ -151,8 +152,16 @@ export function OfferDetailScreen({ order, accepting, onAccept, onBack }: Props)
             </View>
             <View className="h-px bg-border" />
             <View className="flex-row gap-4">
-              <Schedule role="Pickup" date={order.pickup_date} time={order.pickup_time} />
-              <Schedule role="Drop" date={order.delivery_date} time={order.delivery_time} />
+              <Schedule
+                role="Pickup"
+                date={plannedDate(order.pickup_planned_at)}
+                time={plannedTime(order.pickup_planned_at, order.pickup_time_specified)}
+              />
+              <Schedule
+                role="Drop"
+                date={plannedDate(order.delivery_planned_at)}
+                time={plannedTime(order.delivery_planned_at, order.delivery_time_specified)}
+              />
             </View>
           </CardBody>
         </Card>

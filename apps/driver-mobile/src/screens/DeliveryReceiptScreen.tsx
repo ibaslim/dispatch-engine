@@ -6,6 +6,7 @@ import { useTheme } from '@theme';
 import { Button, Card, CardBody } from '@components/ui';
 import { SUCCESS, SUCCESS_SOFT } from '@constants/colors';
 import type { DriverOrder } from '@types';
+import { plannedDate } from '@dispatch/shared/contracts';
 
 interface Props {
   order: DriverOrder | undefined;
@@ -155,7 +156,7 @@ export function DeliveryReceiptScreen({ order, onBack }: Props) {
         >
           <Ionicons name="checkmark-circle" size={18} color={SUCCESS} />
           <Text className="text-[14px] font-bold" style={{ color: SUCCESS }}>
-            Delivered {formatDate(order.delivery_date)}
+            Delivered {formatDate(plannedDate(order.delivery_planned_at))}
           </Text>
         </View>
 

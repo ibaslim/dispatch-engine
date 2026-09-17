@@ -12,6 +12,9 @@ import {
   PUSH_CATEGORY_OFFER,
 } from '@dispatch/shared/contracts';
 
+/** Versioned for the same reason as the offer channel: importance can't change once created. */
+export const REMINDER_CHANNEL_ID = 'order-reminders-v1';
+
 let registered = false;
 
 export async function registerNotificationChannels(): Promise<void> {
@@ -25,6 +28,15 @@ export async function registerNotificationChannels(): Promise<void> {
         id: PUSH_CATEGORY_OFFER,
         name: 'Delivery offers',
         description: 'New jobs available to accept',
+        importance: AndroidImportance.HIGH,
+        visibility: AndroidVisibility.PUBLIC,
+        sound: 'default',
+        vibration: true,
+      });
+      await notifee.createChannel({
+        id: REMINDER_CHANNEL_ID,
+        name: 'Order reminders',
+        description: 'Reminders before your upcoming pickups and drops',
         importance: AndroidImportance.HIGH,
         visibility: AndroidVisibility.PUBLIC,
         sound: 'default',

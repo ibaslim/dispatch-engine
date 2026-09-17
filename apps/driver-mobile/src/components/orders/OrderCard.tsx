@@ -7,6 +7,7 @@ import { DANGER, DANGER_BORDER } from '@constants/colors';
 import type { DriverOrder } from '@types';
 import { activityLabel, isPickupLeg } from '@utils/orderProgress';
 import { coordsOf, formatDistance, roadDistanceKm, type Coords } from '@utils/distance';
+import { formatStopWhen } from '@utils/schedule';
 import { RouteLine } from './RouteLine';
 
 interface Props {
@@ -57,6 +58,20 @@ function DistanceBadge({ km }: { km: number }) {
   );
 }
 
+/** Clock mark beside the order number when the next stop has a set time; the label says when. */
+function ScheduledMark({ label }: { label: string }) {
+  const { palette } = useTheme();
+  return (
+    <View
+      accessible
+      accessibilityLabel={label}
+      className="h-6 w-6 items-center justify-center rounded-full bg-primary-muted"
+    >
+      <Ionicons name="time-outline" size={14} color={palette['primary-muted-foreground']} />
+    </View>
+  );
+}
+
 /**
  * One job in the Orders list: identity and status, the two stops, then the
  * three things a driver does from the list — open it, call someone, or flag a
@@ -66,6 +81,11 @@ export function OrderCard({ order, driverPosition, onPress, onContact, onReport 
   const { palette } = useTheme();
 
   const pickupLeg = isPickupLeg(order.activity_status);
+  // The stop the driver is heading to next: pickup until the parcel is collected, then the drop.
+  const nextStopTimed = pickupLeg ? order.pickup_time_specified : order.delivery_time_specified;
+  const nextStopWhen = pickupLeg
+    ? `Pickup ${formatStopWhen(order.pickup_planned_at, order.pickup_time_specified)}`
+    : `Drop ${formatStopWhen(order.delivery_planned_at, order.delivery_time_specified)}`;
   const distanceKm = useMemo(() => {
     const target = pickupLeg
       ? coordsOf(order.pickup_latitude, order.pickup_longitude)
@@ -84,14 +104,24 @@ export function OrderCard({ order, driverPosition, onPress, onContact, onReport 
     <Card>
       <CardBody className="gap-3">
         <View className="flex-row items-start justify-between gap-1 flex-wrap">
-          <Ref>{order.order_number ?? '—'}</Ref>
+          <View className="flex-row items-center gap-1.5">
+            <Ref>{order.order_number ?? '—'}</Ref>
+            {nextStopTimed ? <ScheduledMark label={nextStopWhen} /> : null}
+          </View>
           <View className="flex-row items-center gap-1">
             <Badge label={activityLabel(order.activity_status)} dot={false} />
             {distanceKm != null && <DistanceBadge km={distanceKm} />}
           </View>
         </View>
 
-        <RouteLine pickup={order.pickup_address} drop={order.delivery_address} />
+        <RouteLine
+          pickup={order.pickup_address}
+          drop={order.delivery_address}
+          pickupPlannedAt={order.pickup_planned_at}
+          pickupTimeSpecified={order.pickup_time_specified}
+          deliveryPlannedAt={order.delivery_planned_at}
+          deliveryTimeSpecified={order.delivery_time_specified}
+        />
 
         <View className="flex-row items-center gap-3">
           <TouchableOpacity
