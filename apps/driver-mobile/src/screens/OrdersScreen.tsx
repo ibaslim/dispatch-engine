@@ -11,9 +11,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@theme';
 import { useOrders } from '@contexts';
-import { useDriverPosition } from '@hooks';
+import { useDriverPosition, useRoutePlan } from '@hooks';
 import { useToast } from '@components/ui';
-import { ContactSheet, OrderCard, ReportSheet } from '@components/orders';
+import { ContactSheet, OrderCard, ReportSheet, RoutePlanCard } from '@components/orders';
 import { DANGER } from '@constants/colors';
 import { reportIncident } from '@services/orders';
 import type { ActivityStatus, DriverOrder, IncidentReason } from '@types';
@@ -21,6 +21,7 @@ import { PROGRESS_STEPS, incidentStageFor } from '@utils/orderProgress';
 
 interface Props {
   onOrderPress: (id: string) => void;
+  onRoutePress: () => void;
 }
 
 /**
@@ -120,11 +121,12 @@ function FilterPill({
 /**
  * The driver's active jobs, filtered by where each one has reached.
  */
-export function OrdersScreen({ onOrderPress }: Props) {
+export function OrdersScreen({ onOrderPress, onRoutePress }: Props) {
   const { palette } = useTheme();
   const { show } = useToast();
   const { orders, isLoading, isRefreshing, error, refresh, patchOrder } = useOrders();
   const driverPosition = useDriverPosition();
+  const { plan } = useRoutePlan();
 
   const [filter, setFilter] = useState<OrderFilter>('all');
   const [contactOrder, setContactOrder] = useState<DriverOrder | null>(null);
@@ -233,7 +235,13 @@ export function OrdersScreen({ onOrderPress }: Props) {
           />
         }
         ListHeaderComponent={
-          error ? <Text className="text-[13px] text-muted">{error}</Text> : null
+          <>
+            {/* One stop is just the order card's own directions button. */}
+            {plan && plan.stops.length > 1 ? (
+              <RoutePlanCard plan={plan} onPress={onRoutePress} />
+            ) : null}
+            {error ? <Text className="text-[13px] text-muted">{error}</Text> : null}
+          </>
         }
         ListEmptyComponent={
           <View className="flex-1 items-center justify-center gap-1">

@@ -101,6 +101,7 @@ class Order(Base):
     payment_method = Column(String)
     payment_details = Column(JSON)
     proof_of_delivery = Column(JSON, nullable=True)
+    pickup_verification = Column(JSON, nullable=True)
     incident_report = Column(JSON, nullable=True)
 
     status = Column(Enum(OrderStatus, name="orderstatus_enum"), default=OrderStatus.current)

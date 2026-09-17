@@ -53,6 +53,11 @@ export class OrderDetailsModalComponent implements OnChanges {
   podLoadError = false;
   private podLoadedOrderId: string | null = null;
 
+  // The parcel photo a driver took when the sender had no label to scan.
+  pickupPhotoUrl: string | null = null;
+  pickupPhotoLoadError = false;
+  private pickupLoadedOrderId: string | null = null;
+
   protected readonly maskCard = maskCard;
   protected readonly formatPaymentMethod = formatPaymentMethod;
   protected readonly driverEarningsLabel = driverEarningsLabel;
@@ -68,6 +73,8 @@ export class OrderDetailsModalComponent implements OnChanges {
 
   ngOnChanges(): void {
     const order = this.open ? this.order : null;
+    this.loadPickupPhoto(order);
+
     const submission = order?.full.details.podSubmission;
     const targetId = order && submission ? order.id : null;
 
@@ -85,6 +92,33 @@ export class OrderDetailsModalComponent implements OnChanges {
     if (submission.hasPhoto) {
       this.fetchPodImage(order.id, 'photo', (url) => (this.podPhotoUrl = url));
     }
+  }
+
+  private loadPickupPhoto(order: OrderEntity | null): void {
+    const verification = order?.full.details.pickupVerification;
+    const targetId = order && verification?.hasPhoto ? order.id : null;
+
+    if (targetId === this.pickupLoadedOrderId) return;
+
+    this.pickupLoadedOrderId = targetId;
+    this.pickupPhotoUrl = null;
+    this.pickupPhotoLoadError = false;
+
+    if (!targetId) return;
+
+    this.ordersService.getPickupVerificationPhoto(targetId).subscribe({
+      next: (blob) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          // Ignore late responses if the modal moved on to another order.
+          if (this.pickupLoadedOrderId === targetId) this.pickupPhotoUrl = reader.result as string;
+        };
+        reader.readAsDataURL(blob);
+      },
+      error: () => {
+        if (this.pickupLoadedOrderId === targetId) this.pickupPhotoLoadError = true;
+      }
+    });
   }
 
   private fetchPodImage(orderId: string, kind: 'photo' | 'signature', assign: (url: string) => void): void {

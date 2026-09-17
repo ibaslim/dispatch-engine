@@ -91,6 +91,8 @@ export class RealtimeNotificationsService {
         return 'A driver reported an order incident.';
       case 'order-pod-updated':
         return 'Proof of delivery was updated.';
+      case 'order-pickup-verified':
+        return 'A driver verified a parcel at pickup.';
       default:
         return null;
     }

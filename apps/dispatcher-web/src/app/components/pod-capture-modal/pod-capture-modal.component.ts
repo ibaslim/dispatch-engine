@@ -7,6 +7,8 @@ import { OrderActivityStatus } from '@models/orders/order-entity.model';
 import { OrdersService } from '@services/orders/orders.service';
 import { ToastService } from '@core/toast/toast.service';
 
+const NOTE_MAX_LENGTH = 280;
+
 export interface PodCaptureContext {
   id: string;
   next: OrderActivityStatus;
@@ -29,6 +31,8 @@ export class PodCaptureModalComponent implements OnChanges, OnDestroy {
   podPhotoDone = false;
   podPhotoUploading = false;
   podPhotoPreviewUrl: string | null = null;
+  podPhotoNote = '';
+  readonly noteMaxLength = NOTE_MAX_LENGTH;
   private podStream?: MediaStream;
   private podVideoElement?: HTMLVideoElement;
 
@@ -75,6 +79,7 @@ export class PodCaptureModalComponent implements OnChanges, OnDestroy {
       this.podPhotoDone = false;
       this.podPhotoUploading = false;
       this.podPhotoPreviewUrl = null;
+      this.podPhotoNote = '';
       this.podSignatureDone = false;
       this.podSignatureUploading = false;
       this.podSignatureHasDrawing = false;
@@ -132,7 +137,7 @@ export class PodCaptureModalComponent implements OnChanges, OnDestroy {
     canvas.toBlob((blob) => {
       if (!blob || !this.context) return;
       this.podPhotoUploading = true;
-      this.ordersService.uploadDeliveryPhoto(this.context.id, blob).subscribe({
+      this.ordersService.uploadDeliveryPhoto(this.context.id, blob, this.podPhotoNote.trim()).subscribe({
         next: () => {
           this.podPhotoUploading = false;
           this.podPhotoDone = true;

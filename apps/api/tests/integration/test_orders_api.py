@@ -747,6 +747,26 @@ class TestUploadProofOfDeliveryPhoto:
         photo_path = assigned_order.proof_of_delivery["submission"]["photo_path"]
         assert Path(photo_path).read_bytes() == IMAGE_BYTES
 
+    async def test_stores_an_optional_note(self, db, driver_client, assigned_order, pod_uploads_dir):
+        response = await driver_client.post(
+            f"{ORDERS}/{assigned_order.id}/proof-of-delivery/photo",
+            files=_image(),
+            data={"note": "Left with the front desk"},
+        )
+
+        assert response.status_code == 200
+        await db.refresh(assigned_order)
+        assert assigned_order.proof_of_delivery["submission"]["note"] == "Left with the front desk"
+
+    async def test_note_is_optional(self, db, driver_client, assigned_order, pod_uploads_dir):
+        response = await driver_client.post(
+            f"{ORDERS}/{assigned_order.id}/proof-of-delivery/photo", files=_image()
+        )
+
+        assert response.status_code == 200
+        await db.refresh(assigned_order)
+        assert assigned_order.proof_of_delivery["submission"]["note"] is None
+
     async def test_platform_admin_can_upload(self, platform_admin_client, assigned_order, pod_uploads_dir):
         response = await platform_admin_client.post(
             f"{ORDERS}/{assigned_order.id}/proof-of-delivery/photo", files=_image()
@@ -908,3 +928,250 @@ class TestGetProofOfDeliveryImage:
         )
 
         assert response.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Pickup verification: QR scan, and the parcel-photo fallback for senders
+# with no printed label
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+async def unverified_pickup(db, tenant, driver_tenant):
+    """An assigned order still on its way to pickup, with nothing verified yet."""
+    return await OrderFactory.create(
+        db,
+        vendor=tenant,
+        driver=driver_tenant,
+        activity_status=ActivityStatus.pickup_initiated,
+    )
+
+
+@pytest.fixture
+async def order_with_pickup_photo(db, tenant, driver_tenant, pod_uploads_dir):
+    """An order verified by parcel photo, the file already on disk. Written directly
+    rather than uploaded, because `authenticate` re-headers one shared client -- a
+    test that needs two roles cannot get there through the driver's endpoint."""
+    order = await OrderFactory.create(
+        db,
+        vendor=tenant,
+        driver=driver_tenant,
+        activity_status=ActivityStatus.pickup_initiated,
+    )
+    pickup_dir = pod_uploads_dir / "pickup-verification" / str(order.id)
+    pickup_dir.mkdir(parents=True, exist_ok=True)
+    filepath = pickup_dir / "parcel.jpg"
+    filepath.write_bytes(IMAGE_BYTES)
+    order.pickup_verification = {"method": "photo", "photo_path": str(filepath)}
+    db.add(order)
+    await db.flush()
+    return order
+
+
+class TestVerifyPickupByQr:
+    async def test_assigned_driver_records_a_scan(self, db, driver_client, unverified_pickup):
+        response = await driver_client.post(
+            f"{ORDERS}/{unverified_pickup.id}/pickup-verification/qr",
+            json={"code": unverified_pickup.order_number},
+        )
+
+        assert response.status_code == 200
+        await db.refresh(unverified_pickup)
+        assert unverified_pickup.pickup_verification["method"] == "qr"
+        assert unverified_pickup.pickup_verification["verified_at"]
+
+    async def test_rejects_a_code_for_another_order(self, db, driver_client, unverified_pickup):
+        response = await driver_client.post(
+            f"{ORDERS}/{unverified_pickup.id}/pickup-verification/qr",
+            json={"code": "ORD-SOMEONE-ELSE"},
+        )
+
+        assert response.status_code == 400
+        await db.refresh(unverified_pickup)
+        assert unverified_pickup.pickup_verification is None
+
+    async def test_rejects_an_empty_code(self, driver_client, unverified_pickup):
+        response = await driver_client.post(
+            f"{ORDERS}/{unverified_pickup.id}/pickup-verification/qr",
+            json={"code": "   "},
+        )
+
+        assert response.status_code == 400
+
+    async def test_rejects_a_second_verification(self, driver_client, unverified_pickup):
+        await driver_client.post(
+            f"{ORDERS}/{unverified_pickup.id}/pickup-verification/qr",
+            json={"code": unverified_pickup.order_number},
+        )
+
+        response = await driver_client.post(
+            f"{ORDERS}/{unverified_pickup.id}/pickup-verification/qr",
+            json={"code": unverified_pickup.order_number},
+        )
+
+        assert response.status_code == 400
+
+    async def test_rejects_a_driver_the_order_is_not_assigned_to(
+        self, db, authenticate, unverified_pickup
+    ):
+        stranger_tenant = await TenantFactory.create(db, name="Other Driver QR", role=TenantRole.driver)
+        stranger = await UserFactory.create(db, tenant=stranger_tenant, roles=(RoleEnum.driver,))
+
+        response = await authenticate(stranger).post(
+            f"{ORDERS}/{unverified_pickup.id}/pickup-verification/qr",
+            json={"code": unverified_pickup.order_number},
+        )
+
+        assert response.status_code == 403
+
+    async def test_returns_404_for_an_unknown_order(self, driver_client):
+        response = await driver_client.post(
+            f"{ORDERS}/{uuid.uuid4()}/pickup-verification/qr", json={"code": "ORD-1"}
+        )
+
+        assert response.status_code == 404
+
+
+class TestVerifyPickupByPhoto:
+    async def test_assigned_driver_uploads_a_parcel_photo(
+        self, db, driver_client, unverified_pickup, pod_uploads_dir
+    ):
+        response = await driver_client.post(
+            f"{ORDERS}/{unverified_pickup.id}/pickup-verification/photo",
+            files=_image(),
+            data={"note": "Sender had no printer"},
+        )
+
+        assert response.status_code == 200
+        await db.refresh(unverified_pickup)
+        verification = unverified_pickup.pickup_verification
+        assert verification["method"] == "photo"
+        assert verification["note"] == "Sender had no printer"
+        assert Path(verification["photo_path"]).read_bytes() == IMAGE_BYTES
+
+    async def test_note_is_optional(self, db, driver_client, unverified_pickup, pod_uploads_dir):
+        response = await driver_client.post(
+            f"{ORDERS}/{unverified_pickup.id}/pickup-verification/photo", files=_image()
+        )
+
+        assert response.status_code == 200
+        await db.refresh(unverified_pickup)
+        assert unverified_pickup.pickup_verification["note"] is None
+
+    async def test_rejects_a_disallowed_content_type(
+        self, driver_client, unverified_pickup, pod_uploads_dir
+    ):
+        response = await driver_client.post(
+            f"{ORDERS}/{unverified_pickup.id}/pickup-verification/photo",
+            files=_image(filename="doc.pdf", content_type="application/pdf"),
+        )
+
+        assert response.status_code == 400
+
+    async def test_rejects_the_owning_vendor(self, vendor_client, unverified_pickup, pod_uploads_dir):
+        response = await vendor_client.post(
+            f"{ORDERS}/{unverified_pickup.id}/pickup-verification/photo", files=_image()
+        )
+
+        assert response.status_code == 403
+
+    async def test_assigned_driver_downloads_the_parcel_photo(
+        self, driver_client, order_with_pickup_photo
+    ):
+        response = await driver_client.get(
+            f"{ORDERS}/{order_with_pickup_photo.id}/pickup-verification/photo"
+        )
+
+        assert response.status_code == 200
+        assert response.content == IMAGE_BYTES
+
+    async def test_owning_vendor_downloads_the_parcel_photo(
+        self, vendor_client, order_with_pickup_photo
+    ):
+        response = await vendor_client.get(
+            f"{ORDERS}/{order_with_pickup_photo.id}/pickup-verification/photo"
+        )
+
+        assert response.status_code == 200
+
+    async def test_rejects_an_unrelated_tenant(
+        self, db, authenticate, order_with_pickup_photo
+    ):
+        stranger_tenant = await TenantFactory.create(
+            db, name="Impostor Pickup", role=TenantRole.vendor
+        )
+        stranger = await UserFactory.create(
+            db, tenant=stranger_tenant, roles=(RoleEnum.tenant_admin,)
+        )
+
+        response = await authenticate(stranger).get(
+            f"{ORDERS}/{order_with_pickup_photo.id}/pickup-verification/photo"
+        )
+
+        assert response.status_code == 403
+
+    async def test_returns_404_when_the_pickup_was_verified_by_scan(
+        self, driver_client, unverified_pickup, pod_uploads_dir
+    ):
+        await driver_client.post(
+            f"{ORDERS}/{unverified_pickup.id}/pickup-verification/qr",
+            json={"code": unverified_pickup.order_number},
+        )
+
+        response = await driver_client.get(
+            f"{ORDERS}/{unverified_pickup.id}/pickup-verification/photo"
+        )
+
+        assert response.status_code == 404
+
+
+class TestPickedUpRequiresVerification:
+    async def test_rejects_picked_up_without_a_verification(
+        self, db, driver_client, unverified_pickup
+    ):
+        response = await driver_client.patch(
+            f"{ORDERS}/{unverified_pickup.id}/activity-status",
+            json={"activity_status": "picked_up"},
+        )
+
+        assert response.status_code == 400
+        await db.refresh(unverified_pickup)
+        assert unverified_pickup.activity_status is ActivityStatus.pickup_initiated
+
+    async def test_allows_picked_up_after_a_scan(self, db, driver_client, unverified_pickup):
+        await driver_client.post(
+            f"{ORDERS}/{unverified_pickup.id}/pickup-verification/qr",
+            json={"code": unverified_pickup.order_number},
+        )
+
+        response = await driver_client.patch(
+            f"{ORDERS}/{unverified_pickup.id}/activity-status",
+            json={"activity_status": "picked_up"},
+        )
+
+        assert response.status_code == 200
+        await db.refresh(unverified_pickup)
+        assert unverified_pickup.activity_status is ActivityStatus.picked_up
+
+    async def test_allows_picked_up_after_a_parcel_photo(
+        self, db, driver_client, unverified_pickup, pod_uploads_dir
+    ):
+        await driver_client.post(
+            f"{ORDERS}/{unverified_pickup.id}/pickup-verification/photo", files=_image()
+        )
+
+        response = await driver_client.patch(
+            f"{ORDERS}/{unverified_pickup.id}/activity-status",
+            json={"activity_status": "picked_up"},
+        )
+
+        assert response.status_code == 200
+        await db.refresh(unverified_pickup)
+        assert unverified_pickup.activity_status is ActivityStatus.picked_up
+
+    async def test_other_checkpoints_are_not_gated(self, driver_client, unverified_pickup):
+        response = await driver_client.patch(
+            f"{ORDERS}/{unverified_pickup.id}/activity-status",
+            json={"activity_status": "delivery_in_progress"},
+        )
+
+        assert response.status_code == 200

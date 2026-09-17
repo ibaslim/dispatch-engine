@@ -7,6 +7,7 @@ export default function OrdersRoute() {
   return (
     <OrdersScreen
       onOrderPress={(id) => router.push({ pathname: '/order/[id]', params: { id } })}
+      onRoutePress={() => router.push('/route')}
     />
   );
 }

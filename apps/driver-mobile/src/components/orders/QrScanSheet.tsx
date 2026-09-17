@@ -18,7 +18,9 @@ interface Props {
   orderNo: string | null;
   onClose: () => void;
   /** Fired once, ~1s after a successful match so the driver sees the confirmation. */
-  onMatched: () => void;
+  onMatched: (code: string) => void;
+  /** Open the parcel-photo fallback, for senders with no printed label. */
+  onUsePhoto: () => void;
 }
 
 /** How long the green "matched" state shows before the sheet hands back control. */
@@ -29,8 +31,11 @@ const MATCH_LINGER_MS = 1000;
  * the shipping label's QR code; a mismatch keeps the camera running with an
  * inline warning (wrong parcel in hand — keep looking), a match locks the
  * scanner and advances the job.
+ *
+ * Not every sender can print a label, so the sheet always offers photographing
+ * the parcel as an equally valid way through.
  */
-export function QrScanSheet({ visible, orderNo, onClose, onMatched }: Props) {
+export function QrScanSheet({ visible, orderNo, onClose, onMatched, onUsePhoto }: Props) {
   const { palette } = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
   const [matched, setMatched] = useState(false);
@@ -64,7 +69,7 @@ export function QrScanSheet({ visible, orderNo, onClose, onMatched }: Props) {
     }
     setMatched(true);
     setMismatch(null);
-    matchTimer.current = setTimeout(onMatched, MATCH_LINGER_MS);
+    matchTimer.current = setTimeout(() => onMatched(scanned), MATCH_LINGER_MS);
   }
 
   return (
@@ -143,6 +148,29 @@ export function QrScanSheet({ visible, orderNo, onClose, onMatched }: Props) {
             <Text className="text-center text-[13px] text-muted">
               Hold the label inside the frame — it scans automatically.
             </Text>
+          )}
+
+          {/* The fallback stays visible throughout: a driver who finds no label
+              on the parcel should not have to hunt for the way forward. */}
+          {!matched && (
+            <TouchableOpacity
+              onPress={onUsePhoto}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Photograph the parcel instead of scanning"
+              className="flex-row items-center gap-3 rounded-xl border border-border bg-card px-4 py-3"
+            >
+              <Ionicons name="camera" size={20} color={palette.foreground} />
+              <View className="flex-1">
+                <Text className="text-[15px] font-bold text-foreground">
+                  Photograph the parcel instead
+                </Text>
+                <Text className="text-[13px] text-muted">
+                  Use this when the sender has no label to scan.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={palette.muted} />
+            </TouchableOpacity>
           )}
         </View>
       </SafeAreaView>

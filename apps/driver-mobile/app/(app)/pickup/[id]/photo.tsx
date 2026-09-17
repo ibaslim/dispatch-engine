@@ -2,8 +2,9 @@ import React from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { PhotoCaptureScreen } from '@screens/PhotoCaptureScreen';
 import { useOrders } from '@contexts';
+import { verifyPickupByPhoto } from '@services/orders';
 
-export default function PodPhotoRoute() {
+export default function PickupPhotoRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { getOrder, patchOrder } = useOrders();
@@ -12,14 +13,12 @@ export default function PodPhotoRoute() {
   function onUploaded({ uri, note }: { uri: string; note: string }) {
     if (order) {
       patchOrder(order.id, {
-        proof_of_delivery: {
-          ...order.proof_of_delivery,
-          submission: {
-            ...order.proof_of_delivery?.submission,
-            photo_path: uri,
-            photo_uploaded_at: new Date().toISOString(),
-            note: note || null,
-          },
+        pickup_verification: {
+          method: 'photo',
+          photo_path: uri,
+          note: note || null,
+          verified_at: new Date().toISOString(),
+          verified_by: order.driver?.id ?? null,
         },
       });
     }
@@ -30,7 +29,10 @@ export default function PodPhotoRoute() {
     <PhotoCaptureScreen
       orderId={id}
       orderNumber={order?.order_number ?? null}
+      title="Parcel photo"
+      hint="Photograph the whole parcel, address side up."
       notePlaceholder="Add a note for dispatch (optional)"
+      upload={verifyPickupByPhoto}
       onCancel={() => router.back()}
       onUploaded={onUploaded}
     />

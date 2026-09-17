@@ -205,6 +205,12 @@ class ActivityStatusUpdate(BaseModel):
 
 
 # -------------------------
+# PICKUP VERIFICATION
+# -------------------------
+class PickupQrConfirm(BaseModel):
+    code: str
+    
+# -------------------------
 # RESPONSE
 # -------------------------
 class OrderResponse(OrderCreate):
@@ -216,6 +222,7 @@ class OrderResponse(OrderCreate):
     published_at: Optional[datetime] = None
     order_placed_time: Optional[str] = None
     proof_of_delivery: Optional[Dict[str, Any]] = None
+    pickup_verification: Optional[Dict[str, Any]] = None
     incident_report: Optional[Dict[str, Any]] = None
     driver: Optional[DriverInfo] = None
     created_at: Optional[datetime] = None
@@ -291,3 +298,38 @@ class DeliveryQuoteResponse(BaseModel):
     gst_rate: float = 0
     pst_rate: float = 0
     manual_fallback: bool = False
+
+
+class RouteStopResponse(BaseModel):
+    """One stop on the driver's ordered run."""
+    sequence: int
+    order_id: UUID
+    order_number: Optional[str] = None
+    kind: str
+    name: Optional[str] = None
+    address: Optional[str] = None
+    latitude: float
+    longitude: float
+    place_id: Optional[str] = None
+    # Driving from the previous stop (or the driver, for the first one).
+    leg_distance_meters: Optional[int] = None
+    leg_duration_seconds: Optional[int] = None
+
+
+class UnplaceableStopResponse(BaseModel):
+    """An outstanding order that can't be routed because it has no coordinates."""
+    order_id: UUID
+    order_number: Optional[str] = None
+    kind: str
+    address: Optional[str] = None
+
+
+class RoutePlanResponse(BaseModel):
+    origin_latitude: float
+    origin_longitude: float
+    stops: List[RouteStopResponse]
+    unplaceable: List[UnplaceableStopResponse] = Field(default_factory=list)
+    total_distance_meters: Optional[int] = None
+    total_duration_seconds: Optional[int] = None
+    # "routes_api" figures use live traffic; "local" ones are straight-line estimates.
+    optimized_by: str

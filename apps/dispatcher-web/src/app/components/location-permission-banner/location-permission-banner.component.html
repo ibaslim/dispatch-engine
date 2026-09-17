@@ -1,0 +1,23 @@
+<div *ngIf="visible()" role="status"
+    class="flex flex-wrap items-center gap-3 border-b px-4 py-2.5 text-sm sm:px-6"
+    [ngClass]="location.status() === 'prompt'
+        ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100'
+        : 'border-red-200 bg-red-50 text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100'">
+    <i class="ph text-lg" [ngClass]="location.status() === 'prompt' ? 'ph-map-pin' : 'ph-warning-circle'"></i>
+
+    <p class="min-w-0 flex-1">
+        <span class="font-semibold">{{ location.status() === 'prompt' ? 'Location needed.' : 'Location unavailable.' }}</span>
+        {{ message() }}
+    </p>
+
+    <div class="flex items-center gap-2">
+        <app-button *ngIf="canAsk()" variant="primary" label="Allow location"
+            [loading]="requesting()" (onClick)="allow()"></app-button>
+        <app-button *ngIf="location.status() === 'denied' || location.status() === 'unavailable'"
+            variant="ghost-outline" label="Check again" (onClick)="recheck()"></app-button>
+        <app-button variant="icon" ariaLabel="Dismiss" (onClick)="dismiss()"
+            [extraClasses]="'!w-auto !h-auto !p-1.5 bg-transparent'">
+            <i class="ph ph-x text-base text-current"></i>
+        </app-button>
+    </div>
+</div>

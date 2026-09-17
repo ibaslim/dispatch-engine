@@ -13,6 +13,12 @@
 // app/services/push_contract.py and guarded by a contract test).
 export * from './push-contract';
 
+// Route plan wire contract, shared by driver-mobile and dispatcher-web.
+export * from './route-plan';
+
+// Order wire contract, shared by driver-mobile and dispatcher-web.
+export * from './order';
+
 // Manual DTO interfaces used before generation is wired up:
 
 export interface LoginRequest {

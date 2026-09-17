@@ -127,4 +127,7 @@
     <app-shipping-label-modal [open]="isLabelOpen" [order]="selectedOrderForLabel" (close)="closePrintLabel()">
     </app-shipping-label-modal>
 
+    <!-- Best route: drivers only, and only on this page -->
+    <app-route-plan-fab *ngIf="isDriver"></app-route-plan-fab>
+
 </app-page>
