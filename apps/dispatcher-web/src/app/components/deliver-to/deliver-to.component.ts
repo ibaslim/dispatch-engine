@@ -4,22 +4,23 @@ import { CommonModule } from '@angular/common';
 import { BaseInputComponent } from '../base-input/base-input.component';
 import { AddressInputComponent } from '../address-input/address-input.component';
 import { PhoneInputComponent } from '../phone-input/phone-input.component';
-import { TimePickerComponent } from '../time-picker/time-picker.component';
-import { DatePickerComponent } from '../date-picker/date-picker.component';
+import { StopScheduleComponent } from '../stop-schedule/stop-schedule.component';
 import { SelectedGooglePlace } from '../../services/google-maps/google-maps.service';
 import { OperationalZone } from '../../services/delivery-configuration/delivery-configuration.service';
 
 @Component({
   selector: 'app-deliver-to',
   standalone: true,
-  imports: [CommonModule, BaseInputComponent, AddressInputComponent, PhoneInputComponent, TimePickerComponent, DatePickerComponent],
+  imports: [CommonModule, BaseInputComponent, AddressInputComponent, PhoneInputComponent, StopScheduleComponent],
   templateUrl: './deliver-to.component.html',
   styles: [`:host { display: block; }`]
 })
 export class DeliverToComponent {
   @Input() value!: NewOrderFormValue['delivery'];
-  @Input() deliveryTimeError = '';
-  @Input() showDeliveryTimeError = false;
+  @Input() dateError = '';
+  @Input() timeError = '';
+  @Input() minDate = '';
+  @Input() minTime: string | null = null;
   @Input() showSubmitValidation = false;
   @Input() operationalZones: OperationalZone[] = [];
 

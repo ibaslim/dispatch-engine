@@ -6,7 +6,7 @@ import {
 } from '@models/new-order-form/new-order-form.model';
 import { OrderEntity } from '@models/orders/order-entity.model';
 import { OrderView } from '@models/orders/order-tabs.model';
-import type { OrderItem, OrderResponse } from '@dispatch/shared/contracts';
+import { plannedDate, plannedTime, toPlannedAt, type OrderItem, type OrderResponse } from '@dispatch/shared/contracts';
 import { driverEarningsLabel, formatDateTime, formatStatusLabel, formatTime, money } from './orders-formatting.util';
 
 // ─── Pure backend<->frontend order mapping helpers extracted from OrdersComponent ──
@@ -164,8 +164,11 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
     amount: isDriver ? driverEarningsLabel(order.driver_payout) : money(order.total),
     distance: '?',
     orderPlacedTime: order.order_placed_time || '',
-    pickupTime: formatTime(order.pickup_time),
-    estDeliveryTime: formatDateTime(order.delivery_date, order.delivery_time),
+    pickupTime: formatTime(plannedTime(order.pickup_planned_at, order.pickup_time_specified) ?? '') || 'Any time',
+    estDeliveryTime: formatDateTime(
+      plannedDate(order.delivery_planned_at),
+      plannedTime(order.delivery_planned_at, order.delivery_time_specified) ?? ''
+    ),
     readyForPickup: order.ready_for_pickup ?? false,
     driver: order.driver?.contact_name || order.driver?.name || '',
     orderStatus: isExpiredUnassigned ? 'Unassigned' : formatStatusLabel(order.status),
@@ -213,8 +216,9 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
           order.pickup_latitude,
           order.pickup_longitude
         ),
-        pickupDate: order.pickup_date,
-        pickupTime: order.pickup_time
+        pickupDate: plannedDate(order.pickup_planned_at),
+        pickupTime: plannedTime(order.pickup_planned_at, order.pickup_time_specified) ?? '',
+        pickupTimeSpecified: order.pickup_time_specified
       },
       delivery: {
         name: order.delivery_name,
@@ -227,8 +231,9 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
           order.delivery_latitude,
           order.delivery_longitude
         ),
-        deliveryDate: order.delivery_date,
-        deliveryTime: order.delivery_time
+        deliveryDate: plannedDate(order.delivery_planned_at),
+        deliveryTime: plannedTime(order.delivery_planned_at, order.delivery_time_specified) ?? '',
+        deliveryTimeSpecified: order.delivery_time_specified
       },
       details: {
         items: (order.items || []).map((item) => ({
@@ -269,6 +274,14 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
 }
 
 export function toOrderPayload(value: NewOrderFormValue): Record<string, unknown> {
+  const pickupAt = toPlannedAt(
+    value.pickup.pickupDate,
+    value.pickup.pickupTimeSpecified ? value.pickup.pickupTime : null,
+  );
+  const deliveryAt = toPlannedAt(
+    value.delivery.deliveryDate,
+    value.delivery.deliveryTimeSpecified ? value.delivery.deliveryTime : null,
+  );
   return {
     delivery_category_id: value.deliveryCategoryId || null,
     surcharge_ids: value.surchargeIds,
@@ -279,8 +292,8 @@ export function toOrderPayload(value: NewOrderFormValue): Record<string, unknown
     pickup_phone: `${value.pickup.phone.countryCode}${value.pickup.phone.number}`,
     pickup_email: value.pickup.email.trim(),
     pickup_address: value.pickup.address.trim(),
-    pickup_date: value.pickup.pickupDate,
-    pickup_time: value.pickup.pickupTime,
+    pickup_planned_at: pickupAt.plannedAt,
+    pickup_time_specified: pickupAt.timeSpecified,
     delivery_name: value.delivery.name.trim(),
     delivery_phone: `${value.delivery.phone.countryCode}${value.delivery.phone.number}`,
     delivery_email: value.delivery.email.trim(),
@@ -288,8 +301,8 @@ export function toOrderPayload(value: NewOrderFormValue): Record<string, unknown
     delivery_place_id: value.delivery.location?.placeId || null,
     delivery_latitude: value.delivery.location?.latitude ?? null,
     delivery_longitude: value.delivery.location?.longitude ?? null,
-    delivery_date: value.delivery.deliveryDate,
-    delivery_time: value.delivery.deliveryTime,
+    delivery_planned_at: deliveryAt.plannedAt,
+    delivery_time_specified: deliveryAt.timeSpecified,
     items: value.details.items
       .filter((item) => item.itemName.trim() && toNumber(item.itemPrice) > 0 && toNumber(item.itemQty) > 0)
       .map((item) => ({
@@ -326,8 +339,8 @@ export function createDefaultNewOrder(): NewOrderFormValue {
     deliveryCategoryId: '',
     surchargeIds: [],
     routeQuote: null,
-    pickup: { name: '', phone: { countryCode: '+1', number: '' }, email: '', address: '', location: null, pickupDate: todayYYYYMMDD(), pickupTime: '' },
-    delivery: { name: '', phone: { countryCode: '+1', number: '' }, email: '', address: '', location: null, deliveryDate: todayYYYYMMDD(), deliveryTime: '' },
+    pickup: { name: '', phone: { countryCode: '+1', number: '' }, email: '', address: '', location: null, pickupDate: todayYYYYMMDD(), pickupTime: '', pickupTimeSpecified: false },
+    delivery: { name: '', phone: { countryCode: '+1', number: '' }, email: '', address: '', location: null, deliveryDate: todayYYYYMMDD(), deliveryTime: '', deliveryTimeSpecified: false },
     details: {
       items: [{ itemName: '', itemPrice: '', itemQty: '' }],
       gstRate: 0, pstRate: 0, deliveryFees: 0, deliveryTips: 0, discount: 0,
@@ -365,7 +378,8 @@ export function buildDemoDraftValue(): NewOrderFormValue {
       address: '32315 South Fraser Way, Abbotsford, BC V2T 1W7, Canada',
       location: null,
       pickupDate: formatDateForInput(pickupAt),
-      pickupTime: formatTimeForInput(pickupAt)
+      pickupTime: formatTimeForInput(pickupAt),
+      pickupTimeSpecified: true
     },
     delivery: {
       name: 'Maya Chen',
@@ -374,7 +388,8 @@ export function buildDemoDraftValue(): NewOrderFormValue {
       address: '1890 McCallum Rd, Abbotsford, BC V2S 3N2, Canada',
       location: null,
       deliveryDate: formatDateForInput(deliveryAt),
-      deliveryTime: formatTimeForInput(deliveryAt)
+      deliveryTime: formatTimeForInput(deliveryAt),
+      deliveryTimeSpecified: true
     },
     details: {
       items: [{ itemName: 'Burger Combo', itemPrice: '14', itemQty: '2' }],

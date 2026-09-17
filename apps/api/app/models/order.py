@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, Numeric, DateTime, Boolean, JSON, Enum, ForeignKey
+from sqlalchemy import CheckConstraint, Column, String, Integer, Float, Numeric, DateTime, Boolean, JSON, Enum, ForeignKey, text
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -27,6 +27,17 @@ class ActivityStatus(str, enum.Enum):
 
 class Order(Base):
     __tablename__ = "orders"
+    __table_args__ = (
+        # A date-only stop always stores 00:00, so it sorts with its day and never carries a stray time.
+        CheckConstraint(
+            "pickup_time_specified OR pickup_planned_at::time = '00:00'",
+            name="ck_orders_pickup_date_only_midnight",
+        ),
+        CheckConstraint(
+            "delivery_time_specified OR delivery_planned_at::time = '00:00'",
+            name="ck_orders_delivery_date_only_midnight",
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     order_number = Column(String, unique=True, nullable=False)
@@ -39,15 +50,16 @@ class Order(Base):
     pickup_phone = Column(String)
     pickup_email=Column(String)
     pickup_address = Column(String)
-    pickup_date = Column(String)
-    pickup_time = Column(String)
+    # Planned wall-clock time; *_time_specified False means date-only.
+    pickup_planned_at = Column(DateTime(timezone=False), nullable=False)
+    pickup_time_specified = Column(Boolean, nullable=False, default=True, server_default=text("true"))
 
     delivery_name = Column(String)
     delivery_phone = Column(String)
     delivery_email = Column(String)
     delivery_address = Column(String)
-    delivery_date = Column(String)
-    delivery_time = Column(String)
+    delivery_planned_at = Column(DateTime(timezone=False), nullable=False)
+    delivery_time_specified = Column(Boolean, nullable=False, default=True, server_default=text("true"))
 
     delivery_category_id = Column(
         UUID(as_uuid=True), ForeignKey("delivery_categories.id", ondelete="SET NULL"), nullable=True

@@ -28,7 +28,11 @@
     <div *ngIf="rows.length > 0" class="divide-y divide-gray-200 dark:divide-[#2a2d2a]">
 
         <div *ngFor="let row of rows" class="grid items-center gap-4 px-4 py-3 text-sm"
-            [ngClass]="activeMenuRow?.id === row.id ? 'relative z-40' : 'relative z-0'"
+            (click)="onRowClick(row)"
+            [ngClass]="[
+              activeMenuRow?.id === row.id ? 'relative z-40' : 'relative z-0',
+              rowClickable ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-[#232623]' : ''
+            ]"
             [style.gridTemplateColumns]="columnTemplate ? columnTemplate : ('repeat(' + columns.length + ', minmax(0, 1fr))')">
 
             <div *ngFor="let col of columns" class="items-center w-full"
@@ -73,13 +77,7 @@
                     <!-- ACTIVITY STATUS -->
                     <ng-container *ngSwitchCase="'activityStatus'">
                         <div class="flex items-center justify-center gap-1.5 w-full">
-                            <ng-container *ngIf="row.activityStatusAction; else activityStatusText">
-                                <app-button variant="ghost-success" [label]="row.activityStatusAction"
-                                    (onClick)="onActivityStatusClick(row, $event)"></app-button>
-                            </ng-container>
-                            <ng-template #activityStatusText>
-                                <span>{{ row.activityStatusLabel || row.activityStatus }}</span>
-                            </ng-template>
+                            <span>{{ row.activityStatusLabel || row.activityStatus }}</span>
 
                             <app-button *ngIf="row.canReportIncident" variant="icon"
                                 [title]="row.incidentAlreadyReported ? 'Issue already reported' : 'Report an issue'"
@@ -90,20 +88,6 @@
                                     [ngClass]="row.incidentAlreadyReported ? 'text-red-500' : 'text-amber-500'"></i>
                             </app-button>
                         </div>
-                    </ng-container>
-
-                    <!-- DIRECTIONS -->
-                    <ng-container *ngSwitchCase="'directions'">
-                        <div class="flex items-center justify-center w-full" *ngIf="row.showDirections; else noDirections">
-                            <app-button variant="icon" ariaLabel="Directions"
-                                class="rounded-md hover:bg-gray-100 dark:hover:bg-[#2a2d2a] transition"
-                                (onClick)="onDirectionsIconClick(row, $event)">
-                                <i class="ph ph-navigation-arrow text-xl text-gray-900 dark:text-gray-200"></i>
-                            </app-button>
-                        </div>
-                        <ng-template #noDirections>
-                            <span>-</span>
-                        </ng-template>
                     </ng-container>
 
                     <!-- REPORTED ISSUE -->

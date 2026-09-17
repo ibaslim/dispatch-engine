@@ -34,9 +34,10 @@ export class ScheduledOrderPromotionService {
       for (const order of orders) {
         if (order.tab !== 'scheduled') continue;
 
+        // A date-only pickup counts from the start of its day.
         const pickupDateTime = parseDateTime(
           order.full.pickup.pickupDate,
-          order.full.pickup.pickupTime
+          order.full.pickup.pickupTime || '00:00'
         );
 
         if (pickupDateTime && pickupDateTime.getTime() <= twentyFourHoursLater) {

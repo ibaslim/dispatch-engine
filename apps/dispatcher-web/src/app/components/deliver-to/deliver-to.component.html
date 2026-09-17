@@ -22,16 +22,10 @@
         [value]="value.address" (valueChange)="onAddressInput($event)" (placeChange)="onPlaceSelected($event)" (pinClick)="pinClick.emit()"
         name="deliveryAddress" [operationalZones]="operationalZones" [showSubmitValidation]="showSubmitValidation"></app-address-input>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
-        <app-date-picker label="Delivery Date" [required]="true" [value]="value.deliveryDate"
-            (valueChange)="patch({ deliveryDate: $event })" name="deliveryDate"
-            [showSubmitValidation]="showSubmitValidation">
-        </app-date-picker>
-
-        <app-time-picker label="Delivery Time" [required]="true" [value]="value.deliveryTime"
-            (valueChange)="patch({ deliveryTime: $event })" name="deliveryTime" [externalError]="deliveryTimeError"
-            [showExternalError]="showDeliveryTimeError" [showSubmitValidation]="showSubmitValidation">
-        </app-time-picker>
-    </div>
+    <app-stop-schedule label="Delivery" name="delivery" [date]="value.deliveryDate" [time]="value.deliveryTime"
+        [timeSpecified]="value.deliveryTimeSpecified" [minDate]="minDate" [minTime]="minTime"
+        [dateError]="dateError" [timeError]="timeError" [showSubmitValidation]="showSubmitValidation"
+        (scheduleChange)="patch({ deliveryDate: $event.date, deliveryTime: $event.time, deliveryTimeSpecified: $event.timeSpecified })">
+    </app-stop-schedule>
     </div>
 </section>

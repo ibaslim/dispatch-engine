@@ -1,6 +1,7 @@
 export { OrderCard } from './OrderCard';
 export { PublishedOrderCard } from './PublishedOrderCard';
 export { RouteLine } from './RouteLine';
+export { ScheduleCard } from './ScheduleCard';
 export { RoutePlanCard } from './RoutePlanCard';
 export { ProgressTimeline } from './ProgressTimeline';
 export { ContactSheet } from './ContactSheet';

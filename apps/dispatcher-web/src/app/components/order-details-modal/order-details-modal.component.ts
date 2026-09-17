@@ -4,28 +4,8 @@ import { PopupComponent } from '@components/popup/popup.component';
 import { ToggleButtonComponent } from '@components/toggle-button/toggle-button.component';
 import { OrderEntity } from '@models/orders/order-entity.model';
 import { driverEarningsLabel, formatPaymentMethod, maskCard, taxLines } from '@pages/orders/orders-formatting.util';
+import { incidentReasonLabel as sharedIncidentReasonLabel } from '@pages/orders/activity-flow.util';
 import { OrdersService } from '@services/orders/orders.service';
-
-const INCIDENT_REASONS_BY_STAGE: Record<'pickup' | 'delivery', { value: string; label: string }[]> = {
-  pickup: [
-    { value: 'no_answer', label: 'No answer' },
-    { value: 'wrong_address', label: 'Wrong address' },
-    { value: 'business_closed', label: 'Business closed' },
-    { value: 'parcel_issue', label: 'Parcel issue' },
-    { value: 'other', label: 'Other' },
-  ],
-  delivery: [
-    { value: 'no_answer', label: 'No answer' },
-    { value: 'wrong_address', label: 'Wrong address' },
-    { value: 'refused', label: 'Refused' },
-    { value: 'other', label: 'Other' },
-  ],
-};
-
-// Flat reason -> label lookup for display (stage-agnostic; a reason like 'other' is shared).
-const INCIDENT_REASON_LABELS: Record<string, string> = Object.fromEntries(
-  [...INCIDENT_REASONS_BY_STAGE.pickup, ...INCIDENT_REASONS_BY_STAGE.delivery].map((r) => [r.value, r.label])
-);
 
 @Component({
   selector: 'app-order-details-modal',
@@ -163,6 +143,6 @@ export class OrderDetailsModalComponent implements OnChanges {
   }
 
   incidentReasonLabel(reason: string): string {
-    return INCIDENT_REASON_LABELS[reason] ?? reason;
+    return sharedIncidentReasonLabel(reason);
   }
 }

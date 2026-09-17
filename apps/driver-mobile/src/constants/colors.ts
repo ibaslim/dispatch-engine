@@ -52,6 +52,33 @@ export function countdownColor(percent: number): string {
   return DANGER;
 }
 
+function hexToRgb(hex: string): [number, number, number] {
+  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+}
+
+function mixHex(from: string, to: string, t: number): string {
+  const [fr, fg, fb] = hexToRgb(from);
+  const [tr, tg, tb] = hexToRgb(to);
+  const mix = (a: number, b: number) => Math.round(a + (b - a) * t)
+    .toString(16)
+    .padStart(2, '0');
+  return `#${mix(fr, tr)}${mix(fg, tg)}${mix(fb, tb)}`;
+}
+
+/**
+ * SUCCESS -> WARNING -> DANGER as a continuous dial rather than the three
+ * fixed bands of `countdownColor`: `percent` is how much of the window is
+ * left (1 = just started, 0 = due now), so the color eases through amber
+ * instead of jumping at a threshold. Same anchor colors as `countdownColor`,
+ * so a driver reads the same urgency whichever screen shows it.
+ */
+export function countdownGradient(percent: number): string {
+  const clamped = Math.max(0, Math.min(1, percent));
+  return clamped > 0.5
+    ? mixHex(SUCCESS, WARNING, (1 - clamped) * 2)
+    : mixHex(WARNING, DANGER, (0.5 - clamped) * 2);
+}
+
 /** Soft fills for Home's stat chips, which need four tints that stay distinct. */
 export const WARNING_SOFT = 'rgba(251, 191, 36, 0.16)';
 export const ACCENT = '#8b5cf6';

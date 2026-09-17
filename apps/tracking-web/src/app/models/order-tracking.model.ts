@@ -6,12 +6,13 @@ export interface OrderTrackingDetails {
   driver_name: string | null;
   pickup_name: string | null;
   pickup_address: string | null;
-  pickup_date: string | null;
-  pickup_time: string | null;
+  /** Wall-clock time, no zone ("2026-09-20T13:40:00"). */
+  pickup_planned_at: string | null;
+  pickup_time_specified: boolean | null;
   delivery_name: string | null;
   delivery_address: string | null;
-  delivery_date: string | null;
-  delivery_time: string | null;
+  delivery_planned_at: string | null;
+  delivery_time_specified: boolean | null;
   items_count: number;
   created_at: string | null;
 

@@ -18,6 +18,7 @@ export * from './route-plan';
 
 // Order wire contract, shared by driver-mobile and dispatcher-web.
 export * from './order';
+export * from './order-schedule';
 
 // Manual DTO interfaces used before generation is wired up:
 

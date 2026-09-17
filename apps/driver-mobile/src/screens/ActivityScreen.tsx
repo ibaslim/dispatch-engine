@@ -6,6 +6,7 @@ import { useTheme } from '@theme';
 import { useOrders } from '@contexts';
 import { Card, CardBody, Ref } from '@components/ui';
 import type { DriverOrder } from '@types';
+import { plannedDate } from '@dispatch/shared/contracts';
 
 interface Props {
   onOrderPress: (id: string) => void;
@@ -81,21 +82,21 @@ export function ActivityScreen({ onOrderPress }: Props) {
     const oneMonthAgoMs = nowMs - 30 * 24 * 60 * 60 * 1000;
 
     return completedOrders.filter((o) => {
-      if (!o.delivery_date) return timeframe === 'all';
+      if (!o.delivery_planned_at) return timeframe === 'all';
       
-      const orderDateStr = o.delivery_date.slice(0, 10);
+      const orderDateStr = plannedDate(o.delivery_planned_at);
       
       if (timeframe === 'today') {
         return orderDateStr === today;
       }
       
       if (timeframe === 'week') {
-        const orderMs = new Date(o.delivery_date).getTime();
+        const orderMs = new Date(plannedDate(o.delivery_planned_at)).getTime();
         return orderMs >= oneWeekAgoMs;
       }
 
       if (timeframe === 'month') {
-        const orderMs = new Date(o.delivery_date).getTime();
+        const orderMs = new Date(plannedDate(o.delivery_planned_at)).getTime();
         return orderMs >= oneMonthAgoMs;
       }
 
@@ -252,7 +253,7 @@ function ActivityOrderCard({
 
         <View className="flex-row items-center justify-between">
           <Text className="text-xs text-muted">
-            Completed on {formatDate(order.delivery_date)}
+            Completed on {formatDate(plannedDate(order.delivery_planned_at))}
           </Text>
           <TouchableOpacity
             onPress={onPress}

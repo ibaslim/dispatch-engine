@@ -40,7 +40,7 @@ export class OrderDocumentService {
         <p>${escapeHtml(order.full.pickup.phone.countryCode)} ${escapeHtml(order.full.pickup.phone.number)}</p>
         <p>${escapeHtml(order.full.pickup.email)}</p>
         <p>${escapeHtml(order.full.pickup.address)}</p>
-        <p>Time: ${escapeHtml(order.full.pickup.pickupDate)} ${escapeHtml(order.full.pickup.pickupTime)}</p>
+        <p>Time: ${escapeHtml(order.full.pickup.pickupDate)} ${escapeHtml(order.full.pickup.pickupTime || 'Any time')}</p>
       </div>
       <div class="section">
         <h3>Delivery Information</h3>
@@ -48,7 +48,7 @@ export class OrderDocumentService {
         <p>${escapeHtml(order.full.delivery.phone.countryCode)} ${escapeHtml(order.full.delivery.phone.number)}</p>
         <p>${escapeHtml(order.full.delivery.email)}</p>
         <p>${escapeHtml(order.full.delivery.address)}</p>
-        <p>${escapeHtml(order.full.delivery.deliveryDate)} ${escapeHtml(order.full.delivery.deliveryTime)}</p>
+        <p>${escapeHtml(order.full.delivery.deliveryDate)} ${escapeHtml(order.full.delivery.deliveryTime || 'Any time')}</p>
       </div>
       <div class="section">
         <h3>Items</h3>

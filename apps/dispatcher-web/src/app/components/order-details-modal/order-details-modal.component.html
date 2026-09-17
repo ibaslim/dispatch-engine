@@ -44,7 +44,7 @@
                         <p class="font-medium">{{ order.full.pickup.name }}</p>
                         <p>{{ order.full.pickup.phone.countryCode }} {{ order.full.pickup.phone.number }}</p>
                         <p>{{ order.full.pickup.address }}</p>
-                        <p>Time: {{ order.full.pickup.pickupTime }}</p>
+                        <p>Time: {{ order.full.pickup.pickupTime || 'Any time' }}</p>
                     </div>
                 </div>
                 <div class="rounded-lg border border-gray-200 dark:border-[#5a5d5a] p-4">
@@ -54,7 +54,7 @@
                         <p>{{ order.full.delivery.phone.countryCode }} {{ order.full.delivery.phone.number }}</p>
                         <p>{{ order.full.delivery.email }}</p>
                         <p>{{ order.full.delivery.address }}</p>
-                        <p>{{ order.full.delivery.deliveryDate }} · {{ order.full.delivery.deliveryTime }}</p>
+                        <p>{{ order.full.delivery.deliveryDate }} · {{ order.full.delivery.deliveryTime || 'Any time' }}</p>
                     </div>
                 </div>
             </div>

@@ -3,6 +3,7 @@ Email sending via aiosmtplib (SMTP).
 Used by Celery tasks (synchronous wrapper) and for direct sends.
 """
 from __future__ import annotations
+from datetime import datetime
 from app.core.config import settings
 import smtplib
 from email.mime.application import MIMEApplication
@@ -262,6 +263,19 @@ def _field(source: Any, name: str, default: Any = "") -> Any:
     if isinstance(source, dict):
         return source.get(name, default)
     return getattr(source, name, default)
+
+
+def _when(source: Any, stop: str) -> str:
+    """A stop's date, plus its time when one was given."""
+    planned_at = _field(source, f"{stop}_planned_at", None)
+    if not planned_at:
+        return ""
+    if isinstance(planned_at, str):
+        planned_at = datetime.fromisoformat(planned_at)
+    day = planned_at.strftime("%Y-%m-%d")
+    if not _field(source, f"{stop}_time_specified", True):
+        return day
+    return f"{day} &nbsp;·&nbsp; {planned_at.strftime('%H:%M')}"
 
 
 def _money(value: Any) -> str:
@@ -530,8 +544,6 @@ def build_order_recipient_email(order: Any, tracking_url: str) -> str:
     delivery_phone = _html(_field(order, "delivery_phone"))
     delivery_email = _html(_field(order, "delivery_email"))
     delivery_address = _html(_field(order, "delivery_address"))
-    delivery_date = _html(_field(order, "delivery_date"))
-    delivery_time = _html(_field(order, "delivery_time"))
 
     pickup_name = _html(_field(order, "pickup_name")) or "—"
     pickup_phone = _html(_field(order, "pickup_phone"))
@@ -624,7 +636,7 @@ def build_order_recipient_email(order: Any, tracking_url: str) -> str:
                         </tr>
                         <tr>
                             <td></td>
-                            <td style="color: #6b7280; font-size: 12px; text-align: right; padding-top: 4px;">{delivery_date} &nbsp;·&nbsp; {delivery_time}</td>
+                            <td style="color: #6b7280; font-size: 12px; text-align: right; padding-top: 4px;">{_when(order, 'delivery')}</td>
                         </tr>
                     </table>
                 </td>
@@ -744,8 +756,7 @@ def build_order_invoice_pdf(order: Any) -> bytes:
         _p(_field(order, "pickup_address")),
         Spacer(1, 4),
         Paragraph(
-            f"{_html(_field(order, 'pickup_date'))} &nbsp;·&nbsp; "
-            f"{_html(_field(order, 'pickup_time'))}",
+            _when(order, "pickup"),
             MUTED,
         ),
     ]
@@ -757,8 +768,7 @@ def build_order_invoice_pdf(order: Any) -> bytes:
         _p(_field(order, "delivery_address")),
         Spacer(1, 4),
         Paragraph(
-            f"{_html(_field(order, 'delivery_date'))} &nbsp;·&nbsp; "
-            f"{_html(_field(order, 'delivery_time'))}",
+            _when(order, "delivery"),
             MUTED,
         ),
     ]

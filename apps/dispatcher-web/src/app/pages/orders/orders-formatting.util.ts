@@ -58,6 +58,11 @@ export function parseDateTime(dateStr: string, time: string): Date | null {
 }
 
 export function formatDateTime(dateStr: string, time: string): string {
+  // Date-only stop: show the day without inventing a time.
+  if (dateStr && !time) {
+    const day = parseDateTime(dateStr, '00:00');
+    return day ? `${day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, any time` : dateStr;
+  }
   const parsed = parseDateTime(dateStr, time);
   if (!parsed) return formatTime(time);
   return `${parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${formatTime(time)}`;

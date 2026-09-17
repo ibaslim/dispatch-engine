@@ -27,6 +27,7 @@ import {
 } from '@constants/colors';
 import { useTheme } from '@theme';
 import type { DriverOrder } from '@types';
+import { plannedDate } from '@dispatch/shared/contracts';
 import {
   backgroundPermissionHint,
   backgroundPermissionPath,
@@ -51,14 +52,14 @@ function completedToday(orders: DriverOrder[]): DriverOrder[] {
   const today = todayIso();
   return orders.filter(
     (order) =>
-      order.activity_status === 'delivered' && order.delivery_date?.slice(0, 10) === today,
+      order.activity_status === 'delivered' && plannedDate(order.delivery_planned_at) === today,
   );
 }
 
 /** Everything due today — delivered or not — so the count reads as "the shift". */
 function scheduledToday(orders: DriverOrder[]): DriverOrder[] {
   const today = todayIso();
-  return orders.filter((order) => order.delivery_date?.slice(0, 10) === today);
+  return orders.filter((order) => plannedDate(order.delivery_planned_at) === today);
 }
 
 function formatUsd(amount: number): string {

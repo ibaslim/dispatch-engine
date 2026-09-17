@@ -117,8 +117,10 @@ export interface OrderResponse {
   pickup_phone: string;
   pickup_email: string;
   pickup_address: string;
-  pickup_date: string;
-  pickup_time: string;
+  /** Wall-clock time, no zone ("2026-09-20T13:40:00"); read it with order-schedule helpers. */
+  pickup_planned_at: string;
+  /** False means date-only; the time part is 00:00. */
+  pickup_time_specified: boolean;
   pickup_place_id: string | null;
   pickup_latitude: number | null;
   pickup_longitude: number | null;
@@ -129,8 +131,8 @@ export interface OrderResponse {
   delivery_phone: string;
   delivery_email: string;
   delivery_address: string;
-  delivery_date: string;
-  delivery_time: string;
+  delivery_planned_at: string;
+  delivery_time_specified: boolean;
   delivery_place_id: string | null;
   delivery_latitude: number | null;
   delivery_longitude: number | null;
@@ -197,15 +199,15 @@ export interface DriverOrder
     | 'pickup_name'
     | 'pickup_phone'
     | 'pickup_address'
-    | 'pickup_date'
-    | 'pickup_time'
+    | 'pickup_planned_at'
+    | 'pickup_time_specified'
     | 'pickup_latitude'
     | 'pickup_longitude'
     | 'delivery_name'
     | 'delivery_phone'
     | 'delivery_address'
-    | 'delivery_date'
-    | 'delivery_time'
+    | 'delivery_planned_at'
+    | 'delivery_time_specified'
     | 'delivery_latitude'
     | 'delivery_longitude'
     | 'route_distance_meters'

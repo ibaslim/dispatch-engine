@@ -58,6 +58,7 @@ from app.schemas.order import (
     RouteStopResponse,
     UnplaceableStopResponse,
     StatusUpdate,
+    normalize_planned_at,
     INCIDENT_REASONS_REQUIRING_DESCRIPTION,
 )
 from app.workers.celery_app import celery_app
@@ -219,8 +220,8 @@ async def _get_quote_or_http_error(
     delivery_place_id: str | None,
     category_id: UUID | None,
     vendor_id: UUID | None = None,
-    delivery_date: str | None = None,
-    delivery_time: str | None = None,
+    delivery_planned_at: datetime | None = None,
+    delivery_time_specified: bool = False,
     surcharge_ids: list[UUID] | None = None,
     pickup_address: str | None = None,
     delivery_address: str | None = None,
@@ -242,8 +243,8 @@ async def _get_quote_or_http_error(
                 delivery_address=delivery_address or "",
                 category_id=category_id,
                 vendor_id=vendor_id,
-                delivery_date=delivery_date,
-                delivery_time=delivery_time,
+                delivery_planned_at=delivery_planned_at,
+                delivery_time_specified=delivery_time_specified,
                 surcharge_ids=surcharge_ids,
             )
         return await build_delivery_quote(
@@ -252,8 +253,8 @@ async def _get_quote_or_http_error(
             delivery_place_id=delivery_place_id,
             category_id=category_id,
             vendor_id=vendor_id,
-            delivery_date=delivery_date,
-            delivery_time=delivery_time,
+            delivery_planned_at=delivery_planned_at,
+            delivery_time_specified=delivery_time_specified,
             surcharge_ids=surcharge_ids,
         )
     except DeliveryQuoteError as exc:
@@ -315,32 +316,45 @@ async def _driver_order_responses(
     return [_driver_order_response(order, payment_group) for order in orders]
 
 
-def parse_order_datetime(date_value: str, time_value: str) -> datetime:
-    return datetime.strptime(f"{date_value} {time_value}", "%Y-%m-%d %H:%M").replace(
-        tzinfo=APP_TIMEZONE
-    )
-
-
-def get_order_status(
-    pickup_date: str,
-    pickup_time: str,
-    delivery_date: str,
-    delivery_time: str,
-):
+def get_order_status(delivery_planned_at: datetime, delivery_time_specified: bool) -> OrderStatus:
+    """Current once delivery is due within 3 hours; a date-only delivery is current from its date on."""
     now = datetime.now(APP_TIMEZONE)
+    if not delivery_time_specified:
+        return OrderStatus.current if delivery_planned_at.date() <= now.date() else OrderStatus.scheduled
+    due = delivery_planned_at.replace(tzinfo=APP_TIMEZONE)
+    return OrderStatus.current if due <= now + timedelta(hours=3) else OrderStatus.scheduled
 
-    try:
-        delivery_at = parse_order_datetime(delivery_date, delivery_time)
-        return (
-            OrderStatus.current
-            if delivery_at <= now + timedelta(hours=3)
-            else OrderStatus.scheduled
-        )
-    except ValueError:
-        pickup_at = datetime.strptime(pickup_time, "%H:%M")
-        delivery_at = datetime.strptime(delivery_time, "%H:%M")
-        diff_hours = (delivery_at - pickup_at).total_seconds() / 3600
-        return OrderStatus.current if diff_hours < 3 else OrderStatus.scheduled
+
+# Absorbs the seconds between the form's own check and the request arriving.
+SCHEDULE_GRACE = timedelta(minutes=5)
+
+
+def schedule_error(
+    pickup_at: datetime,
+    pickup_time_specified: bool,
+    delivery_at: datetime,
+    delivery_time_specified: bool,
+    *,
+    check_pickup_past: bool = True,
+    check_delivery_past: bool = True,
+    now: datetime | None = None,
+) -> str | None:
+    """First problem with an order schedule, or None. Mirrors the order form's rules."""
+    now = now or datetime.now(APP_TIMEZONE).replace(tzinfo=None)
+    earliest = now - SCHEDULE_GRACE
+    if check_pickup_past and (
+        pickup_at.date() < now.date() or (pickup_time_specified and pickup_at < earliest)
+    ):
+        return "Pickup can't be in the past."
+    if check_delivery_past and (
+        delivery_at.date() < now.date() or (delivery_time_specified and delivery_at < earliest)
+    ):
+        return "Delivery can't be in the past."
+    if delivery_at.date() < pickup_at.date():
+        return "Delivery can't be before the pickup date."
+    if pickup_time_specified and delivery_time_specified and delivery_at <= pickup_at:
+        return "Delivery must be after the pickup time."
+    return None
 
 
 async def generate_order_number(db: AsyncSession) -> str:
@@ -409,8 +423,8 @@ async def quote_delivery(
         payload.delivery_place_id,
         payload.delivery_category_id,
         payload.vendor_id,
-        payload.delivery_date,
-        payload.delivery_time,
+        payload.delivery_planned_at,
+        payload.delivery_time_specified,
         payload.surcharge_ids,
         payload.pickup_address,
         payload.delivery_address,
@@ -435,14 +449,23 @@ async def create_order(
     try:
         data = payload.model_dump()
 
+        schedule_problem = schedule_error(
+            data["pickup_planned_at"],
+            data["pickup_time_specified"],
+            data["delivery_planned_at"],
+            data["delivery_time_specified"],
+        )
+        if schedule_problem:
+            raise HTTPException(status_code=422, detail=schedule_problem)
+
         quote = await _get_quote_or_http_error(
             db,
             data.get("pickup_place_id"),
             data.get("delivery_place_id"),
             data.get("delivery_category_id"),
             data.get("vendor_id"),
-            data.get("delivery_date"),
-            data.get("delivery_time"),
+            data.get("delivery_planned_at"),
+            data.get("delivery_time_specified"),
             data.get("surcharge_ids"),
             data.get("pickup_address"),
             data.get("delivery_address"),
@@ -465,12 +488,7 @@ async def create_order(
             "picture": False,
         }
 
-        data["status"] = get_order_status(
-            data["pickup_date"],
-            data["pickup_time"],
-            data["delivery_date"],
-            data["delivery_time"],
-        )
+        data["status"] = get_order_status(data["delivery_planned_at"], data["delivery_time_specified"])
 
         order = Order(**data)
         if order.driver_id:
@@ -540,10 +558,39 @@ async def update_order(
         "delivery_place_id",
         "delivery_category_id",
         "vendor_id",
-        "delivery_date",
-        "delivery_time",
+        "delivery_planned_at",
+        "delivery_time_specified",
         "surcharge_ids",
     }
+
+    # Merge a partial schedule edit with what's stored, keeping date-only stops at midnight.
+    schedule_changed = False
+    moved_stops: set[str] = set()
+    for stop in ("pickup", "delivery"):
+        at_key, flag_key = f"{stop}_planned_at", f"{stop}_time_specified"
+        if at_key in update_data or flag_key in update_data:
+            planned_at = update_data.get(at_key) or getattr(order, at_key)
+            specified = update_data.get(flag_key)
+            if specified is None:
+                specified = getattr(order, flag_key)
+            update_data[at_key] = normalize_planned_at(planned_at, specified)
+            update_data[flag_key] = specified
+            if (update_data[at_key], specified) != (getattr(order, at_key), getattr(order, flag_key)):
+                moved_stops.add(stop)
+            schedule_changed = True
+
+    if schedule_changed:
+        # A stop left where it was may already be in the past; only moved stops must be upcoming.
+        schedule_problem = schedule_error(
+            update_data.get("pickup_planned_at", order.pickup_planned_at),
+            update_data.get("pickup_time_specified", order.pickup_time_specified),
+            update_data.get("delivery_planned_at", order.delivery_planned_at),
+            update_data.get("delivery_time_specified", order.delivery_time_specified),
+            check_pickup_past="pickup" in moved_stops,
+            check_delivery_past="delivery" in moved_stops,
+        )
+        if schedule_problem:
+            raise HTTPException(status_code=422, detail=schedule_problem)
 
     if quote_fields.intersection(update_data):
         quote = await _get_quote_or_http_error(
@@ -552,8 +599,8 @@ async def update_order(
             update_data.get("delivery_place_id", order.delivery_place_id),
             update_data.get("delivery_category_id", order.delivery_category_id),
             update_data.get("vendor_id", order.vendor_id),
-            update_data.get("delivery_date", order.delivery_date),
-            update_data.get("delivery_time", order.delivery_time),
+            update_data.get("delivery_planned_at", order.delivery_planned_at),
+            update_data.get("delivery_time_specified", order.delivery_time_specified),
             update_data.get("surcharge_ids", order.surcharge_ids),
             update_data.get("pickup_address", order.pickup_address),
             update_data.get("delivery_address", order.delivery_address),
@@ -613,14 +660,8 @@ async def update_order(
                 payment_group = await get_driver_payment_group(db, order.driver_id)
                 apply_driver_payout_snapshot(order, payment_group)
 
-        schedule_fields = {"pickup_date", "pickup_time", "delivery_date", "delivery_time"}
-        if "status" not in update_data and schedule_fields.intersection(update_data):
-            order.status = get_order_status(
-                order.pickup_date,
-                order.pickup_time,
-                order.delivery_date,
-                order.delivery_time,
-            )
+        if "status" not in update_data and schedule_changed:
+            order.status = get_order_status(order.delivery_planned_at, order.delivery_time_specified)
 
         await db.commit()
         await db.refresh(order)
@@ -808,14 +849,14 @@ def _notify_sender_order_delivered(order: Order) -> None:
         "pickup_phone": order.pickup_phone,
         "pickup_email": order.pickup_email,
         "pickup_address": order.pickup_address,
-        "pickup_date": order.pickup_date,
-        "pickup_time": order.pickup_time,
+        "pickup_planned_at": order.pickup_planned_at.isoformat(),
+        "pickup_time_specified": order.pickup_time_specified,
         "delivery_name": order.delivery_name,
         "delivery_phone": order.delivery_phone,
         "delivery_email": order.delivery_email,
         "delivery_address": order.delivery_address,
-        "delivery_date": order.delivery_date,
-        "delivery_time": order.delivery_time,
+        "delivery_planned_at": order.delivery_planned_at.isoformat(),
+        "delivery_time_specified": order.delivery_time_specified,
         "items": order.items or [],
         "subtotal": order.subtotal,
         "gst_rate": order.gst_rate,
@@ -1327,14 +1368,14 @@ async def send_sender_invoice(
         "pickup_phone": order.pickup_phone,
         "pickup_email": order.pickup_email,
         "pickup_address": order.pickup_address,
-        "pickup_date": order.pickup_date,
-        "pickup_time": order.pickup_time,
+        "pickup_planned_at": order.pickup_planned_at.isoformat(),
+        "pickup_time_specified": order.pickup_time_specified,
         "delivery_name": order.delivery_name,
         "delivery_phone": order.delivery_phone,
         "delivery_email": order.delivery_email,
         "delivery_address": order.delivery_address,
-        "delivery_date": order.delivery_date,
-        "delivery_time": order.delivery_time,
+        "delivery_planned_at": order.delivery_planned_at.isoformat(),
+        "delivery_time_specified": order.delivery_time_specified,
         "items": order.items or [],
         "subtotal": order.subtotal,
         "gst_rate": order.gst_rate,
@@ -1400,14 +1441,14 @@ async def send_recipient_notification(
         "pickup_phone": order.pickup_phone,
         "pickup_email": order.pickup_email,
         "pickup_address": order.pickup_address,
-        "pickup_date": order.pickup_date,
-        "pickup_time": order.pickup_time,
+        "pickup_planned_at": order.pickup_planned_at.isoformat(),
+        "pickup_time_specified": order.pickup_time_specified,
         "delivery_name": order.delivery_name,
         "delivery_phone": order.delivery_phone,
         "delivery_email": order.delivery_email,
         "delivery_address": order.delivery_address,
-        "delivery_date": order.delivery_date,
-        "delivery_time": order.delivery_time,
+        "delivery_planned_at": order.delivery_planned_at.isoformat(),
+        "delivery_time_specified": order.delivery_time_specified,
         "items": order.items or [],
         "subtotal": order.subtotal,
         "gst_rate": order.gst_rate,

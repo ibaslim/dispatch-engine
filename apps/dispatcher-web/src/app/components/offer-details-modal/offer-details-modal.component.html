@@ -1,0 +1,85 @@
+<app-popup [open]="open" [title]="title" widthClass="max-w-lg" (close)="close.emit()">
+
+    <div *ngIf="card as offer; else gone" class="space-y-5 px-2 py-2 text-sm text-gray-600 dark:text-gray-300">
+
+        <div class="flex items-start justify-between gap-4 rounded-lg bg-gray-50 p-4 dark:bg-[#232623]">
+            <div>
+                <p class="text-xs text-gray-500 dark:text-gray-400">You earn</p>
+                <p class="text-3xl font-bold text-[#3ddc97]">C$ {{ offer.driverFee | number:'1.2-2' }}</p>
+                <p *ngIf="hasBreakdown" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Delivery fee C$ {{ (offer.feePayout ?? 0) | number:'1.2-2' }}, tip C$ {{ (offer.tipPayout ?? 0) | number:'1.2-2' }}
+                </p>
+            </div>
+            <div class="shrink-0 text-right" [attr.aria-label]="countdown + ' left to accept'">
+                <p class="font-mono text-xl font-bold tabular-nums" [ngClass]="timerClass">{{ countdown }}</p>
+                <p class="text-[10px] text-gray-400">left to accept</p>
+            </div>
+        </div>
+
+        <section>
+            <h3 class="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">Route</h3>
+            <ol class="ml-2.5 space-y-5 border-l border-gray-200 pl-6 dark:border-[#3a3d3a]">
+                <li class="relative">
+                    <span class="absolute -left-[35px] top-0 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">P</span>
+                    <p class="font-medium text-gray-900 dark:text-gray-100">{{ offer.pickupName || 'Pickup' }}</p>
+                    <p class="mt-0.5 leading-snug">{{ offer.pickupAddress }}</p>
+                    <p class="mt-1.5 flex items-center gap-1.5 text-xs"
+                        [ngClass]="offer.pickupTimeSpecified ? 'font-medium text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'">
+                        <i class="ph ph-clock" aria-hidden="true"></i>
+                        <span><span class="sr-only">Pickup </span>{{ offer.pickupWhen }}</span>
+                    </p>
+                </li>
+                <li class="relative">
+                    <span class="absolute -left-[35px] top-0 flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">D</span>
+                    <p class="font-medium text-gray-900 dark:text-gray-100">{{ offer.deliveryName || 'Drop' }}</p>
+                    <p class="mt-0.5 leading-snug">{{ offer.deliveryAddress }}</p>
+                    <p class="mt-1.5 flex items-center gap-1.5 text-xs"
+                        [ngClass]="offer.deliveryTimeSpecified ? 'font-medium text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'">
+                        <i class="ph ph-clock" aria-hidden="true"></i>
+                        <span><span class="sr-only">Drop </span>{{ offer.deliveryWhen }}</span>
+                    </p>
+                </li>
+            </ol>
+            <p *ngIf="trip" class="mt-4 text-xs text-gray-500 dark:text-gray-400">Pickup to drop: {{ trip }}</p>
+        </section>
+
+        <section>
+            <h3 class="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">Items</h3>
+            <ul *ngIf="offer.items.length; else noItems" class="space-y-1">
+                <li *ngFor="let item of offer.items">{{ item.qty }} × {{ item.name }}</li>
+            </ul>
+            <ng-template #noItems><p class="text-gray-500 dark:text-gray-400">No items listed.</p></ng-template>
+        </section>
+
+        <section *ngIf="offer.instructions">
+            <h3 class="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">Instructions</h3>
+            <p class="whitespace-pre-line leading-relaxed">{{ offer.instructions }}</p>
+        </section>
+
+        <p class="border-t border-gray-200 pt-4 text-xs text-gray-500 dark:border-[#3a3d3a] dark:text-gray-400">
+            Contact details unlock once you accept.
+        </p>
+    </div>
+
+    <ng-template #gone>
+        <div class="px-2 py-10 text-center">
+            <p class="font-semibold text-gray-900 dark:text-gray-100">Offer no longer available</p>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Another driver accepted it, or the 15-minute window closed.</p>
+        </div>
+    </ng-template>
+
+    <!-- Always rendered: the popup only checks for footer content once, when it opens. -->
+    <div modal-footer class="flex flex-wrap items-center justify-end gap-2">
+        <button type="button" (click)="close.emit()"
+            class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-100 dark:border-[#5a5d5a] dark:text-gray-200 dark:hover:bg-[#2a2d2a]">
+            Close
+        </button>
+        <button *ngIf="card" type="button" [disabled]="!canAccept" (click)="onAccept()"
+            class="rounded-md px-6 py-2 text-sm font-semibold transition"
+            [ngClass]="canAccept
+                ? 'bg-[#3ddc97] text-black hover:bg-[#2fbf82]'
+                : card.accepting ? 'cursor-wait bg-[#3ddc97]/70 text-black' : 'cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-[#2a2d2a]'">
+            {{ card.accepting ? 'Accepting...' : card.remainingSeconds <= 0 ? 'Expired' : 'Accept order' }}
+        </button>
+    </div>
+</app-popup>
