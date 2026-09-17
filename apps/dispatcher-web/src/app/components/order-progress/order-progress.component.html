@@ -1,0 +1,25 @@
+<div class="mb-3">
+    <div *ngFor="let step of steps; let last = last" class="flex gap-3">
+        <div class="flex flex-col items-center">
+            <span *ngIf="step.done" class="flex h-6 w-6 items-center justify-center rounded-full bg-[#3ddc97]">
+                <i class="ph ph-check text-xs text-black"></i>
+            </span>
+            <span *ngIf="step.current" class="flex h-6 w-6 items-center justify-center rounded-full border-2 border-[#3ddc97] bg-white dark:bg-[#1E201E]">
+                <span class="h-2 w-2 rounded-full bg-[#3ddc97]"></span>
+            </span>
+            <span *ngIf="!step.done && !step.current" class="h-6 w-6 rounded-full border border-gray-300 dark:border-[#5a5d5a]"></span>
+
+            <span *ngIf="!last" class="mt-1 w-px flex-1 bg-gray-200 dark:bg-[#3a3d3a]"></span>
+        </div>
+
+        <div [class]="last ? 'flex-1' : 'flex-1 pb-5'">
+            <p [class]="step.current
+                ? 'text-sm font-bold text-gray-900 dark:text-gray-100'
+                : step.done
+                    ? 'text-sm text-gray-900 dark:text-gray-100'
+                    : 'text-sm text-gray-400 dark:text-gray-500'">
+                {{ step.label }}
+            </p>
+        </div>
+    </div>
+</div>

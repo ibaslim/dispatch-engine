@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { auditTime, firstValueFrom, Subject, takeUntil } from 'rxjs';
 import { PageComponent } from '@components/page/page.component';
 import { TableComponent } from '@components/table/table.component';
@@ -8,11 +9,8 @@ import { SearchBarComponent } from '@components/search-bar/search-bar.component'
 import { ButtonComponent } from '@components/button/button.component';
 import { NewOrderFormComponent } from '@components/new-order-form/new-order-form.component';
 import { PopupComponent } from '@components/popup/popup.component';
-import { DirectionsModalComponent } from '@components/directions-modal/directions-modal.component';
 import { ReportIncidentModalComponent, ReportIncidentContext } from '@components/report-incident-modal/report-incident-modal.component';
 import { AssignDriverModalComponent } from '@components/assign-driver-modal/assign-driver-modal.component';
-import { QrScanModalComponent, QrScanContext } from '@components/qr-scan-modal/qr-scan-modal.component';
-import { PodCaptureModalComponent, PodCaptureContext } from '@components/pod-capture-modal/pod-capture-modal.component';
 import { OrderDetailsModalComponent } from '@components/order-details-modal/order-details-modal.component';
 import { PrintOrderModalComponent } from '@components/print-order-modal/print-order-modal.component';
 import { ShippingLabelModalComponent } from '@components/shipping-label-modal/shipping-label-modal.component';
@@ -41,56 +39,11 @@ import {
   toNumber,
   truncateWords
 } from './orders-formatting.util';
-
-// Action type controls what happens on click: 'direct' updates the status immediately,
-// other types route through a handler in activityActionHandlers (e.g. a modal flow)
-// before the status update is applied. Add new entries here to add new checkpoint behaviors.
-type ActivityActionType = 'direct' | 'qr-scan' | 'proof-of-delivery';
-
-interface ActivityFlowEntry {
-  label: string;
-  next: OrderActivityStatus | null;
-  actionLabel: string | null;
-  actionType: ActivityActionType;
-}
-
-const ACTIVITY_STATUS_FLOW: Record<OrderActivityStatus, ActivityFlowEntry> = {
-  driver_not_assigned: { label: 'Driver Not Assigned', next: null, actionLabel: null, actionType: 'direct' },
-  pickup_initiated: { label: 'Pickup Initiated', next: 'picked_up', actionLabel: 'Mark Picked Up', actionType: 'qr-scan' },
-  picked_up: { label: 'Picked Up', next: 'delivery_initiated', actionLabel: 'Start Delivery', actionType: 'direct' },
-  delivery_initiated: { label: 'Delivery Initiated', next: 'delivery_in_progress', actionLabel: 'In Transit', actionType: 'direct' },
-  delivery_in_progress: { label: 'Delivery In Progress', next: 'delivered', actionLabel: 'Mark Delivered', actionType: 'proof-of-delivery' },
-  delivered: { label: 'Delivered', next: null, actionLabel: null, actionType: 'direct' },
-};
-
-// Which checkpoint an incident report belongs to, based on the order's current activity status.
-const INCIDENT_STAGE_BY_ACTIVITY_STATUS: Partial<Record<OrderActivityStatus, 'pickup' | 'delivery'>> = {
-  pickup_initiated: 'pickup',
-  picked_up: 'delivery',
-  delivery_initiated: 'delivery',
-  delivery_in_progress: 'delivery',
-};
-
-const INCIDENT_REASONS_BY_STAGE: Record<'pickup' | 'delivery', { value: string; label: string }[]> = {
-  pickup: [
-    { value: 'no_answer', label: 'No answer' },
-    { value: 'wrong_address', label: 'Wrong address' },
-    { value: 'business_closed', label: 'Business closed' },
-    { value: 'parcel_issue', label: 'Parcel issue' },
-    { value: 'other', label: 'Other' },
-  ],
-  delivery: [
-    { value: 'no_answer', label: 'No answer' },
-    { value: 'wrong_address', label: 'Wrong address' },
-    { value: 'refused', label: 'Refused' },
-    { value: 'other', label: 'Other' },
-  ],
-};
-
-// Flat reason -> label lookup for display (stage-agnostic; a reason like 'other' is shared).
-const INCIDENT_REASON_LABELS: Record<string, string> = Object.fromEntries(
-  [...INCIDENT_REASONS_BY_STAGE.pickup, ...INCIDENT_REASONS_BY_STAGE.delivery].map((r) => [r.value, r.label])
-);
+import {
+  ACTIVITY_STATUS_FLOW,
+  INCIDENT_STAGE_BY_ACTIVITY_STATUS,
+  incidentReasonLabel as sharedIncidentReasonLabel,
+} from './activity-flow.util';
 
 @Component({
   selector: 'app-orders',
@@ -104,11 +57,8 @@ const INCIDENT_REASON_LABELS: Record<string, string> = Object.fromEntries(
     ButtonComponent,
     PopupComponent,
     NewOrderFormComponent,
-    DirectionsModalComponent,
     ReportIncidentModalComponent,
     AssignDriverModalComponent,
-    QrScanModalComponent,
-    PodCaptureModalComponent,
     OrderDetailsModalComponent,
     PrintOrderModalComponent,
     ShippingLabelModalComponent,
@@ -152,10 +102,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
   // ─── Table menu ────────────────────────────────────────────────────────────
   activeMenuRow: { id: string } | null = null;
 
-  // ─── Directions modal ──────────────────────────────────────────────────────
-  isDirectionsOpen = false;
-  selectedRowForDirections: any = null;
-
   // ─── Report incident modal ─────────────────────────────────────────────────
   isReportOpen = false;
   reportContext: ReportIncidentContext | null = null;
@@ -176,12 +122,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
   isPrintOpen = false;
   selectedOrderForPrint: OrderEntity | null = null;
 
-  // ─── QR scan / proof-of-delivery modals ────────────────────────────────────
-  isQrScanOpen = false;
-  qrScanContext: QrScanContext | null = null;
-  isPodOpen = false;
-  podContext: PodCaptureContext | null = null;
-
   // ─── Search & feedback ─────────────────────────────────────────────────────
   searchQuery = '';
   feedbackMessage = '';
@@ -200,7 +140,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
     private readonly scheduledOrderPromotionService: ScheduledOrderPromotionService,
     private readonly auth: AuthService,
     private readonly toast: ToastService,
-    private readonly pusher: PusherService
+    private readonly pusher: PusherService,
+    private readonly router: Router
   ) { }
 
   get isReadOnlyTenant(): boolean {
@@ -281,7 +222,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
     { key: 'orderStatus', label: 'Order Status', sortable: true },
     { key: 'trackingStatus', label: 'Tracking Status', sortable: true },
     {key : 'activityStatus', label: 'Activity Status', sortable: false },
-    { key: 'directions', label: 'Directions', sortable: false },
     { key: 'incidentReport', label: 'Reported Issue', sortable: false },
     { key: 'actions', label: '', sortable: false }
   ];
@@ -289,9 +229,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   get columns(): TableColumn[] {
     const showPickupAndDriver = this.activeTab === 'Current' || this.activeTab === 'Scheduled';
 
-    let base = this.auth.isDriver()
-      ? this.unifiedColumns
-      : this.unifiedColumns.filter((c) => c.key !== 'directions');
+    let base = this.unifiedColumns;
 
     if (this.activeTab !== 'Disputed') {
       base = base.filter((c) => c.key !== 'incidentReport');
@@ -313,6 +251,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.setActiveTab(this.toTabLabel(order.tab));
     this.selectedOrderForDetails = order;
     this.isDetailsOpen = true;
+  }
+
+  // ─── Row navigation (drivers only — dispatchers still use the Details modal) ──
+
+  onRowClick(row: { id: string }): void {
+    if (!this.isDriver) return;
+    this.router.navigate(['/orders', row.id]);
   }
 
   // ─── Table rows ────────────────────────────────────────────────────────────
@@ -365,12 +310,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const flow = ACTIVITY_STATUS_FLOW[activityStatus];
     row['activityStatusLabel'] = flow?.label ?? activityStatus;
 
-    if (this.auth.isDriver() && this.activeTab === 'Current' && flow?.next) {
-      row['activityStatusAction'] = flow.actionLabel;
-      row['activityStatusNext'] = flow.next;
-      row['activityStatusActionType'] = flow.actionType;
-    }
-
     const incidentStage = INCIDENT_STAGE_BY_ACTIVITY_STATUS[activityStatus];
     if (this.auth.isDriver() && this.activeTab === 'Current' && incidentStage) {
       row['canReportIncident'] = true;
@@ -378,16 +317,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
       row['incidentAlreadyReported'] = this.hasIncidentReport(order);
     }
 
-    if (this.auth.isDriver()) {
-      row['showDirections'] = true;
-      row['pickupAddress'] = order.full.pickup.address;
-      row['deliveryAddress'] = order.full.delivery.address;
-    }
-
     if (this.activeTab === 'Disputed') {
       const report = order.full.details.incidentReport;
       if (report) {
-        const reasonLabel = this.incidentReasonLabel(report.reason);
+        const reasonLabel = sharedIncidentReasonLabel(report.reason);
         const summary = report.description ? `${reasonLabel} — ${report.description}` : reasonLabel;
         row['incidentReportSummary'] = truncateWords(summary, 7);
         row['incidentReportStage'] = report.stage === 'pickup' ? 'Pickup' : 'Delivery';
@@ -628,16 +561,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
     });
   }
 
-  openDirections(row: any): void {
-    this.selectedRowForDirections = row;
-    this.isDirectionsOpen = true;
-  }
-
-  closeDirections(): void {
-    this.isDirectionsOpen = false;
-    this.selectedRowForDirections = null;
-  }
-
   openReportModal(row: any): void {
     const stage = row.incidentStage as 'pickup' | 'delivery' | undefined;
     if (!stage) return;
@@ -655,83 +578,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
   closeReportModal(): void {
     this.isReportOpen = false;
     this.reportContext = null;
-  }
-
-  // Registry of handlers keyed by ActivityFlowEntry.actionType. To add a new checkpoint
-  // behavior (photo capture, signature, OTP, etc.), add a case to ActivityActionType and
-  // a handler here — the click plumbing in the table component doesn't need to change.
-  private activityActionHandlers: Record<ActivityActionType, (event: { id: string; next: string }) => void> = {
-    direct: (event) => this.applyActivityStatus(event.id, event.next),
-    'qr-scan': (event) => this.openQrScanModal(event.id, event.next as OrderActivityStatus),
-    'proof-of-delivery': (event) => this.openPodModal(event.id, event.next as OrderActivityStatus),
-  };
-
-  onActivityStatusAction(event: { id: string; next: string; type?: string }): void {
-    const handler = this.activityActionHandlers[(event.type as ActivityActionType) ?? 'direct']
-      ?? this.activityActionHandlers.direct;
-    handler(event);
-  }
-
-  private applyActivityStatus(id: string, next: string): void {
-    this.ordersService.updateActivityStatus(id, next).subscribe({
-      next: () => {
-        this.setFeedback('Activity status updated.', 'success');
-        this.loadOrders();
-
-        if (next === 'delivery_initiated') {
-          this.ordersService.sendRecipientNotification(id).subscribe({
-            error: () => this.setFeedback('Unable to notify the recipient by email.', 'error')
-          });
-        }
-      },
-      error: () => this.setFeedback('Unable to update activity status.', 'error')
-    });
-  }
-
-  // ─── QR scan modal ─────────────────────────────────────────────────────────
-
-  private openQrScanModal(id: string, next: OrderActivityStatus): void {
-    const order = this.orders.find((o) => o.id === id);
-
-    // A parcel already verified by the driver -- by scan or by photo -- needs no
-    // second proof; the API rejects one anyway.
-    if (order?.full.details.pickupVerification) {
-      this.applyActivityStatus(id, next);
-      return;
-    }
-
-    this.qrScanContext = { id, next, orderNo: order?.view.current.orderNo ?? null };
-    this.isQrScanOpen = true;
-  }
-
-  closeQrScanModal(): void {
-    this.isQrScanOpen = false;
-    this.qrScanContext = null;
-  }
-
-  onQrMatched(event: { id: string; next: OrderActivityStatus }): void {
-    this.closeQrScanModal();
-    this.applyActivityStatus(event.id, event.next);
-  }
-
-  // ─── Proof-of-delivery modal ────────────────────────────────────────────────
-
-  private openPodModal(id: string, next: OrderActivityStatus): void {
-    const order = this.orders.find((o) => o.id === id);
-    const signatureRequired = !!order?.full.details.proofOfDelivery?.signature;
-
-    this.podContext = { id, next, orderNo: order?.view.current.orderNo ?? null, signatureRequired };
-    this.isPodOpen = true;
-  }
-
-  closePodModal(): void {
-    this.isPodOpen = false;
-    this.podContext = null;
-  }
-
-  onPodDelivered(event: { id: string; next: OrderActivityStatus }): void {
-    this.closePodModal();
-    this.applyActivityStatus(event.id, event.next);
   }
 
   getReadyForPickupStatus(orderId: string): boolean {
@@ -934,10 +780,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   private hasIncidentReport(order: OrderEntity): boolean {
     return order.full.details.incidentReport !== null;
-  }
-
-  incidentReasonLabel(reason: string): string {
-    return INCIDENT_REASON_LABELS[reason] ?? reason;
   }
 
   private getTabKey(tab: string): OrderTab {

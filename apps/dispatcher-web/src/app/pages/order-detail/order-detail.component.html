@@ -1,0 +1,183 @@
+<app-page
+    containerClass="w-full px-4 py-6 sm:px-6 lg:px-8 bg-white dark:bg-[#1E201E] text-gray-900 dark:text-gray-100 min-h-[calc(100vh-4rem)]"
+    contentClass="w-full max-w-6xl mx-auto space-y-6">
+
+    <!-- HEADER -->
+    <div class="flex items-center gap-3">
+        <button type="button" (click)="goBack()" aria-label="Back to orders"
+            class="flex h-9 w-9 items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-[#2a2d2a] transition">
+            <i class="ph ph-arrow-left text-xl text-gray-900 dark:text-gray-200"></i>
+        </button>
+        <h1 class="text-xl font-bold">{{ order?.full?.orderNumber ?? (loading ? 'Loading…' : 'Order') }}</h1>
+    </div>
+
+    <!-- NOT FOUND -->
+    <div *ngIf="!loading && !order" class="flex flex-col items-center gap-2 py-24 text-center text-gray-500 dark:text-gray-400">
+        <p class="text-base font-semibold text-gray-900 dark:text-gray-100">Order not available</p>
+        <p class="text-sm">It may have been reassigned or completed.</p>
+        <app-button variant="ghost-outline" label="Back to orders" (onClick)="goBack()" [extraClasses]="'mt-2'"></app-button>
+    </div>
+
+    <!-- CONTENT -->
+    <div *ngIf="order as order" class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+
+        <!-- MAIN COLUMN -->
+        <div class="lg:col-span-2 space-y-6">
+
+            <!-- NAVIGATE -->
+            <div class="rounded-xl border border-gray-200 dark:border-[#3a3d3a] p-4 space-y-2">
+                <h3 class="text-[11px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-1">Navigate</h3>
+
+                <button type="button" (click)="navigate('pickup')"
+                    class="w-full flex items-start gap-3 rounded-lg px-4 py-3 text-left transition"
+                    [class]="activityStatus === 'pickup_initiated' || activityStatus === 'driver_not_assigned'
+                        ? 'bg-[#3ddc97] text-black'
+                        : 'border border-gray-200 dark:border-[#3a3d3a] hover:bg-gray-50 dark:hover:bg-[#232623]'">
+                    <i class="ph ph-map-pin-line text-lg mt-0.5"></i>
+                    <span>
+                        <span class="block text-sm font-bold">Navigate to Pickup</span>
+                        <span class="block text-xs opacity-80">{{ order.full.pickup.address }}</span>
+                    </span>
+                </button>
+
+                <button type="button" (click)="navigate('delivery')"
+                    class="w-full flex items-start gap-3 rounded-lg px-4 py-3 text-left transition"
+                    [class]="activityStatus !== 'pickup_initiated' && activityStatus !== 'driver_not_assigned'
+                        ? 'bg-[#3ddc97] text-black'
+                        : 'border border-gray-200 dark:border-[#3a3d3a] hover:bg-gray-50 dark:hover:bg-[#232623]'">
+                    <i class="ph ph-map-pin-line text-lg mt-0.5"></i>
+                    <span>
+                        <span class="block text-sm font-bold">Navigate to Drop</span>
+                        <span class="block text-xs opacity-80">{{ order.full.delivery.address }}</span>
+                    </span>
+                </button>
+            </div>
+
+            <!-- SCHEDULE (only when at least one leg has a set time) -->
+            <div *ngIf="order.full.pickup.pickupTimeSpecified || order.full.delivery.deliveryTimeSpecified"
+                class="rounded-xl border border-gray-200 dark:border-[#3a3d3a] p-4">
+                <h3 class="text-[11px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-3">Scheduled At</h3>
+                <app-schedule-timeline
+                    [pickupAddress]="order.full.pickup.address"
+                    [pickupDate]="order.full.pickup.pickupDate"
+                    [pickupTime]="order.full.pickup.pickupTime"
+                    [pickupTimeSpecified]="order.full.pickup.pickupTimeSpecified"
+                    [deliveryAddress]="order.full.delivery.address"
+                    [deliveryDate]="order.full.delivery.deliveryDate"
+                    [deliveryTime]="order.full.delivery.deliveryTime"
+                    [deliveryTimeSpecified]="order.full.delivery.deliveryTimeSpecified">
+                </app-schedule-timeline>
+            </div>
+
+            <!-- SENDER / RECIPIENT -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="rounded-xl border border-gray-200 dark:border-[#3a3d3a] p-4">
+                    <h3 class="text-[11px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-1">Sender</h3>
+                    <p class="text-base font-semibold">{{ order.full.pickup.name }}</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-300 mt-0.5">{{ order.full.pickup.address }}</p>
+                    <a [href]="callHref(order.full.pickup.phone)" class="mt-1.5 inline-block text-sm text-[#2fbf82] hover:underline">
+                        {{ order.full.pickup.phone.countryCode }} {{ order.full.pickup.phone.number }}
+                    </a>
+                </div>
+                <div class="rounded-xl border border-gray-200 dark:border-[#3a3d3a] p-4">
+                    <h3 class="text-[11px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-1">Recipient</h3>
+                    <p class="text-base font-semibold">{{ order.full.delivery.name }}</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-300 mt-0.5">{{ order.full.delivery.address }}</p>
+                    <a [href]="callHref(order.full.delivery.phone)" class="mt-1.5 inline-block text-sm text-[#2fbf82] hover:underline">
+                        {{ order.full.delivery.phone.countryCode }} {{ order.full.delivery.phone.number }}
+                    </a>
+                </div>
+            </div>
+
+            <!-- ORDER BREAKDOWN -->
+            <div class="rounded-xl border border-gray-200 dark:border-[#3a3d3a] p-4">
+                <h3 class="text-[11px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-2">Order breakdown</h3>
+                <p *ngIf="order.full.details.items.length === 0" class="text-sm text-gray-500 dark:text-gray-400">No items listed.</p>
+                <div *ngFor="let item of order.full.details.items" class="flex justify-between text-sm py-1">
+                    <span>{{ item.itemQty }}x {{ item.itemName }}</span>
+                </div>
+            </div>
+
+            <!-- INSTRUCTIONS -->
+            <div *ngIf="order.full.details.instructions" class="rounded-xl border border-gray-200 dark:border-[#3a3d3a] p-4">
+                <h3 class="text-[11px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-2">Instructions</h3>
+                <p class="text-sm leading-5 text-gray-800 dark:text-gray-200">{{ order.full.details.instructions }}</p>
+            </div>
+
+        </div>
+
+        <!-- SIDEBAR -->
+        <div class="space-y-6 lg:sticky lg:top-6">
+
+            <!-- EARNINGS -->
+            <div class="rounded-xl border border-gray-200 dark:border-[#3a3d3a] p-4">
+                <h3 class="text-[11px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-1">Your earnings</h3>
+                <p class="text-2xl font-bold text-[#2fbf82]">{{ driverEarningsLabel(order.full.details.driverPayout) }}</p>
+            </div>
+
+            <!-- INCIDENT BANNER -->
+            <div *ngIf="order.full.details.incidentReport as report"
+                class="rounded-xl border-2 border-red-500 p-4 bg-red-50 dark:bg-red-900/10">
+                <h3 class="text-sm font-semibold text-red-700 dark:text-red-400 flex items-center gap-1.5 mb-1">
+                    <i class="ph ph-warning-circle text-base"></i>
+                    Issue reported · {{ incidentReasonLabel(report.reason) }}
+                </h3>
+                <p *ngIf="report.description" class="text-sm text-gray-700 dark:text-gray-300">{{ report.description }}</p>
+            </div>
+
+            <!-- POD NOTE -->
+            <p *ngIf="podRequired" class="text-xs text-gray-500 dark:text-gray-400 px-1">
+                This delivery requires proof of delivery
+                <ng-container *ngIf="order.full.details.proofOfDelivery.signature && order.full.details.proofOfDelivery.picture">
+                    (signature and photo).
+                </ng-container>
+                <ng-container *ngIf="order.full.details.proofOfDelivery.signature && !order.full.details.proofOfDelivery.picture">
+                    (signature).
+                </ng-container>
+                <ng-container *ngIf="!order.full.details.proofOfDelivery.signature && order.full.details.proofOfDelivery.picture">
+                    (photo).
+                </ng-container>
+            </p>
+
+            <!-- PROGRESS -->
+            <div class="rounded-xl border border-gray-200 dark:border-[#3a3d3a] p-4 mb-3">
+                <h3 class="text-[11px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-3">Progress</h3>
+                <app-order-progress [status]="activityStatus ?? 'pickup_initiated'"></app-order-progress>
+            </div>
+
+            <!-- PRIMARY ACTION -->
+            <app-button *ngIf="step?.next" variant="primary" [label]="step?.actionLabel ?? ''" [loading]="advancing"
+                (onClick)="onPrimaryAction()"
+                [extraClasses]="'w-full py-3 rounded-lg text-sm font-bold bg-[#3ddc97] text-black hover:bg-[#2fbf82]'">
+            </app-button>
+
+            <!-- REPORT ISSUE -->
+            <button *ngIf="incidentStage" type="button" (click)="openReportModal()"
+                [disabled]="hasIncidentReport"
+                class="w-full flex items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-bold transition disabled:opacity-50"
+                [class]="hasIncidentReport
+                    ? 'border-gray-300 text-gray-400 dark:border-[#3a3d3a]'
+                    : 'border-red-300 text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/10'">
+                <i class="ph ph-warning text-base"></i>
+                {{ hasIncidentReport ? 'Issue already reported' : 'Report an issue' }}
+            </button>
+
+        </div>
+    </div>
+
+    <!-- QR SCAN MODAL -->
+    <app-qr-scan-modal [open]="isQrScanOpen" [context]="qrScanContext"
+        (close)="closeQrScanModal()" (matched)="onQrMatched($event)">
+    </app-qr-scan-modal>
+
+    <!-- PROOF OF DELIVERY MODAL -->
+    <app-pod-capture-modal [open]="isPodOpen" [context]="podContext"
+        (close)="closePodModal()" (delivered)="onPodDelivered($event)">
+    </app-pod-capture-modal>
+
+    <!-- REPORT ISSUE MODAL -->
+    <app-report-incident-modal [open]="isReportOpen" [context]="reportContext"
+        (close)="closeReportModal()" (submitted)="onReportSubmitted()">
+    </app-report-incident-modal>
+
+</app-page>

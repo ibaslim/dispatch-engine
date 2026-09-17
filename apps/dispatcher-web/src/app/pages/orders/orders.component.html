@@ -43,14 +43,13 @@
 
     <!-- TABLE -->
     <app-table *ngIf="activeTab !== 'New Orders'" [columns]="columns" [rows]="rows" [emptyTitle]="emptyTitle" [emptySubtitle]="emptySubtitle"
-        [activeMenuRow]="activeMenuRow" [menuItems]="getContextMenuItems()"
+        [activeMenuRow]="activeMenuRow" [menuItems]="getContextMenuItems()" [rowClickable]="isDriver"
         (actionClick)="toggleMenu($event)"
         (assignClick)="openAssignDriver($event)"
         (menuSelect)="handleMenuAction($event.item, $event.row)"
         (readyForPickupChange)="updateReadyForPickupFromRow($event.id, $event.value)"
-        (activityStatusAction)="onActivityStatusAction($event)"
-        (directionsClick)="openDirections($event)"
-        (reportIncidentClick)="openReportModal($event)">
+        (reportIncidentClick)="openReportModal($event)"
+        (rowClick)="onRowClick($event)">
     </app-table>
 
 
@@ -96,23 +95,9 @@
         (close)="closeAssignDriver()" (assigned)="onDriverAssigned()" (unassigned)="onDriverUnassigned()">
     </app-assign-driver-modal>
 
-    <!-- DIRECTIONS MODAL -->
-    <app-directions-modal [open]="isDirectionsOpen" [row]="selectedRowForDirections" (close)="closeDirections()">
-    </app-directions-modal>
-
-    <!-- QR SCAN MODAL -->
-    <app-qr-scan-modal [open]="isQrScanOpen" [context]="qrScanContext"
-        (close)="closeQrScanModal()" (matched)="onQrMatched($event)">
-    </app-qr-scan-modal>
-
     <!-- REPORT ISSUE MODAL -->
     <app-report-incident-modal [open]="isReportOpen" [context]="reportContext" (close)="closeReportModal()">
     </app-report-incident-modal>
-
-    <!-- PROOF OF DELIVERY MODAL -->
-    <app-pod-capture-modal [open]="isPodOpen" [context]="podContext"
-        (close)="closePodModal()" (delivered)="onPodDelivered($event)">
-    </app-pod-capture-modal>
 
     <!-- ORDER DETAILS MODAL -->
     <app-order-details-modal [open]="isDetailsOpen" [order]="selectedOrderForDetails" [isReadOnlyTenant]="isReadOnlyTenant" [isDriver]="isDriver"

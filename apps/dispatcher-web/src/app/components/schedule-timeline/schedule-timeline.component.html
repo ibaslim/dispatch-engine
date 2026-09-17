@@ -1,0 +1,46 @@
+<div>
+    <!-- PICKUP -->
+    <div class="flex gap-3">
+        <div class="flex flex-col items-center">
+            <span class="mt-1 h-2.5 w-2.5 rounded-full bg-[#3ddc97]"></span>
+            <span class="mt-1 w-px flex-1 bg-gray-200 dark:bg-[#3a3d3a]"></span>
+        </div>
+        <div class="flex-1 pb-4">
+            <div class="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Pickup</p>
+                    <p class="text-sm text-gray-800 dark:text-gray-200">{{ pickupAddress }}</p>
+                </div>
+                <div *ngIf="pickup.time" class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ pickup.time }}</span>
+                    <span *ngIf="pickup.countdown" class="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                        [style.color]="pickup.countdown.color" [style.backgroundColor]="pickup.countdown.background">
+                        {{ pickup.countdown.text }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DROP -->
+    <div class="flex gap-3">
+        <div class="flex flex-col items-center">
+            <span class="h-2.5 w-2.5 rounded-[3px] bg-gray-700 dark:bg-gray-300"></span>
+        </div>
+        <div class="flex-1">
+            <div class="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Drop</p>
+                    <p class="text-sm text-gray-800 dark:text-gray-200">{{ deliveryAddress }}</p>
+                </div>
+                <div *ngIf="delivery.time" class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ delivery.time }}</span>
+                    <span *ngIf="delivery.countdown" class="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                        [style.color]="delivery.countdown.color" [style.backgroundColor]="delivery.countdown.background">
+                        {{ delivery.countdown.text }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

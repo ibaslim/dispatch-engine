@@ -5,31 +5,14 @@ import { PopupComponent } from '@components/popup/popup.component';
 import { ButtonComponent } from '@components/button/button.component';
 import { OrdersService } from '@services/orders/orders.service';
 import { ToastService } from '@core/toast/toast.service';
+import { INCIDENT_REASONS_BY_STAGE } from '@pages/orders/activity-flow.util';
+import { INCIDENT_REASONS_REQUIRING_DESCRIPTION, type IncidentReason } from '@dispatch/shared/contracts';
 
 export interface ReportIncidentContext {
   id: string;
   stage: 'pickup' | 'delivery';
   orderNo: string | null;
 }
-
-// Reasons that always require a description, regardless of stage.
-const INCIDENT_REASONS_REQUIRING_DESCRIPTION = new Set(['other', 'parcel_issue']);
-
-const INCIDENT_REASONS_BY_STAGE: Record<'pickup' | 'delivery', { value: string; label: string }[]> = {
-  pickup: [
-    { value: 'no_answer', label: 'No answer' },
-    { value: 'wrong_address', label: 'Wrong address' },
-    { value: 'business_closed', label: 'Business closed' },
-    { value: 'parcel_issue', label: 'Parcel issue' },
-    { value: 'other', label: 'Other' },
-  ],
-  delivery: [
-    { value: 'no_answer', label: 'No answer' },
-    { value: 'wrong_address', label: 'Wrong address' },
-    { value: 'refused', label: 'Refused' },
-    { value: 'other', label: 'Other' },
-  ],
-};
 
 @Component({
   selector: 'app-report-incident-modal',
@@ -66,7 +49,7 @@ export class ReportIncidentModalComponent implements OnChanges {
   }
 
   get reportDescriptionRequired(): boolean {
-    return INCIDENT_REASONS_REQUIRING_DESCRIPTION.has(this.reportReason);
+    return INCIDENT_REASONS_REQUIRING_DESCRIPTION.includes(this.reportReason as IncidentReason);
   }
 
   onClose(): void {
