@@ -16,6 +16,35 @@ export interface ProofOfDeliveryValue {
     picture: boolean;
 }
 
+export type ManualDiscountKind = 'percentage' | 'fixed_amount';
+
+export type ManualDiscountReason =
+    | 'late_delivery'
+    | 'damaged_item'
+    | 'wrong_address_our_fault'
+    | 'sales_goodwill'
+    | 'price_correction'
+    | 'other';
+
+/** A discount the dispatcher enters. Value stays a string while being typed. */
+export interface ManualDiscountValue {
+    kind: ManualDiscountKind;
+    value: string;
+    reason: ManualDiscountReason;
+    note: string;
+}
+
+/** A priced discount line the server applied to the order. */
+export interface AppliedDiscountLine {
+    source: string;
+    kind: string;
+    label: string;
+    value: number;
+    amount: number;
+    reason: string | null;
+    note: string | null;
+}
+
 /** What the driver actually captured at delivery time (read-only, set by backend). */
 export interface ProofOfDeliverySubmission {
     recipientName: string;
@@ -87,7 +116,10 @@ export interface NewOrderFormValue {
         pstRate: number;
         deliveryFees: number;
         deliveryTips: number;
+        /** Priced from manualDiscount and capped at the delivery fee. */
         discount: number;
+        manualDiscount: ManualDiscountValue | null;
+        appliedDiscounts: AppliedDiscountLine[];
 
         subtotal: number;
         gstAmount: number;

@@ -1,12 +1,22 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { NewOrderFormValue } from '../../models/new-order-form/new-order-form.model';
+import {
+  ManualDiscountKind,
+  ManualDiscountReason,
+  NewOrderFormValue,
+} from '../../models/new-order-form/new-order-form.model';
 import { BaseInputComponent } from '../base-input/base-input.component';
 import { PaymentMethodComponent } from '../payment-method/payment-method.component';
 import { TextareaComponent } from '../textarea/textarea.component';
 import { ButtonComponent } from '../button/button.component';
+import { DropdownSelectorComponent } from '../dropdown-selector/dropdown-selector.component';
 import { ErrorMessageComponent } from '../error-message/error-message.component';
-import { taxLines } from '@pages/orders/orders-formatting.util';
+import {
+  MANUAL_DISCOUNT_REASONS,
+  manualDiscountAmount,
+  manualDiscountError,
+  taxLines,
+} from '@pages/orders/orders-formatting.util';
 
 @Component({
   selector: 'app-other-order-details',
@@ -17,6 +27,7 @@ import { taxLines } from '@pages/orders/orders-formatting.util';
     TextareaComponent,
     PaymentMethodComponent,
     ButtonComponent,
+    DropdownSelectorComponent,
     ErrorMessageComponent
   ],
   templateUrl: './other-order-details.component.html'
@@ -92,6 +103,58 @@ export class OtherOrderDetailsComponent {
     this.patch({ items });
   }
 
+  // ─── Manual discount ──────────────────────────────────────────────────────
+  // The dispatcher enters terms, not an amount: the server prices it and caps
+  // it at the delivery fee, so goods value, tax and tip are never touched.
+
+  readonly discountReasons = MANUAL_DISCOUNT_REASONS;
+
+  addManualDiscount(): void {
+    this.patch({
+      manualDiscount: { kind: 'percentage', value: '', reason: 'sales_goodwill', note: '' }
+    });
+  }
+
+  removeManualDiscount(): void {
+    this.patch({ manualDiscount: null });
+  }
+
+  patchManualDiscount(change: Partial<NewOrderFormValue['details']['manualDiscount']>): void {
+    if (!this.value.manualDiscount) return;
+    this.patch({ manualDiscount: { ...this.value.manualDiscount, ...change } });
+  }
+
+  setDiscountKind(kind: ManualDiscountKind): void {
+    this.patchManualDiscount({ kind });
+  }
+
+  setDiscountValue(value: unknown): void {
+    const text = String(value ?? '').trim();
+    if (text && !/^\d+(\.\d*)?$/.test(text)) return;
+    this.patchManualDiscount({ value: text });
+  }
+
+  setDiscountReason(reason: unknown): void {
+    this.patchManualDiscount({ reason: reason as ManualDiscountReason });
+  }
+
+  setDiscountNote(note: unknown): void {
+    this.patchManualDiscount({ note: String(note ?? '') });
+  }
+
+  discountNoteRequired(): boolean {
+    return this.value.manualDiscount?.reason === 'other';
+  }
+
+  discountError(): string | null {
+    return manualDiscountError(this.value.manualDiscount);
+  }
+
+  /** True once the entered terms price to nothing, e.g. before a fee is quoted. */
+  discountNotYetPriced(): boolean {
+    return !!this.value.manualDiscount && !this.discountError() && this.value.discount <= 0;
+  }
+
   onProofChange(type: 'signature' | 'picture', checked: boolean): void {
     this.patch({
       proofOfDelivery: {
@@ -133,7 +196,8 @@ export class OtherOrderDetailsComponent {
     const pstRate = this.toNumber(details.pstRate);
     const deliveryFees = this.toNumber(details.deliveryFees);
     const deliveryTips = this.toNumber(details.deliveryTips);
-    const discount = this.toNumber(details.discount);
+    // Previewed the way the server prices it; the saved order is authoritative.
+    const discount = manualDiscountAmount(details.manualDiscount, deliveryFees);
 
     // Each tax is rounded on its own so the receipt's GST and PST lines add up
     // to the tax total exactly, rather than to a separately rounded figure.

@@ -1,4 +1,6 @@
 import {
+  AppliedDiscountLine,
+  ManualDiscountValue,
   NewOrderFormValue,
   PaymentMethodType,
   PickupVerification,
@@ -249,6 +251,8 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
         deliveryFees: order.delivery_fees,
         deliveryTips: order.delivery_tips,
         discount: order.discount,
+        manualDiscount: toManualDiscountValue(order.applied_discounts),
+        appliedDiscounts: (order.applied_discounts || []) as AppliedDiscountLine[],
         total: order.total,
         driverPayout: order.driver_payout ?? 0,
         driverFeePayout: order.driver_fee_payout ?? 0,
@@ -270,6 +274,31 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
       incomplete: { ...view },
       history: { ...view }
     }
+  };
+}
+
+/** The manual line of a saved order, back as editable form terms. */
+export function toManualDiscountValue(
+  applied: OrderResponse['applied_discounts'] | undefined,
+): ManualDiscountValue | null {
+  const manual = (applied || []).find((line) => line.source === 'manual');
+  if (!manual) return null;
+  return {
+    kind: manual.kind === 'percentage' ? 'percentage' : 'fixed_amount',
+    value: String(manual.value ?? manual.amount ?? ''),
+    reason: (manual.reason as ManualDiscountValue['reason']) || 'sales_goodwill',
+    note: manual.note || '',
+  };
+}
+
+function toManualDiscountPayload(manual: ManualDiscountValue | null): Record<string, unknown> | null {
+  const value = toNumber(manual?.value);
+  if (!manual || value <= 0) return null;
+  return {
+    kind: manual.kind,
+    value,
+    reason: manual.reason,
+    note: manual.note.trim() || null,
   };
 }
 
@@ -317,7 +346,8 @@ export function toOrderPayload(value: NewOrderFormValue): Record<string, unknown
     pst_amount: value.details.pstAmount,
     delivery_fees: value.details.deliveryFees,
     delivery_tips: value.details.deliveryTips,
-    discount: value.details.discount,
+    // The server prices every discount; it only ever receives the terms.
+    manual_discount: toManualDiscountPayload(value.details.manualDiscount),
     total: value.details.total,
     instructions: value.details.instructions.trim(),
     payment_method: value.details.payment.method,
@@ -344,6 +374,7 @@ export function createDefaultNewOrder(): NewOrderFormValue {
     details: {
       items: [{ itemName: '', itemPrice: '', itemQty: '' }],
       gstRate: 0, pstRate: 0, deliveryFees: 0, deliveryTips: 0, discount: 0,
+      manualDiscount: null, appliedDiscounts: [],
       subtotal: 0, gstAmount: 0, pstAmount: 0, total: 0,
       instructions: '', payment: { method: 'cash_on_delivery' },
       proofOfDelivery: { signature: false, picture: false },
@@ -398,6 +429,8 @@ export function buildDemoDraftValue(): NewOrderFormValue {
       deliveryFees: 4,
       deliveryTips: 1.5,
       discount: 0,
+      manualDiscount: null,
+      appliedDiscounts: [],
       subtotal: 28,
       gstAmount: 1.4,
       pstAmount: 2.24,

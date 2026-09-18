@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from pydantic import AfterValidator, BaseModel, Field, model_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
 from typing import Annotated, List, Optional, Dict, Any
 from app.models.order import OrderStatus, ActivityStatus
 from uuid import UUID
@@ -62,6 +62,49 @@ class OrderItem(BaseModel):
     itemName: str
     itemPrice: float
     itemQty: int
+
+
+class ManualDiscountKind(str, enum.Enum):
+    percentage = "percentage"
+    fixed_amount = "fixed_amount"
+
+
+class ManualDiscountReason(str, enum.Enum):
+    late_delivery = "late_delivery"
+    damaged_item = "damaged_item"
+    wrong_address_our_fault = "wrong_address_our_fault"
+    sales_goodwill = "sales_goodwill"
+    price_correction = "price_correction"
+    other = "other"
+
+
+class ManualDiscountInput(BaseModel):
+    """A discount a dispatcher applies by hand. The server prices and caps it."""
+    kind: ManualDiscountKind
+    value: float = Field(gt=0)
+    reason: ManualDiscountReason
+    note: Optional[str] = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def _validate(self):
+        if self.kind == ManualDiscountKind.percentage and self.value > 100:
+            raise ValueError("A percentage discount cannot be more than 100%.")
+        self.note = (self.note or "").strip() or None
+        if self.reason == ManualDiscountReason.other and not self.note:
+            raise ValueError("Add a note explaining this discount.")
+        return self
+
+
+class AppliedDiscountResponse(BaseModel):
+    """One priced discount line as stored on the order."""
+    source: str
+    kind: str
+    label: str
+    value: float = 0
+    amount: float = 0
+    reason: Optional[str] = None
+    note: Optional[str] = None
+    applied_by: Optional[str] = None
 
 
 class PublicOrderTracking(BaseModel):
@@ -141,7 +184,9 @@ class OrderCreate(BaseModel):
     pst_amount: float = 0
     delivery_fees: float
     delivery_tips: float
-    discount: float
+    # `discount` is not accepted from the client: the server prices every
+    # discount and returns the lines it applied.
+    manual_discount: Optional[ManualDiscountInput] = None
     total: float
 
     instructions: Optional[str] = None
@@ -206,7 +251,9 @@ class OrderUpdate(BaseModel):
     pst_amount: Optional[float] = None
     delivery_fees: Optional[float] = None
     delivery_tips: Optional[float] = None
-    discount: Optional[float] = None
+    # Sending manual_discount replaces the order's manual discount; sending
+    # null clears it. Leaving it out keeps whatever the order already has.
+    manual_discount: Optional[ManualDiscountInput] = None
     total: Optional[float] = None
 
     instructions: Optional[str] = None
@@ -241,6 +288,18 @@ class OrderResponse(OrderCreate):
     status: OrderStatus
     activity_status: ActivityStatus
     ready_for_pickup: bool
+    # Server-priced: the total plus the line per discount it came from.
+    discount: float = 0
+    applied_discounts: List[AppliedDiscountResponse] = Field(default_factory=list)
+    coupon_code: Optional[str] = None
+    # Input-only; the applied lines above are what a client reads back.
+    manual_discount: Optional[ManualDiscountInput] = Field(default=None, exclude=True)
+
+    @field_validator("applied_discounts", mode="before")
+    @classmethod
+    def _no_lines_is_an_empty_list(cls, value):
+        """An order created before the breakdown existed carries no lines."""
+        return value or []
     published: bool = False
     published_at: Optional[datetime] = None
     order_placed_time: Optional[str] = None

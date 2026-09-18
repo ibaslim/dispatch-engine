@@ -65,6 +65,36 @@ export interface AppliedCharge {
   amount: number;
 }
 
+export type ManualDiscountKind = 'percentage' | 'fixed_amount';
+
+export type ManualDiscountReason =
+  | 'late_delivery'
+  | 'damaged_item'
+  | 'wrong_address_our_fault'
+  | 'sales_goodwill'
+  | 'price_correction'
+  | 'other';
+
+/** A discount a dispatcher applies by hand. The server prices and caps it. */
+export interface ManualDiscount {
+  kind: ManualDiscountKind;
+  value: number;
+  reason: ManualDiscountReason;
+  note?: string | null;
+}
+
+/** One priced discount line. Discounts only ever come off the delivery fee. */
+export interface AppliedDiscount {
+  source: 'manual' | 'automatic' | 'code';
+  kind: string;
+  label: string;
+  value: number;
+  amount: number;
+  reason: string | null;
+  note: string | null;
+  applied_by: string | null;
+}
+
 export interface DriverInfo {
   id: string;
   name: string;
@@ -154,7 +184,10 @@ export interface OrderResponse {
   pst_amount: number;
   delivery_fees: number;
   delivery_tips: number;
+  /** Server-priced: the sum of `applied_discounts`, never sent by a client. */
   discount: number;
+  applied_discounts: AppliedDiscount[];
+  coupon_code: string | null;
   total: number;
 
   instructions: string | null;

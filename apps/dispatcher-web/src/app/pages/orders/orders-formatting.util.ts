@@ -1,8 +1,45 @@
 import { OrderTab } from '@models/orders/order-entity.model';
-import { PaymentMethodType } from '@models/new-order-form/new-order-form.model';
+import {
+  ManualDiscountReason,
+  ManualDiscountValue,
+  PaymentMethodType,
+} from '@models/new-order-form/new-order-form.model';
 import { toNumber } from './orders-mapping.util';
 
 export { toNumber };
+
+export const MANUAL_DISCOUNT_REASONS: { value: ManualDiscountReason; label: string }[] = [
+  { value: 'late_delivery', label: 'Late delivery' },
+  { value: 'damaged_item', label: 'Damaged item' },
+  { value: 'wrong_address_our_fault', label: 'Wrong address (our fault)' },
+  { value: 'sales_goodwill', label: 'Sales goodwill' },
+  { value: 'price_correction', label: 'Price correction' },
+  { value: 'other', label: 'Other' },
+];
+
+/** What a manual discount takes off the fee. Mirrors the server, which decides. */
+export function manualDiscountAmount(
+  manual: ManualDiscountValue | null | undefined,
+  deliveryFees: number,
+): number {
+  if (!manual) return 0;
+  const fee = Math.max(0, Math.round(toNumber(deliveryFees) * 100) / 100);
+  const value = toNumber(manual.value);
+  if (value <= 0 || fee <= 0) return 0;
+  const raw = manual.kind === 'percentage' ? (fee * value) / 100 : value;
+  return Math.min(Math.round(raw * 100) / 100, fee);
+}
+
+/** The reason a manual discount can't be saved yet, or null when it is fine. */
+export function manualDiscountError(manual: ManualDiscountValue | null | undefined): string | null {
+  if (!manual) return null;
+  const value = toNumber(manual.value);
+  if (!String(manual.value ?? '').trim() || value <= 0) return 'Enter a discount greater than 0.';
+  if (manual.kind === 'percentage' && value > 100) return 'A percentage discount cannot be more than 100%.';
+  if (!manual.reason) return 'Choose a reason for this discount.';
+  if (manual.reason === 'other' && !manual.note.trim()) return 'Add a note explaining this discount.';
+  return null;
+}
 
 // ─── Pure display/formatting helpers extracted from OrdersComponent ──────────
 // No Angular dependencies; safe to call directly from templates or services.

@@ -14,6 +14,7 @@ import {
   Surcharge,
 } from '../../services/delivery-configuration/delivery-configuration.service';
 import { OrdersService } from '../../services/orders/orders.service';
+import { manualDiscountAmount } from '@pages/orders/orders-formatting.util';
 import { ProofOfDeliveryComponent } from '../proof-of-delivery/proof-of-delivery.component';
 import { PickupFromComponent } from '../pickup-from/pickup-from.component';
 import { DeliverToComponent } from '../deliver-to/deliver-to.component';
@@ -139,6 +140,8 @@ export class NewOrderFormComponent implements OnInit {
         deliveryFees: 0,
         deliveryTips: 0,
         discount: 0,
+        manualDiscount: null,
+        appliedDiscounts: [],
         subtotal: 0,
         gstAmount: 0,
         pstAmount: 0,
@@ -280,9 +283,11 @@ export class NewOrderFormComponent implements OnInit {
     changes: Partial<NewOrderFormValue['details']>
   ): NewOrderFormValue['details'] {
     const updated = { ...details, ...changes };
+    // A percentage discount follows the fee, so it is re-priced with the quote.
+    const discount = manualDiscountAmount(updated.manualDiscount, updated.deliveryFees);
     const total = updated.subtotal + updated.gstAmount + updated.pstAmount + updated.deliveryFees
-      + Number(updated.deliveryTips || 0) - Number(updated.discount || 0);
-    return { ...updated, total: Math.round(total * 100) / 100 };
+      + Number(updated.deliveryTips || 0) - discount;
+    return { ...updated, discount, total: Math.round(total * 100) / 100 };
   }
 
   private quoteErrorText(error: unknown): string {

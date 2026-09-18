@@ -92,7 +92,10 @@ class Order(Base):
     pst_amount = Column(Float, default=0)
     delivery_fees = Column(Float, default=0)
     delivery_tips = Column(Float, default=0)
+    # Server-priced discount lines; `discount` is their sum.
     discount = Column(Float, default=0)
+    applied_discounts = Column(JSON, nullable=False, default=list)
+    coupon_code = Column(String(40), nullable=True)
     total = Column(Float, default=0)
 
     # Immutable payout agreed when a driver is assigned/accepts the delivery.

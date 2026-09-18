@@ -39,6 +39,7 @@ from app.services.driver_payout_service import (
     clear_driver_payout_snapshot,
     get_driver_payment_group,
 )
+from app.services.discounts import apply_manual, as_dicts, reprice, total_of
 from app.services.pusher_service import pusher_service
 from app.schemas.order import (
     OrderCreate,
@@ -52,6 +53,7 @@ from app.schemas.order import (
     IncidentReportCreate,
     IncidentReason,
     IncidentStage,
+    ManualDiscountInput,
     PickupQrConfirm,
     ReadyUpdate,
     RoutePlanResponse,
@@ -198,6 +200,41 @@ def _apply_quote(data: dict, quote: DeliveryQuote) -> None:
     data["total"] = float(total.quantize(Decimal("0.01")))
 
 
+def _apply_discounts(
+    data: dict,
+    gross_fee: Decimal,
+    *,
+    manual: ManualDiscountInput | None,
+    applied_by: UUID | None,
+) -> None:
+    """Price the discount lines and their total. The client never sets `discount`."""
+    data.pop("manual_discount", None)
+    lines = as_dicts(apply_manual(manual, gross_fee, applied_by))
+    data["applied_discounts"] = lines
+    data["discount"] = float(total_of(lines))
+
+
+def _reprice_discounts(data: dict, order: Order, gross_fee: Decimal) -> None:
+    """Follow the order's own discount lines onto a new delivery fee."""
+    lines = reprice(order.applied_discounts, gross_fee)
+    data["applied_discounts"] = lines
+    data["discount"] = float(total_of(lines))
+
+
+# Everything the order total is built from, discount last because it comes off.
+TOTAL_COMPONENTS = ("subtotal", "gst_amount", "pst_amount", "delivery_fees", "delivery_tips")
+
+
+def _order_total(order: Order, data: dict) -> float:
+    """Rebuild the total from the order's stored money fields plus this edit."""
+
+    def field(name: str) -> Decimal:
+        return Decimal(str(data.get(name, getattr(order, name)) or 0))
+
+    total = sum((field(name) for name in TOTAL_COMPONENTS), Decimal("0")) - field("discount")
+    return float(total.quantize(Decimal("0.01")))
+
+
 def _apply_tax(data: dict, gst_rate: Decimal, pst_rate: Decimal) -> None:
     """Charge the resolved GST/PST against the order subtotal.
 
@@ -285,6 +322,8 @@ def _driver_order_response(order: Order, payment_group) -> dict:
         delivery_fees=0,
         delivery_tips=0,
         discount=0,
+        applied_discounts=[],
+        coupon_code=None,
         total=0,
         surcharge_ids=[],
         applied_charges=[],
@@ -470,8 +509,14 @@ async def create_order(
             data.get("pickup_address"),
             data.get("delivery_address"),
         )
-        # Must run before _apply_quote, which folds the tax into the total.
+        # Must run before _apply_quote, which folds tax and discount into the total.
         _apply_tax(data, quote.gst_rate, quote.pst_rate)
+        _apply_discounts(
+            data,
+            quote.delivery_fee,
+            manual=payload.manual_discount,
+            applied_by=current_user.id,
+        )
         _apply_quote(data, quote)
         data["surcharge_ids"] = [str(value) for value in data.get("surcharge_ids", [])]
 
@@ -546,6 +591,9 @@ async def update_order(
     update_data = payload.model_dump(exclude_unset=True)
     # The charge breakdown is always recalculated by the server.
     update_data.pop("applied_charges", None)
+    # Sending the field at all replaces the manual discount; null clears it.
+    manual_changed = "manual_discount" in update_data
+    update_data.pop("manual_discount", None)
 
     tax_trigger_fields = {
         "subtotal", "items",
@@ -592,7 +640,8 @@ async def update_order(
         if schedule_problem:
             raise HTTPException(status_code=422, detail=schedule_problem)
 
-    if quote_fields.intersection(update_data):
+    quote_ran = bool(quote_fields.intersection(update_data))
+    if quote_ran:
         quote = await _get_quote_or_http_error(
             db,
             update_data.get("pickup_place_id", order.pickup_place_id),
@@ -615,8 +664,17 @@ async def update_order(
             "gst_amount": tax_data["gst_amount"],
             "pst_amount": tax_data["pst_amount"],
             "delivery_tips": update_data.get("delivery_tips", order.delivery_tips),
-            "discount": update_data.get("discount", order.discount),
         }
+        # The fee moved, so the discount is re-priced against the new one.
+        if manual_changed:
+            _apply_discounts(
+                merged_totals,
+                quote.delivery_fee,
+                manual=payload.manual_discount,
+                applied_by=current_user.id,
+            )
+        else:
+            _reprice_discounts(merged_totals, order, quote.delivery_fee)
         _apply_quote(merged_totals, quote)
         update_data.update(merged_totals)
     elif tax_trigger_fields.intersection(update_data):
@@ -631,6 +689,22 @@ async def update_order(
         tax_data = {"subtotal": update_data.get("subtotal", order.subtotal)}
         _apply_tax(tax_data, gst_rate, pst_rate)
         update_data.update(tax_data)
+
+    if not quote_ran:
+        # No new quote, so discounts are priced against the fee already in force
+        # and the total is rebuilt only when one of its parts actually moved.
+        gross_fee = Decimal(str(update_data.get("delivery_fees", order.delivery_fees) or 0))
+        if manual_changed:
+            _apply_discounts(
+                update_data,
+                gross_fee,
+                manual=payload.manual_discount,
+                applied_by=current_user.id,
+            )
+        elif "delivery_fees" in update_data:
+            _reprice_discounts(update_data, order, gross_fee)
+        if {*TOTAL_COMPONENTS, "discount"}.intersection(update_data):
+            update_data["total"] = _order_total(order, update_data)
 
     if "surcharge_ids" in update_data:
         update_data["surcharge_ids"] = [
@@ -866,6 +940,7 @@ def _notify_sender_order_delivered(order: Order) -> None:
         "delivery_fees": order.delivery_fees,
         "delivery_tips": order.delivery_tips,
         "discount": order.discount,
+        "applied_discounts": order.applied_discounts or [],
         "total": order.total,
         "payment_method": order.payment_method,
         "payment_details": order.payment_details or {},
@@ -1385,6 +1460,7 @@ async def send_sender_invoice(
         "delivery_fees": order.delivery_fees,
         "delivery_tips": order.delivery_tips,
         "discount": order.discount,
+        "applied_discounts": order.applied_discounts or [],
         "total": order.total,
         "payment_method": order.payment_method,
         "payment_details": order.payment_details or {},
@@ -1458,6 +1534,7 @@ async def send_recipient_notification(
         "delivery_fees": order.delivery_fees,
         "delivery_tips": order.delivery_tips,
         "discount": order.discount,
+        "applied_discounts": order.applied_discounts or [],
         "total": order.total,
         "payment_method": order.payment_method,
     }

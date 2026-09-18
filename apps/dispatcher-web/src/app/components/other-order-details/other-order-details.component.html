@@ -85,9 +85,69 @@
             (valueChange)="patch({ deliveryTips: $event })">
         </app-base-input>
 
-        <!-- DISCOUNT -->
-        <app-base-input label="Discount (C$)" [value]="value.discount" (valueChange)="patch({ discount: $event })">
-        </app-base-input>
+        <!-- MANUAL DISCOUNT: terms in, priced against the delivery fee -->
+        <div class="space-y-2">
+            <app-button *ngIf="!value.manualDiscount" variant="primary" type="button"
+                label="+ Add discount" (onClick)="addManualDiscount()">
+            </app-button>
+
+            <div *ngIf="value.manualDiscount"
+                class="space-y-3 rounded-md border border-gray-300 px-4 py-3 dark:border-[#5a5d5a]">
+                <div class="flex items-center justify-between gap-4">
+                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Discount</p>
+                    <app-button variant="icon" type="button" ariaLabel="Remove discount"
+                        (onClick)="removeManualDiscount()">
+                        <span class="text-red-600 dark:text-red-400">&#10005;</span>
+                    </app-button>
+                </div>
+
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                    Comes off the delivery fee only, never the goods value, tax or tip.
+                </p>
+
+                <div class="flex flex-wrap items-end gap-3">
+                    <div class="inline-flex overflow-hidden rounded-md border border-gray-300 dark:border-[#5a5d5a]">
+                        <button type="button" class="px-3 py-2 text-sm"
+                            [ngClass]="value.manualDiscount.kind === 'percentage'
+                                ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
+                                : 'text-gray-700 dark:text-gray-200'"
+                            (click)="setDiscountKind('percentage')">%</button>
+                        <button type="button" class="px-3 py-2 text-sm"
+                            [ngClass]="value.manualDiscount.kind === 'fixed_amount'
+                                ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
+                                : 'text-gray-700 dark:text-gray-200'"
+                            (click)="setDiscountKind('fixed_amount')">C$</button>
+                    </div>
+
+                    <div class="min-w-[8rem] flex-1">
+                        <app-base-input type="text" [showLabel]="false"
+                            [placeholder]="value.manualDiscount.kind === 'percentage' ? 'e.g. 10' : 'e.g. 5.00'"
+                            [value]="value.manualDiscount.value" (valueChange)="setDiscountValue($event)">
+                        </app-base-input>
+                    </div>
+
+                    <div class="min-w-[12rem] flex-1">
+                        <app-dropdown-selector [showLabel]="false" placeholder="Reason"
+                            [options]="discountReasons" [value]="value.manualDiscount.reason"
+                            (valueChange)="setDiscountReason($event)">
+                        </app-dropdown-selector>
+                    </div>
+                </div>
+
+                <app-textarea [label]="discountNoteRequired() ? 'Note (required)' : 'Note (optional)'"
+                    placeholder="What was agreed, and with whom" [value]="value.manualDiscount.note"
+                    (valueChange)="setDiscountNote($event)">
+                </app-textarea>
+
+                <app-error-message *ngIf="showSubmitValidation && discountError()" [show]="true"
+                    [messages]="[discountError()!]">
+                </app-error-message>
+
+                <p *ngIf="discountNotYetPriced()" class="text-xs text-gray-500 dark:text-gray-400">
+                    Nothing to take off yet — this applies once a delivery fee is quoted.
+                </p>
+            </div>
+        </div>
 
         <!-- RECEIPT: every computed charge, so the total can be checked by eye -->
         <dl class="rounded-md border border-gray-300 dark:border-[#5a5d5a] px-4 py-3 text-sm">
@@ -112,7 +172,11 @@
             </div>
 
             <div *ngIf="value.discount > 0" class="flex justify-between gap-4 py-1">
-                <dt class="text-gray-600 dark:text-gray-300">Discount</dt>
+                <dt class="text-gray-600 dark:text-gray-300">
+                    {{ value.manualDiscount?.kind === 'percentage'
+                        ? 'Discount (' + value.manualDiscount?.value + '%)'
+                        : 'Discount' }}
+                </dt>
                 <dd class="tabular-nums text-red-600 dark:text-red-400">-{{ money(value.discount) }}</dd>
             </div>
 
