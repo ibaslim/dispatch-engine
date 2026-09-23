@@ -14,6 +14,8 @@ import {
   Surcharge,
 } from '../../services/delivery-configuration/delivery-configuration.service';
 import { OrdersService } from '../../services/orders/orders.service';
+import { DiscountPick, totalDiscount } from '@pages/orders/orders-formatting.util';
+import { Discount, DiscountsService } from '@services/discounts/discounts.service';
 import { ProofOfDeliveryComponent } from '../proof-of-delivery/proof-of-delivery.component';
 import { PickupFromComponent } from '../pickup-from/pickup-from.component';
 import { DeliverToComponent } from '../deliver-to/deliver-to.component';
@@ -46,14 +48,22 @@ export class NewOrderFormComponent implements OnInit {
 
   categories: DeliveryCategory[] = [];
   surcharges: Surcharge[] = [];
+  availableDiscounts: Discount[] = [];
   operationalZones: OperationalZone[] = [];
   categoryDropdownOpen = false;
   isQuoting = false;
   quoteError = '';
   private quoteRequest = 0;
+  private automaticRequest = 0;
+
+  /** The discount a checked coupon code unlocks, once validated against the server. */
+  couponDiscount: Discount | null = null;
+  couponCheckError = '';
+  isCheckingCoupon = false;
 
   constructor(
     private readonly configurations: DeliveryConfigurationService,
+    private readonly discounts: DiscountsService,
     private readonly orders: OrdersService,
     private readonly googleMaps: GoogleMapsService,
     private readonly toast: ToastService,
@@ -78,17 +88,110 @@ export class NewOrderFormComponent implements OnInit {
 
   async ngOnInit(): Promise<void> {
     try {
-      const [categories, surcharges, operationalZones] = await Promise.all([
+      const [categories, surcharges, operationalZones, discounts] = await Promise.all([
         firstValueFrom(this.configurations.getCategories()),
         firstValueFrom(this.configurations.getSurcharges()),
         firstValueFrom(this.configurations.getZones()),
+        firstValueFrom(this.discounts.getPickable(this.pickupMoment(), this.value.pickup.pickupTimeSpecified)),
       ]);
       this.categories = categories;
       this.surcharges = surcharges;
       this.operationalZones = operationalZones;
+      this.availableDiscounts = discounts;
+      void this.refreshAutomatic();
       // Tax rates belong to the pickup zone, so they arrive with the delivery quote.
     } catch {
       this.quoteError = 'Unable to load delivery categories.';
+    }
+  }
+
+  /** The planned pickup as the API wants it, so scheduled discounts filter. */
+  private pickupMoment(): string | undefined {
+    const { pickupDate, pickupTime, pickupTimeSpecified } = this.value.pickup;
+    if (!pickupDate) return undefined;
+    return `${pickupDate}T${pickupTimeSpecified && pickupTime ? pickupTime : '00:00'}:00`;
+  }
+
+  /**
+   * Asks the server which automatic discount this order would get. The rule that
+   * picks the winner stays on the server, so it is never decided here.
+   */
+  private async refreshAutomatic(
+    deliveryFees: number = this.value.details.deliveryFees,
+    optedOut: string[] = this.value.details.optedOutDiscountIds || [],
+  ): Promise<void> {
+    const at = this.pickupMoment();
+    if (!at) return;
+    const request = ++this.automaticRequest;
+    try {
+      const offers = await firstValueFrom(
+        this.discounts.getAutomaticOffers({
+          at,
+          timeSpecified: this.value.pickup.pickupTimeSpecified,
+          deliveryFee: deliveryFees || 0,
+          optedOut,
+        }),
+      );
+      if (request !== this.automaticRequest) return;
+      const details = this.withRecalculatedTotal(this.value.details, { automaticOffers: offers });
+      this.valueChange.emit({ ...this.value, details });
+    } catch {
+      // Keep what is showing; saving still applies the real rule server-side.
+    }
+  }
+
+  /** Removing or restoring an automatic discount changes which one wins, so ask again. */
+  onDetailsChange(details: NewOrderFormValue['details']): void {
+    const before = this.value.details.optedOutDiscountIds || [];
+    const after = details.optedOutDiscountIds || [];
+    const optedOutChanged = before.length !== after.length || before.some((id) => !after.includes(id));
+    // A typed-over code no longer matches what was checked, so the preview clears
+    // until it is checked again.
+    const couponCodeChanged = details.couponCode !== this.value.details.couponCode;
+    if (couponCodeChanged) {
+      this.couponDiscount = null;
+      this.couponCheckError = '';
+    }
+    this.patch({ details: couponCodeChanged ? this.withRecalculatedTotal(details, {}) : details });
+    if (optedOutChanged) void this.refreshAutomatic(details.deliveryFees, after);
+  }
+
+  /** Resolves a typed coupon code to the discount it unlocks, so the total can preview it. */
+  async checkCoupon(): Promise<void> {
+    const code = this.value.details.couponCode.trim();
+    if (!code) return;
+    const at = this.pickupMoment();
+    if (!at) {
+      this.couponCheckError = 'Set a pickup date first.';
+      return;
+    }
+    this.isCheckingCoupon = true;
+    this.couponCheckError = '';
+    try {
+      const result = await firstValueFrom(
+        this.discounts.checkCoupon({ code, at, timeSpecified: this.value.pickup.pickupTimeSpecified }),
+      );
+      this.couponDiscount = result.discount;
+      const details = this.withRecalculatedTotal(this.value.details, {});
+      this.valueChange.emit({ ...this.value, details });
+    } catch (error) {
+      this.couponDiscount = null;
+      this.couponCheckError = error instanceof HttpErrorResponse && typeof error.error?.detail === 'string'
+        ? error.error.detail
+        : 'Unable to check that code.';
+    } finally {
+      this.isCheckingCoupon = false;
+    }
+  }
+
+  /** A discount can be tied to a weekday or a date, so the list follows the pickup. */
+  private async refreshDiscounts(): Promise<void> {
+    try {
+      this.availableDiscounts = await firstValueFrom(
+        this.discounts.getPickable(this.pickupMoment(), this.value.pickup.pickupTimeSpecified),
+      );
+    } catch {
+      // Keep the list we already have; saving still validates server-side.
     }
   }
 
@@ -139,6 +242,12 @@ export class NewOrderFormComponent implements OnInit {
         deliveryFees: 0,
         deliveryTips: 0,
         discount: 0,
+        discountSelections: [],
+        discountNote: '',
+        couponCode: '',
+        automaticOffers: [],
+        optedOutDiscountIds: [],
+        appliedDiscounts: [],
         subtotal: 0,
         gstAmount: 0,
         pstAmount: 0,
@@ -159,8 +268,16 @@ export class NewOrderFormComponent implements OnInit {
   }
 
   onPickupChange(pickup: NewOrderFormValue['pickup']): void {
+    const dayChanged = pickup.pickupDate !== this.value.pickup.pickupDate
+      || pickup.pickupTime !== this.value.pickup.pickupTime
+      || pickup.pickupTimeSpecified !== this.value.pickup.pickupTimeSpecified;
     const changed = pickup.location?.placeId !== this.value.pickup.location?.placeId;
     changed ? this.patchAndQuote({ pickup }) : this.patch({ pickup });
+    // A scheduled discount only applies on its own days, so the list follows.
+    if (dayChanged) {
+      void this.refreshDiscounts();
+      void this.refreshAutomatic();
+    }
   }
 
   onDeliveryChange(delivery: NewOrderFormValue['delivery']): void {
@@ -229,6 +346,8 @@ export class NewOrderFormComponent implements OnInit {
       if (request !== this.quoteRequest) return;
       const details = this.withQuotedCharges(this.value.details, quote);
       this.valueChange.emit({ ...this.value, details, routeQuote: quote });
+      // The fee just changed, and automatic discounts come off the fee.
+      void this.refreshAutomatic(quote.delivery_fee);
     } catch (error: unknown) {
       if (request !== this.quoteRequest) return;
       if (error instanceof HttpErrorResponse && error.status === 429) {
@@ -280,9 +399,23 @@ export class NewOrderFormComponent implements OnInit {
     changes: Partial<NewOrderFormValue['details']>
   ): NewOrderFormValue['details'] {
     const updated = { ...details, ...changes };
+    // A percentage discount follows the fee, so it is re-priced with the quote.
+    const picks = (updated.discountSelections || [])
+      .map((item) => ({
+        discount: this.availableDiscounts.find((option) => option.id === item.discountId),
+        value: item.value,
+      }))
+      .filter((item): item is DiscountPick => !!item.discount);
+    const discount = totalDiscount(
+      picks,
+      updated.deliveryFees,
+      updated.automaticOffers,
+      updated.optedOutDiscountIds,
+      this.couponDiscount,
+    );
     const total = updated.subtotal + updated.gstAmount + updated.pstAmount + updated.deliveryFees
-      + Number(updated.deliveryTips || 0) - Number(updated.discount || 0);
-    return { ...updated, total: Math.round(total * 100) / 100 };
+      + Number(updated.deliveryTips || 0) - discount;
+    return { ...updated, discount, total: Math.round(total * 100) / 100 };
   }
 
   private quoteErrorText(error: unknown): string {

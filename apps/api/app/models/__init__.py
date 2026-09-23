@@ -38,6 +38,14 @@ from app.models.driver_payment import (
     DriverPaymentGroupAssignment,
 )
 from app.models.driver_location_log import DriverLocationLog
+from app.models.discount import (
+    Coupon,
+    Discount,
+    DiscountKind,
+    DiscountStatus,
+    DiscountTrigger,
+    DiscountType,
+)
 
 __all__ = [
     "Tenant",
@@ -77,4 +85,10 @@ __all__ = [
     "DriverPaymentGroup",
     "DriverPaymentGroupAssignment",
     "DriverLocationLog",
+    "DiscountType",
+    "Discount",
+    "Coupon",
+    "DiscountKind",
+    "DiscountTrigger",
+    "DiscountStatus",
 ]

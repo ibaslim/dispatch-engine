@@ -14,6 +14,14 @@ from typing import Iterable, Optional, Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
+from app.models.discount import (
+    Discount,
+    DiscountKind,
+    DiscountStatus,
+    DiscountTrigger,
+    DiscountType,
+    DiscountValueMode,
+)
 from app.models.invitation import Invitation
 from app.models.onboarding_application import ApplicationStatus, OnboardingApplication
 from app.models.order import ActivityStatus, Order, OrderStatus
@@ -248,3 +256,57 @@ def make_invitation(
         expires_at=datetime.now(timezone.utc) + timedelta(hours=hours_until_expiry),
         **extra,
     )
+
+
+class DiscountTypeFactory:
+    @staticmethod
+    async def create(
+        db: AsyncSession,
+        *,
+        title: str = "Service recovery",
+        description: Optional[str] = None,
+    ) -> DiscountType:
+        item = DiscountType(title=f"{title} {_suffix()}", description=description)
+        db.add(item)
+        await db.flush()
+        await db.refresh(item)
+        return item
+
+
+class DiscountFactory:
+    @staticmethod
+    async def create(
+        db: AsyncSession,
+        *,
+        title: str = "Late delivery",
+        kind: DiscountKind = DiscountKind.percentage,
+        value: str | None = "10",
+        status: DiscountStatus = DiscountStatus.active,
+        trigger: DiscountTrigger = DiscountTrigger.manual,
+        discount_type: Optional[DiscountType] = None,
+        **extra,
+    ) -> Discount:
+        """An active, pickable discount. Money fields take strings, not floats."""
+        from decimal import Decimal
+
+        for field in ("max_discount_amount", "min_gross_fee", "min_net_fee"):
+            if field in extra and extra[field] is not None:
+                extra[field] = Decimal(str(extra[field]))
+        extra.setdefault("min_net_fee", Decimal("0.00"))
+        extra.setdefault("redemption_count", 0)
+        extra.setdefault("value_mode", DiscountValueMode.fixed)
+        extra.setdefault("schedule", {"kind": "always"})
+        discount = Discount(
+            title=title,
+            public_label=extra.pop("public_label", title),
+            kind=kind,
+            value=Decimal(value) if value is not None else None,
+            status=status,
+            trigger=trigger,
+            discount_type_id=discount_type.id if discount_type else None,
+            **extra,
+        )
+        db.add(discount)
+        await db.flush()
+        await db.refresh(discount)
+        return discount

@@ -20,6 +20,7 @@ from app.api.routers import (
     pricing,
     driver_payroll,
     delivery_configuration,
+    discounts,
     public_config,
     pusher_channels,
 )
@@ -98,6 +99,11 @@ def create_app() -> FastAPI:
         delivery_configuration.router,
         prefix="/api/v1/configurations",
         tags=["delivery-configuration"],
+    )
+    application.include_router(
+        discounts.router,
+        prefix="/api/v1/discounts",
+        tags=["discounts"],
     )
 
     return application

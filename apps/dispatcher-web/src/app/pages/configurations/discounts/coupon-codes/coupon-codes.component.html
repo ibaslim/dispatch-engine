@@ -1,0 +1,117 @@
+<app-popup [open]="open" [title]="discountLabel ? 'Codes for ' + discountLabel : 'Codes'"
+  widthClass="max-w-2xl" (close)="close()">
+  <div class="space-y-6 px-2">
+
+    <!-- Add one code -->
+    <section class="space-y-3">
+      <div class="flex items-center gap-2">
+        <i class="ph ph-plus-circle text-base text-gray-400 dark:text-gray-500"></i>
+        <h4 class="text-sm font-semibold">Add a code</h4>
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-3">
+        <app-base-input label="Code" placeholder="WELCOME10" [value]="couponSingleForm.code"
+          (valueChange)="couponSingleForm.code = $event.toUpperCase()">
+        </app-base-input>
+        <app-base-input label="Uses" type="number" [min]="1" [step]="1" placeholder="Unlimited"
+          [value]="couponSingleForm.max_uses" (valueChange)="couponSingleForm.max_uses = $event">
+        </app-base-input>
+        <app-base-input label="Expires" type="date" [value]="couponSingleForm.expires_at"
+          (valueChange)="couponSingleForm.expires_at = $event">
+        </app-base-input>
+      </div>
+
+      <div class="flex justify-end">
+        <app-button variant="ghost-outline" [label]="isCreatingCoupon ? 'Adding...' : 'Add code'"
+          [disabled]="isCreatingCoupon || !couponSingleForm.code.trim()"
+          (onClick)="createSingleCoupon()">
+        </app-button>
+      </div>
+    </section>
+
+    <!-- Generate a batch -->
+    <section class="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-[#3a3d3a] dark:bg-[#1E201E]">
+      <div class="flex items-center gap-2">
+        <i class="ph ph-stack text-base text-gray-400 dark:text-gray-500"></i>
+        <h4 class="text-sm font-semibold">Generate a batch</h4>
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-2">
+        <app-base-input label="How many" type="number" [min]="1" [max]="2000"
+          [value]="couponBatchForm.count" (valueChange)="couponBatchForm.count = $event">
+        </app-base-input>
+        <app-base-input label="Prefix" placeholder="Optional" [value]="couponBatchForm.prefix"
+          (valueChange)="couponBatchForm.prefix = $event.toUpperCase()">
+        </app-base-input>
+        <app-base-input label="Batch label" placeholder="Trade show Oct 2026"
+          [value]="couponBatchForm.batch_label" (valueChange)="couponBatchForm.batch_label = $event">
+        </app-base-input>
+        <app-base-input label="Expires" type="date" [value]="couponBatchForm.expires_at"
+          (valueChange)="couponBatchForm.expires_at = $event">
+        </app-base-input>
+      </div>
+
+      <div class="flex items-center justify-between gap-3 pt-1">
+        <p class="text-xs text-gray-500 dark:text-gray-400">Each code in the batch is single-use.</p>
+        <app-button variant="ghost-outline" [label]="isCreatingBatch ? 'Generating...' : 'Generate codes'"
+          [disabled]="isCreatingBatch || !couponBatchForm.batch_label.trim() || !couponBatchForm.count"
+          (onClick)="createCouponBatch()">
+        </app-button>
+      </div>
+    </section>
+
+    <!-- Existing codes -->
+    <section class="space-y-3 border-t border-gray-200 pt-5 dark:border-[#3a3d3a]">
+      <div class="flex items-center justify-between gap-3">
+        <h4 class="text-sm font-semibold">
+          Codes
+          <span class="font-normal text-gray-500 dark:text-gray-400">({{ filteredCoupons.length }})</span>
+        </h4>
+        <app-button variant="ghost-outline" label="Export CSV" (onClick)="exportCoupons()"></app-button>
+      </div>
+
+      <app-base-input placeholder="Filter by batch label" [value]="couponBatchFilter"
+        (valueChange)="couponBatchFilter = $event">
+      </app-base-input>
+
+      <p *ngIf="couponsLoading" class="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+        Loading codes...
+      </p>
+
+      <p *ngIf="!couponsLoading && !filteredCoupons.length"
+        class="rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500 dark:border-[#3a3d3a] dark:text-gray-400">
+        No codes yet. Add one above, or generate a batch.
+      </p>
+
+      <div *ngIf="!couponsLoading && filteredCoupons.length"
+        class="max-h-80 divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-200 dark:divide-[#2a2d2a] dark:border-[#3a3d3a]">
+        <div *ngFor="let coupon of filteredCoupons"
+          class="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="rounded-md bg-gray-100 px-2 py-0.5 font-mono font-medium tracking-wide dark:bg-[#2a2d2a]">
+                {{ coupon.code }}
+              </span>
+              <span *ngIf="!coupon.is_active"
+                class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-[#303330] dark:text-gray-400">
+                Off
+              </span>
+            </div>
+            <p class="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">
+              {{ couponUsageLabel(coupon) }}
+              <span *ngIf="coupon.batch_label"> · {{ coupon.batch_label }}</span>
+              <span *ngIf="coupon.expires_at"> · expires {{ coupon.expires_at | slice:0:10 }}</span>
+            </p>
+          </div>
+          <app-button variant="ghost-outline" [label]="coupon.is_active ? 'Deactivate' : 'Activate'"
+            (onClick)="toggleCouponActive(coupon)">
+          </app-button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div modal-footer class="flex justify-end">
+    <app-button variant="ghost-outline" label="Done" (onClick)="close()"></app-button>
+  </div>
+</app-popup>

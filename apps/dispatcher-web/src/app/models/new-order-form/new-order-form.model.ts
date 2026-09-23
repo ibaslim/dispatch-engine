@@ -1,5 +1,6 @@
 import { PhoneValue } from "../phone-input/phone-input.model";
 import { SelectedGooglePlace } from '../../services/google-maps/google-maps.service';
+import type { AutomaticOffer } from '../../services/discounts/discounts.service';
 
 export type PaymentMethodType = 'cash_on_delivery' | 'credit_card';
 
@@ -14,6 +15,18 @@ export interface CreditCardDetails {
 export interface ProofOfDeliveryValue {
     signature: boolean;
     picture: boolean;
+}
+
+/** A priced discount line the server applied to the order. */
+export interface AppliedDiscountLine {
+    discount_id: string | null;
+    source: string;
+    kind: string;
+    label: string;
+    value: number;
+    amount: number;
+    reason: string | null;
+    note: string | null;
 }
 
 /** What the driver actually captured at delivery time (read-only, set by backend). */
@@ -87,7 +100,19 @@ export interface NewOrderFormValue {
         pstRate: number;
         deliveryFees: number;
         deliveryTips: number;
+        /** Priced from the selected discounts, capped at the delivery fee. */
         discount: number;
+        /** Which admin-created discounts to apply; the server prices them.
+         * `value` is only for discounts whose amount is typed per order. */
+        discountSelections: { discountId: string; value: string }[];
+        discountNote: string;
+        /** A coupon code to redeem; the server resolves it to whichever discount it unlocks. */
+        couponCode: string;
+        /** Automatic discounts this order could get; the server picks the winner. */
+        automaticOffers: AutomaticOffer[];
+        /** Automatic discounts a dispatcher removed from this order. */
+        optedOutDiscountIds: string[];
+        appliedDiscounts: AppliedDiscountLine[];
 
         subtotal: number;
         gstAmount: number;

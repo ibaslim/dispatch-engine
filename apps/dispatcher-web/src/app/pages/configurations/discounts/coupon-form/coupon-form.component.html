@@ -1,0 +1,119 @@
+<app-popup [open]="open" [title]="form.id ? 'Edit coupon' : 'New coupon'" widthClass="max-w-2xl" (close)="close()">
+  <div class="space-y-6 px-2">
+
+    <p *ngIf="termsLocked"
+      class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+      Already given to a customer, so the amount is fixed. Naming, schedule and limits can still change.
+    </p>
+
+    <!-- Naming -->
+    <section class="space-y-3">
+      <div class="grid gap-4 sm:grid-cols-2">
+        <app-base-input label="Name" placeholder="Trade show giveaway"
+          [value]="form.title" [externalError]="fieldError('title') || ''"
+          [showExternalError]="hasError('title')"
+          (valueChange)="form.title = $event; markTouched('title')">
+        </app-base-input>
+
+        <app-base-input label="Coupon label" placeholder="e.g. $50 off, welcome gift"
+          [value]="form.public_label" [externalError]="fieldError('public_label') || ''"
+          [showExternalError]="hasError('public_label')"
+          (valueChange)="form.public_label = $event; markTouched('public_label')">
+        </app-base-input>
+      </div>
+      <p class="text-xs text-gray-500 dark:text-gray-400">
+        Name is for your own records; the label is what a customer sees.
+      </p>
+    </section>
+
+    <!-- What it takes off -->
+    <section class="space-y-4 border-t border-gray-200 pt-5 dark:border-[#3a3d3a]">
+      <div class="flex items-center gap-2">
+        <i class="ph ph-percent text-base text-gray-400 dark:text-gray-500"></i>
+        <h4 class="text-sm font-semibold">What it takes off</h4>
+      </div>
+
+      <div class="grid gap-4 sm:grid-cols-2">
+        <app-dropdown-selector label="Mechanic" [options]="kindOptions" [disabled]="termsLocked"
+          [value]="form.kind" (valueChange)="setKind($event)">
+        </app-dropdown-selector>
+
+        <app-base-input type="number" [min]="0" [step]="0.01" [disabled]="termsLocked" [label]="valueLabel"
+          [value]="form.value" [externalError]="fieldError('value') || ''"
+          [showExternalError]="hasError('value')"
+          (valueChange)="form.value = $event; markTouched('value')">
+        </app-base-input>
+      </div>
+
+      <p class="rounded-lg bg-gray-50 px-3 py-2 text-sm dark:bg-[#1E201E]">
+        <span class="text-gray-500 dark:text-gray-400">This coupon:</span>
+        <span class="font-medium">{{ summaryLine() }}</span>
+      </p>
+
+      <div class="grid gap-4 sm:grid-cols-3">
+        <app-base-input label="Most it can take" type="number"
+          [min]="0" [step]="0.01" [disabled]="termsLocked" placeholder="No cap"
+          [value]="form.max_discount_amount" (valueChange)="form.max_discount_amount = $event">
+        </app-base-input>
+
+        <app-base-input label="Smallest fee it works on" type="number" [min]="0" [step]="0.01"
+          [disabled]="termsLocked" placeholder="Any fee" [value]="form.min_gross_fee"
+          (valueChange)="form.min_gross_fee = $event">
+        </app-base-input>
+
+        <app-base-input label="Fee left afterwards" type="number" [min]="0" [step]="0.01"
+          [disabled]="termsLocked" [value]="form.min_net_fee"
+          (valueChange)="form.min_net_fee = $event">
+        </app-base-input>
+      </div>
+    </section>
+
+    <!-- Availability -->
+    <section class="space-y-4 border-t border-gray-200 pt-5 dark:border-[#3a3d3a]">
+      <div class="flex items-center gap-2">
+        <i class="ph ph-calendar-dots text-base text-gray-400 dark:text-gray-500"></i>
+        <h4 class="text-sm font-semibold">Availability</h4>
+      </div>
+
+      <app-dropdown-selector label="Status" [options]="statusOptions" [value]="form.status"
+        (valueChange)="setStatus($event)">
+      </app-dropdown-selector>
+
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <app-base-input label="Live from" type="date" [value]="form.starts_at"
+            (valueChange)="form.starts_at = $event">
+          </app-base-input>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Empty starts it now.</p>
+        </div>
+
+        <div>
+          <app-base-input label="Live until" type="date" [value]="form.ends_at"
+            [externalError]="fieldError('ends_at') || ''" [showExternalError]="hasError('ends_at')"
+            (valueChange)="form.ends_at = $event; markTouched('ends_at')">
+          </app-base-input>
+          <p *ngIf="!hasError('ends_at')" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Empty runs it forever.
+          </p>
+        </div>
+      </div>
+
+      <app-base-input label="Total uses across all codes" type="number" [min]="1" [step]="1"
+        placeholder="Unlimited" [value]="form.usage_limit_total"
+        (valueChange)="form.usage_limit_total = $event">
+      </app-base-input>
+    </section>
+
+  </div>
+
+  <div modal-footer class="flex items-center justify-between gap-3">
+    <app-error-message [show]="saveAttempted && !!formError()" [messages]="[formError() || '']">
+    </app-error-message>
+    <div class="ml-auto flex gap-2">
+      <app-button variant="ghost-outline" label="Cancel" (onClick)="close()"></app-button>
+      <app-button variant="primary" [label]="isSaving ? 'Saving...' : 'Save coupon'"
+        [extraClasses]="addButtonClasses" [disabled]="isSaving" (onClick)="save()">
+      </app-button>
+    </div>
+  </div>
+</app-popup>
