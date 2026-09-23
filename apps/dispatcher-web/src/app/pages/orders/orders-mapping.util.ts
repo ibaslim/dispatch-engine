@@ -1,6 +1,5 @@
 import {
   AppliedDiscountLine,
-  ManualDiscountValue,
   NewOrderFormValue,
   PaymentMethodType,
   PickupVerification,
@@ -251,7 +250,11 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
         deliveryFees: order.delivery_fees,
         deliveryTips: order.delivery_tips,
         discount: order.discount,
-        manualDiscount: toManualDiscountValue(order.applied_discounts),
+        discountSelections: appliedDiscountSelections(order.applied_discounts),
+        discountNote: appliedDiscountNote(order.applied_discounts),
+        couponCode: order.coupon_code || '',
+        automaticOffers: [],
+        optedOutDiscountIds: order.opted_out_discount_ids || [],
         appliedDiscounts: (order.applied_discounts || []) as AppliedDiscountLine[],
         total: order.total,
         driverPayout: order.driver_payout ?? 0,
@@ -277,29 +280,23 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
   };
 }
 
-/** The manual line of a saved order, back as editable form terms. */
-export function toManualDiscountValue(
+/** Which discounts a saved order carries, so the picker shows them ticked
+ * with the value each was given. */
+export function appliedDiscountSelections(
   applied: OrderResponse['applied_discounts'] | undefined,
-): ManualDiscountValue | null {
-  const manual = (applied || []).find((line) => line.source === 'manual');
-  if (!manual) return null;
-  return {
-    kind: manual.kind === 'percentage' ? 'percentage' : 'fixed_amount',
-    value: String(manual.value ?? manual.amount ?? ''),
-    reason: (manual.reason as ManualDiscountValue['reason']) || 'sales_goodwill',
-    note: manual.note || '',
-  };
+): { discountId: string; value: string }[] {
+  return (applied || [])
+    .filter((line) => !!line.discount_id)
+    .map((line) => ({
+      discountId: line.discount_id as string,
+      value: line.value ? String(line.value) : '',
+    }));
 }
 
-function toManualDiscountPayload(manual: ManualDiscountValue | null): Record<string, unknown> | null {
-  const value = toNumber(manual?.value);
-  if (!manual || value <= 0) return null;
-  return {
-    kind: manual.kind,
-    value,
-    reason: manual.reason,
-    note: manual.note.trim() || null,
-  };
+export function appliedDiscountNote(
+  applied: OrderResponse['applied_discounts'] | undefined,
+): string {
+  return (applied || []).find((line) => line.note)?.note || '';
 }
 
 export function toOrderPayload(value: NewOrderFormValue): Record<string, unknown> {
@@ -346,8 +343,16 @@ export function toOrderPayload(value: NewOrderFormValue): Record<string, unknown
     pst_amount: value.details.pstAmount,
     delivery_fees: value.details.deliveryFees,
     delivery_tips: value.details.deliveryTips,
-    // The server prices every discount; it only ever receives the terms.
-    manual_discount: toManualDiscountPayload(value.details.manualDiscount),
+    // The server prices every discount; it only ever receives the choice,
+    // plus the value for any discount whose amount is typed per order.
+    discounts: (value.details.discountSelections || []).map((item) => ({
+      discount_id: item.discountId,
+      value: toNumber(item.value) > 0 ? toNumber(item.value) : null,
+    })),
+    discount_note: value.details.discountNote.trim() || null,
+    coupon_code: value.details.couponCode.trim() || null,
+    // Automatic discounts a dispatcher removed from this order.
+    opted_out_discount_ids: value.details.optedOutDiscountIds || [],
     total: value.details.total,
     instructions: value.details.instructions.trim(),
     payment_method: value.details.payment.method,
@@ -374,7 +379,8 @@ export function createDefaultNewOrder(): NewOrderFormValue {
     details: {
       items: [{ itemName: '', itemPrice: '', itemQty: '' }],
       gstRate: 0, pstRate: 0, deliveryFees: 0, deliveryTips: 0, discount: 0,
-      manualDiscount: null, appliedDiscounts: [],
+      discountSelections: [], discountNote: '', couponCode: '', automaticOffers: [], optedOutDiscountIds: [],
+      appliedDiscounts: [],
       subtotal: 0, gstAmount: 0, pstAmount: 0, total: 0,
       instructions: '', payment: { method: 'cash_on_delivery' },
       proofOfDelivery: { signature: false, picture: false },
@@ -429,7 +435,11 @@ export function buildDemoDraftValue(): NewOrderFormValue {
       deliveryFees: 4,
       deliveryTips: 1.5,
       discount: 0,
-      manualDiscount: null,
+      discountSelections: [],
+      discountNote: '',
+      couponCode: '',
+      automaticOffers: [],
+      optedOutDiscountIds: [],
       appliedDiscounts: [],
       subtotal: 28,
       gstAmount: 1.4,

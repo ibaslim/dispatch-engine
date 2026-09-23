@@ -64,39 +64,15 @@ class OrderItem(BaseModel):
     itemQty: int
 
 
-class ManualDiscountKind(str, enum.Enum):
-    percentage = "percentage"
-    fixed_amount = "fixed_amount"
-
-
-class ManualDiscountReason(str, enum.Enum):
-    late_delivery = "late_delivery"
-    damaged_item = "damaged_item"
-    wrong_address_our_fault = "wrong_address_our_fault"
-    sales_goodwill = "sales_goodwill"
-    price_correction = "price_correction"
-    other = "other"
-
-
-class ManualDiscountInput(BaseModel):
-    """A discount a dispatcher applies by hand. The server prices and caps it."""
-    kind: ManualDiscountKind
-    value: float = Field(gt=0)
-    reason: ManualDiscountReason
-    note: Optional[str] = Field(default=None, max_length=500)
-
-    @model_validator(mode="after")
-    def _validate(self):
-        if self.kind == ManualDiscountKind.percentage and self.value > 100:
-            raise ValueError("A percentage discount cannot be more than 100%.")
-        self.note = (self.note or "").strip() or None
-        if self.reason == ManualDiscountReason.other and not self.note:
-            raise ValueError("Add a note explaining this discount.")
-        return self
+class DiscountSelection(BaseModel):
+    """A discount picked for an order, with the value typed for it if it needs one."""
+    discount_id: UUID
+    value: Optional[float] = Field(default=None, gt=0)
 
 
 class AppliedDiscountResponse(BaseModel):
     """One priced discount line as stored on the order."""
+    discount_id: Optional[str] = None
     source: str
     kind: str
     label: str
@@ -184,9 +160,14 @@ class OrderCreate(BaseModel):
     pst_amount: float = 0
     delivery_fees: float
     delivery_tips: float
-    # `discount` is not accepted from the client: the server prices every
-    # discount and returns the lines it applied.
-    manual_discount: Optional[ManualDiscountInput] = None
+    # `discount` is not accepted from the client: it picks discounts, and the
+    # server prices them, capped at the delivery fee.
+    discounts: List[DiscountSelection] = Field(default_factory=list)
+    discount_note: Optional[str] = Field(default=None, max_length=500)
+    # Automatic discounts to leave off this order.
+    opted_out_discount_ids: List[UUID] = Field(default_factory=list)
+    # A coupon code, resolved server-side to whichever discount it unlocks.
+    coupon_code: Optional[str] = Field(default=None, max_length=40)
     total: float
 
     instructions: Optional[str] = None
@@ -251,9 +232,14 @@ class OrderUpdate(BaseModel):
     pst_amount: Optional[float] = None
     delivery_fees: Optional[float] = None
     delivery_tips: Optional[float] = None
-    # Sending manual_discount replaces the order's manual discount; sending
-    # null clears it. Leaving it out keeps whatever the order already has.
-    manual_discount: Optional[ManualDiscountInput] = None
+    # Sending discounts replaces the order's discounts; an empty list clears
+    # them. Leaving it out keeps whatever the order already has.
+    discounts: Optional[List[DiscountSelection]] = None
+    discount_note: Optional[str] = Field(default=None, max_length=500)
+    opted_out_discount_ids: Optional[List[UUID]] = None
+    # Sending it replaces the order's coupon; null clears it. Leaving it out
+    # keeps whatever the order already has.
+    coupon_code: Optional[str] = Field(default=None, max_length=40)
     total: Optional[float] = None
 
     instructions: Optional[str] = None
@@ -293,9 +279,10 @@ class OrderResponse(OrderCreate):
     applied_discounts: List[AppliedDiscountResponse] = Field(default_factory=list)
     coupon_code: Optional[str] = None
     # Input-only; the applied lines above are what a client reads back.
-    manual_discount: Optional[ManualDiscountInput] = Field(default=None, exclude=True)
+    discounts: List[DiscountSelection] = Field(default_factory=list, exclude=True)
+    discount_note: Optional[str] = Field(default=None, exclude=True)
 
-    @field_validator("applied_discounts", mode="before")
+    @field_validator("applied_discounts", "opted_out_discount_ids", mode="before")
     @classmethod
     def _no_lines_is_an_empty_list(cls, value):
         """An order created before the breakdown existed carries no lines."""

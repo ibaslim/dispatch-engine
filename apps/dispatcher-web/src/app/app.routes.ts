@@ -169,6 +169,13 @@ export const routes: Routes = [
         data: { section: 'base-prices' },
       },
       {
+        path: 'discounts',
+        loadComponent: () =>
+          import('./pages/configurations/discounts/discounts.component').then(
+            (m) => m.DiscountsComponent
+          ),
+      },
+      {
         path: 'surcharges',
         loadComponent: () =>
           import('./pages/configurations/delivery-settings/delivery-settings.component').then(

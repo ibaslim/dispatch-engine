@@ -1,5 +1,6 @@
 import { PhoneValue } from "../phone-input/phone-input.model";
 import { SelectedGooglePlace } from '../../services/google-maps/google-maps.service';
+import type { AutomaticOffer } from '../../services/discounts/discounts.service';
 
 export type PaymentMethodType = 'cash_on_delivery' | 'credit_card';
 
@@ -16,26 +17,9 @@ export interface ProofOfDeliveryValue {
     picture: boolean;
 }
 
-export type ManualDiscountKind = 'percentage' | 'fixed_amount';
-
-export type ManualDiscountReason =
-    | 'late_delivery'
-    | 'damaged_item'
-    | 'wrong_address_our_fault'
-    | 'sales_goodwill'
-    | 'price_correction'
-    | 'other';
-
-/** A discount the dispatcher enters. Value stays a string while being typed. */
-export interface ManualDiscountValue {
-    kind: ManualDiscountKind;
-    value: string;
-    reason: ManualDiscountReason;
-    note: string;
-}
-
 /** A priced discount line the server applied to the order. */
 export interface AppliedDiscountLine {
+    discount_id: string | null;
     source: string;
     kind: string;
     label: string;
@@ -116,9 +100,18 @@ export interface NewOrderFormValue {
         pstRate: number;
         deliveryFees: number;
         deliveryTips: number;
-        /** Priced from manualDiscount and capped at the delivery fee. */
+        /** Priced from the selected discounts, capped at the delivery fee. */
         discount: number;
-        manualDiscount: ManualDiscountValue | null;
+        /** Which admin-created discounts to apply; the server prices them.
+         * `value` is only for discounts whose amount is typed per order. */
+        discountSelections: { discountId: string; value: string }[];
+        discountNote: string;
+        /** A coupon code to redeem; the server resolves it to whichever discount it unlocks. */
+        couponCode: string;
+        /** Automatic discounts this order could get; the server picks the winner. */
+        automaticOffers: AutomaticOffer[];
+        /** Automatic discounts a dispatcher removed from this order. */
+        optedOutDiscountIds: string[];
         appliedDiscounts: AppliedDiscountLine[];
 
         subtotal: number;

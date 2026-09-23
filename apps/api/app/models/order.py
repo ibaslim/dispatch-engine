@@ -95,6 +95,8 @@ class Order(Base):
     # Server-priced discount lines; `discount` is their sum.
     discount = Column(Float, default=0)
     applied_discounts = Column(JSON, nullable=False, default=list)
+    # Automatic discounts a dispatcher removed from this order, so edits keep them off.
+    opted_out_discount_ids = Column(JSON, nullable=False, default=list)
     coupon_code = Column(String(40), nullable=True)
     total = Column(Float, default=0)
 

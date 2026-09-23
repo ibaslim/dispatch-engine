@@ -39,7 +39,21 @@ from app.services.driver_payout_service import (
     clear_driver_payout_snapshot,
     get_driver_payment_group,
 )
-from app.services.discounts import apply_manual, as_dicts, reprice, total_of
+from app.services.discounts import (
+    DiscountSelectionError,
+    already_applied_ids,
+    as_uuids,
+    automatic_applied_ids,
+    build_lines,
+    choose_best,
+    coupons as coupon_rules,
+    eligible_automatic,
+    load_selected,
+    orphan_lines,
+    redemptions,
+    selected_choices,
+    total_of,
+)
 from app.services.pusher_service import pusher_service
 from app.schemas.order import (
     OrderCreate,
@@ -53,7 +67,6 @@ from app.schemas.order import (
     IncidentReportCreate,
     IncidentReason,
     IncidentStage,
-    ManualDiscountInput,
     PickupQrConfirm,
     ReadyUpdate,
     RoutePlanResponse,
@@ -204,21 +217,95 @@ def _apply_discounts(
     data: dict,
     gross_fee: Decimal,
     *,
-    manual: ManualDiscountInput | None,
+    discounts: list,
+    entered_values: dict | None = None,
+    note: str | None,
     applied_by: UUID | None,
+    keep_lines: list[dict] | None = None,
 ) -> None:
     """Price the discount lines and their total. The client never sets `discount`."""
-    data.pop("manual_discount", None)
-    lines = as_dicts(apply_manual(manual, gross_fee, applied_by))
+    lines = build_lines(
+        gross_fee=gross_fee,
+        discounts=discounts,
+        entered_values=entered_values,
+        orphan_lines=keep_lines,
+        note=note,
+        applied_by=applied_by,
+    )
     data["applied_discounts"] = lines
     data["discount"] = float(total_of(lines))
 
 
-def _reprice_discounts(data: dict, order: Order, gross_fee: Decimal) -> None:
-    """Follow the order's own discount lines onto a new delivery fee."""
-    lines = reprice(order.applied_discounts, gross_fee)
-    data["applied_discounts"] = lines
-    data["discount"] = float(total_of(lines))
+async def _automatic_discounts(
+    db: AsyncSession,
+    *,
+    pickup_at: datetime | None,
+    pickup_time_specified: bool,
+    tenant_id: UUID | None,
+    order_id: UUID | None,
+    gross_fee: Decimal,
+    opted_out: list,
+    already_applied: set | None = None,
+) -> list:
+    """The automatic discount this order gets, if any: the best that fits, minus opt-outs."""
+    if pickup_at is None:
+        return []
+    eligible = await eligible_automatic(
+        db,
+        pickup_at=pickup_at,
+        pickup_time_specified=pickup_time_specified,
+        tenant_id=tenant_id,
+        order_id=order_id,
+        already_applied=already_applied or (),
+    )
+    winner = choose_best(eligible, gross_fee, as_uuids(opted_out))
+    return [winner] if winner is not None else []
+
+
+async def _selected_or_http_error(
+    db: AsyncSession,
+    choices: list,
+    *,
+    tenant_id: UUID | None,
+    order_id: UUID | None = None,
+    pickup_at: datetime | None = None,
+    pickup_time_specified: bool = True,
+    already_applied: set | None = None,
+) -> tuple[list, dict]:
+    try:
+        return await load_selected(
+            db,
+            choices,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            pickup_at=pickup_at,
+            pickup_time_specified=pickup_time_specified,
+            already_applied=already_applied,
+        )
+    except DiscountSelectionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+async def _coupon_or_http_error(
+    db: AsyncSession,
+    code: str,
+    *,
+    tenant_id: UUID | None,
+    order_id: UUID | None,
+    pickup_at: datetime | None,
+    pickup_time_specified: bool,
+):
+    try:
+        return await coupon_rules.validate(
+            db,
+            code,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            pickup_at=pickup_at,
+            pickup_time_specified=pickup_time_specified,
+        )
+    except DiscountSelectionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
 # Everything the order total is built from, discount last because it comes off.
@@ -323,6 +410,7 @@ def _driver_order_response(order: Order, payment_group) -> dict:
         delivery_tips=0,
         discount=0,
         applied_discounts=[],
+        opted_out_discount_ids=[],
         coupon_code=None,
         total=0,
         surcharge_ids=[],
@@ -509,12 +597,49 @@ async def create_order(
             data.get("pickup_address"),
             data.get("delivery_address"),
         )
+        selected, entered_values = await _selected_or_http_error(
+            db,
+            data.pop("discounts", []) or [],
+            tenant_id=data.get("vendor_id"),
+            pickup_at=data.get("pickup_planned_at"),
+            pickup_time_specified=bool(data.get("pickup_time_specified", True)),
+        )
+        note = data.pop("discount_note", None)
+        opted_out = [str(value) for value in data.get("opted_out_discount_ids") or []]
+        data["opted_out_discount_ids"] = opted_out
+        coupon_code = coupon_rules.normalize(data.get("coupon_code")) or None
+        data["coupon_code"] = coupon_code
+        coupon_discount = None
+        coupon_to_claim = None
+        if coupon_code:
+            coupon_discount, coupon_to_claim = await _coupon_or_http_error(
+                db,
+                coupon_code,
+                tenant_id=data.get("vendor_id"),
+                order_id=None,
+                pickup_at=data.get("pickup_planned_at"),
+                pickup_time_specified=bool(data.get("pickup_time_specified", True)),
+            )
+        # An automatic discount goes first, then the coupon, so a hand-picked
+        # discount always prices on whatever is left of the fee.
+        automatic = await _automatic_discounts(
+            db,
+            pickup_at=data.get("pickup_planned_at"),
+            pickup_time_specified=bool(data.get("pickup_time_specified", True)),
+            tenant_id=data.get("vendor_id"),
+            order_id=None,
+            gross_fee=quote.delivery_fee,
+            opted_out=opted_out,
+        )
+        selected = [*automatic, *([coupon_discount] if coupon_discount else []), *selected]
         # Must run before _apply_quote, which folds tax and discount into the total.
         _apply_tax(data, quote.gst_rate, quote.pst_rate)
         _apply_discounts(
             data,
             quote.delivery_fee,
-            manual=payload.manual_discount,
+            discounts=selected,
+            entered_values=entered_values,
+            note=note,
             applied_by=current_user.id,
         )
         _apply_quote(data, quote)
@@ -540,6 +665,25 @@ async def create_order(
             payment_group = await get_driver_payment_group(db, order.driver_id)
             apply_driver_payout_snapshot(order, payment_group)
         db.add(order)
+        # The order needs an id before a redemption can point at it, and both
+        # must land together: a discount over its limit rolls the order back.
+        await db.flush()
+        try:
+            if coupon_to_claim is not None:
+                await coupon_rules.claim(db, coupon_to_claim)
+            await redemptions.sync(
+                db,
+                order,
+                order.applied_discounts,
+                selected,
+                applied_by=current_user.id,
+                coupon_ids=(
+                    {coupon_discount.id: coupon_to_claim.id} if coupon_discount else None
+                ),
+            )
+        except DiscountSelectionError as exc:
+            await db.rollback()
+            raise HTTPException(status_code=409, detail=exc.message) from exc
         await db.commit()
         await db.refresh(order)
 
@@ -591,9 +735,22 @@ async def update_order(
     update_data = payload.model_dump(exclude_unset=True)
     # The charge breakdown is always recalculated by the server.
     update_data.pop("applied_charges", None)
-    # Sending the field at all replaces the manual discount; null clears it.
-    manual_changed = "manual_discount" in update_data
-    update_data.pop("manual_discount", None)
+    # Sending the field at all replaces the order's discounts; [] clears them.
+    selection_changed = "discounts" in update_data
+    requested_choices = list(update_data.pop("discounts", None) or [])
+    note_changed = "discount_note" in update_data
+    discount_note = update_data.pop("discount_note", None)
+    # Automatic discounts a dispatcher removed; sending the list replaces it.
+    optout_changed = "opted_out_discount_ids" in update_data
+    if optout_changed:
+        update_data["opted_out_discount_ids"] = [
+            str(value) for value in (update_data["opted_out_discount_ids"] or [])
+        ]
+    opted_out = update_data.get("opted_out_discount_ids", order.opted_out_discount_ids) or []
+    # A code a dispatcher entered or cleared; sending it replaces the order's coupon.
+    coupon_changed = "coupon_code" in update_data
+    if coupon_changed:
+        update_data["coupon_code"] = coupon_rules.normalize(update_data.get("coupon_code")) or None
 
     tax_trigger_fields = {
         "subtotal", "items",
@@ -641,6 +798,75 @@ async def update_order(
             raise HTTPException(status_code=422, detail=schedule_problem)
 
     quote_ran = bool(quote_fields.intersection(update_data))
+    pickup_changed = bool(
+        {"pickup_planned_at", "pickup_time_specified"}.intersection(update_data)
+    )
+    # Only these can change what an order is owed. Anything else (an instruction,
+    # a phone number) leaves its discounts exactly as they were given.
+    reprice = (
+        selection_changed
+        or note_changed
+        or optout_changed
+        or coupon_changed
+        or quote_ran
+        or pickup_changed
+        or "delivery_fees" in update_data
+    )
+    # An explicit selection replaces everything, including lines that predate
+    # discount rows; leaving it out keeps what the order already carries.
+    existing_lines = order.applied_discounts or []
+    if selection_changed:
+        keep_lines: list[dict] = []
+    else:
+        keep_lines = orphan_lines(existing_lines)
+        requested_choices = selected_choices(existing_lines)
+    vendor_id = update_data.get("vendor_id", order.vendor_id)
+    pickup_at = update_data.get("pickup_planned_at", order.pickup_planned_at)
+    pickup_specified = bool(
+        update_data.get("pickup_time_specified", order.pickup_time_specified)
+    )
+    if reprice:
+        selected, entered_values = await _selected_or_http_error(
+            db,
+            requested_choices,
+            tenant_id=vendor_id,
+            order_id=order.id,
+            # An edit re-checks the schedule against the pickup time it now has.
+            pickup_at=pickup_at,
+            pickup_time_specified=pickup_specified,
+            # What is already on the order was valid when it was given.
+            already_applied=already_applied_ids(existing_lines),
+        )
+    else:
+        selected, entered_values = [], {}
+
+    # The coupon is resolved once here; the branches below only need to price it.
+    effective_coupon_code = update_data.get("coupon_code", order.coupon_code)
+    coupon_discount = None
+    coupon_to_claim = None
+    if reprice and effective_coupon_code:
+        if coupon_changed:
+            coupon_discount, coupon_to_claim = await _coupon_or_http_error(
+                db,
+                effective_coupon_code,
+                tenant_id=vendor_id,
+                order_id=order.id,
+                pickup_at=pickup_at,
+                pickup_time_specified=pickup_specified,
+            )
+        else:
+            # Unchanged: carry over what it already unlocked, not a fresh claim.
+            coupon_discount = await coupon_rules.carried_discount(
+                db, existing_lines, pickup_at, pickup_specified
+            )
+
+    if note_changed:
+        keep_lines = [{**line, "note": discount_note} for line in keep_lines]
+    elif not selection_changed:
+        discount_note = next(
+            (line.get("note") for line in existing_lines if line.get("note")), None
+        )
+
     if quote_ran:
         quote = await _get_quote_or_http_error(
             db,
@@ -665,16 +891,30 @@ async def update_order(
             "pst_amount": tax_data["pst_amount"],
             "delivery_tips": update_data.get("delivery_tips", order.delivery_tips),
         }
-        # The fee moved, so the discount is re-priced against the new one.
-        if manual_changed:
-            _apply_discounts(
-                merged_totals,
-                quote.delivery_fee,
-                manual=payload.manual_discount,
-                applied_by=current_user.id,
-            )
-        else:
-            _reprice_discounts(merged_totals, order, quote.delivery_fee)
+        # The fee moved, so every discount is re-priced against the new one.
+        selected = [
+            *await _automatic_discounts(
+                db,
+                pickup_at=pickup_at,
+                pickup_time_specified=pickup_specified,
+                tenant_id=vendor_id,
+                order_id=order.id,
+                gross_fee=quote.delivery_fee,
+                opted_out=opted_out,
+                already_applied=automatic_applied_ids(existing_lines),
+            ),
+            *([coupon_discount] if coupon_discount else []),
+            *selected,
+        ]
+        _apply_discounts(
+            merged_totals,
+            quote.delivery_fee,
+            discounts=selected,
+            entered_values=entered_values,
+            note=discount_note,
+            applied_by=current_user.id,
+            keep_lines=keep_lines,
+        )
         _apply_quote(merged_totals, quote)
         update_data.update(merged_totals)
     elif tax_trigger_fields.intersection(update_data):
@@ -694,15 +934,30 @@ async def update_order(
         # No new quote, so discounts are priced against the fee already in force
         # and the total is rebuilt only when one of its parts actually moved.
         gross_fee = Decimal(str(update_data.get("delivery_fees", order.delivery_fees) or 0))
-        if manual_changed:
+        if reprice:
+            selected = [
+                *await _automatic_discounts(
+                    db,
+                    pickup_at=pickup_at,
+                    pickup_time_specified=pickup_specified,
+                    tenant_id=vendor_id,
+                    order_id=order.id,
+                    gross_fee=gross_fee,
+                    opted_out=opted_out,
+                    already_applied=automatic_applied_ids(existing_lines),
+                ),
+                *([coupon_discount] if coupon_discount else []),
+                *selected,
+            ]
             _apply_discounts(
                 update_data,
                 gross_fee,
-                manual=payload.manual_discount,
+                discounts=selected,
+                entered_values=entered_values,
+                note=discount_note,
                 applied_by=current_user.id,
+                keep_lines=keep_lines,
             )
-        elif "delivery_fees" in update_data:
-            _reprice_discounts(update_data, order, gross_fee)
         if {*TOTAL_COMPONENTS, "discount"}.intersection(update_data):
             update_data["total"] = _order_total(order, update_data)
 
@@ -723,6 +978,7 @@ async def update_order(
     try:
         previous_driver_id = order.driver_id
         previous_vendor_id = order.vendor_id
+        previous_coupon_code = order.coupon_code
         was_published = bool(order.published)
         for key, value in update_data.items():
             setattr(order, key, value)
@@ -736,6 +992,28 @@ async def update_order(
 
         if "status" not in update_data and schedule_changed:
             order.status = get_order_status(order.delivery_planned_at, order.delivery_time_specified)
+
+        if "applied_discounts" in update_data:
+            try:
+                if coupon_changed and previous_coupon_code and previous_coupon_code != effective_coupon_code:
+                    await coupon_rules.release_by_code(db, previous_coupon_code)
+                if coupon_to_claim is not None:
+                    await coupon_rules.claim(db, coupon_to_claim)
+                await redemptions.sync(
+                    db,
+                    order,
+                    order.applied_discounts,
+                    selected,
+                    applied_by=current_user.id,
+                    coupon_ids=(
+                        {coupon_discount.id: coupon_to_claim.id}
+                        if coupon_discount and coupon_to_claim
+                        else None
+                    ),
+                )
+            except DiscountSelectionError as exc:
+                await db.rollback()
+                raise HTTPException(status_code=409, detail=exc.message) from exc
 
         await db.commit()
         await db.refresh(order)
@@ -785,6 +1063,10 @@ async def delete_order(
         raise HTTPException(status_code=404, detail="Order not found")
 
     was_published = bool(order.published)
+    # The redemption rows outlive the order, but the uses go back to the pool.
+    await redemptions.void_for_order(db, order.id, "order_deleted")
+    if order.coupon_code:
+        await coupon_rules.release_by_code(db, order.coupon_code)
     await db.delete(order)
     await db.commit()
 

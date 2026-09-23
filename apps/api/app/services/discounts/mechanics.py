@@ -22,5 +22,6 @@ def capped(amount: Decimal, ceiling: Decimal) -> Decimal:
 
 def discount_amount(kind: str, value: Decimal, eligible: Decimal) -> Decimal:
     """What `kind` takes off `eligible`, capped at it."""
+    eligible = quantize(eligible)
     raw = percentage_amount(eligible, value) if kind == PERCENTAGE else value
     return capped(raw, eligible)

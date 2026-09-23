@@ -1,129 +1,163 @@
 from decimal import Decimal
 from uuid import uuid4
 
-import pytest
-from pydantic import ValidationError
+from app.models.discount import Discount, DiscountKind, DiscountTrigger
+from app.services.discounts import (
+    amount_for,
+    as_dicts,
+    build_lines,
+    discount_amount,
+    price_discounts,
+    reprice_orphans,
+    total_of,
+)
 
-from app.schemas.order import ManualDiscountInput, ManualDiscountKind, ManualDiscountReason
-from app.services.discounts import apply_manual, as_dicts, reprice, total_of
+
+def _discount(
+    kind: str = "percentage",
+    value: str = "10",
+    *,
+    title: str = "Late delivery",
+    max_discount_amount: str | None = None,
+    min_gross_fee: str | None = None,
+    min_net_fee: str = "0",
+    reason: str | None = "late_delivery",
+) -> Discount:
+    """A Discount as the engine sees it. Never flushed, so defaults are explicit."""
+    return Discount(
+        id=uuid4(),
+        title=title,
+        public_label=title,
+        kind=DiscountKind(kind),
+        value=Decimal(value),
+        trigger=DiscountTrigger.manual,
+        reason=reason,
+        max_discount_amount=Decimal(max_discount_amount) if max_discount_amount else None,
+        min_gross_fee=Decimal(min_gross_fee) if min_gross_fee else None,
+        min_net_fee=Decimal(min_net_fee),
+    )
 
 
-def _manual(kind="percentage", value=10, reason="sales_goodwill", note=None) -> ManualDiscountInput:
-    return ManualDiscountInput(kind=kind, value=value, reason=reason, note=note)
+class TestMechanics:
+    def test_percentage_takes_a_share(self) -> None:
+        assert discount_amount("percentage", Decimal("10"), Decimal("12.00")) == Decimal("1.20")
 
-
-class TestApplyManual:
-    def test_no_manual_discount_applies_nothing(self) -> None:
-        assert apply_manual(None, Decimal("12.00")) == []
-
-    def test_percentage_comes_off_the_delivery_fee(self) -> None:
-        [line] = apply_manual(_manual(value=10), Decimal("12.00"))
-
-        assert line.amount == Decimal("1.20")
-        assert line.kind == "percentage"
-        assert line.label == "Discount (10%)"
-        assert line.value == Decimal("10")
-
-    def test_fixed_amount_comes_off_as_entered(self) -> None:
-        [line] = apply_manual(_manual(kind="fixed_amount", value=5), Decimal("12.00"))
-
-        assert line.amount == Decimal("5.00")
-        assert line.label == "Discount"
-
-    def test_fixed_amount_is_capped_at_the_fee(self) -> None:
-        """A discount never eats into the goods value, tax or tip owed to others."""
-        [line] = apply_manual(_manual(kind="fixed_amount", value=40), Decimal("12.00"))
-
-        assert line.amount == Decimal("12.00")
-
-    def test_full_percentage_is_capped_at_the_fee(self) -> None:
-        [line] = apply_manual(_manual(value=100), Decimal("12.00"))
-
-        assert line.amount == Decimal("12.00")
+    def test_fixed_amount_takes_its_value(self) -> None:
+        assert discount_amount("fixed_amount", Decimal("5"), Decimal("12.00")) == Decimal("5.00")
 
     def test_rounds_half_up_to_cents(self) -> None:
-        [line] = apply_manual(_manual(value=15), Decimal("12.50"))
+        assert discount_amount("percentage", Decimal("15"), Decimal("12.50")) == Decimal("1.88")
 
-        assert line.amount == Decimal("1.88")
+    def test_nothing_ever_exceeds_the_fee(self) -> None:
+        assert discount_amount("fixed_amount", Decimal("500"), Decimal("12.00")) == Decimal("12.00")
 
-    def test_nothing_is_applied_when_there_is_no_fee(self) -> None:
-        assert apply_manual(_manual(value=10), Decimal("0.00")) == []
 
-    def test_records_who_applied_it_and_why(self) -> None:
-        admin_id = uuid4()
-        [line] = apply_manual(
-            _manual(reason="late_delivery"), Decimal("12.00"), applied_by=admin_id
+class TestAmountFor:
+    def test_max_discount_amount_caps_a_percentage(self) -> None:
+        discount = _discount("percentage", "20", max_discount_amount="4")
+
+        assert amount_for(discount, Decimal("30.00")) == Decimal("4.00")
+
+    def test_min_gross_fee_holds_it_back(self) -> None:
+        discount = _discount("fixed_amount", "5", min_gross_fee="8")
+
+        assert amount_for(discount, Decimal("6.00")) == Decimal("0.00")
+        assert amount_for(discount, Decimal("8.00")) == Decimal("5.00")
+
+    def test_min_net_fee_leaves_a_floor(self) -> None:
+        """The platform keeps at least $6 of a $20 fee, whatever the terms say."""
+        discount = _discount("percentage", "100", min_net_fee="6")
+
+        assert amount_for(discount, Decimal("20.00")) == Decimal("14.00")
+
+    def test_nothing_is_taken_off_a_fee_of_nothing(self) -> None:
+        assert amount_for(_discount(), Decimal("0.00")) == Decimal("0.00")
+
+
+class TestPriceDiscounts:
+    def test_prices_each_against_what_is_left(self) -> None:
+        first = _discount("fixed_amount", "5", title="Goodwill")
+        second = _discount("percentage", "10", title="Late delivery")
+
+        lines = price_discounts([first, second], Decimal("20.00"))
+
+        assert [line.amount for line in lines] == [Decimal("5.00"), Decimal("1.50")]
+
+    def test_the_sum_never_exceeds_the_fee(self) -> None:
+        lines = price_discounts(
+            [_discount("fixed_amount", "15"), _discount("fixed_amount", "15")],
+            Decimal("20.00"),
         )
 
-        assert line.reason == "late_delivery"
-        assert line.as_dict()["applied_by"] == str(admin_id)
-        assert line.as_dict()["source"] == "manual"
+        assert sum(line.amount for line in lines) == Decimal("20.00")
+
+    def test_a_discount_worth_nothing_is_left_out(self) -> None:
+        lines = price_discounts(
+            [_discount("fixed_amount", "20"), _discount("percentage", "50")],
+            Decimal("20.00"),
+        )
+
+        assert len(lines) == 1
+
+    def test_the_line_carries_what_a_receipt_needs(self) -> None:
+        admin_id = uuid4()
+        discount = _discount("percentage", "10", title="Late delivery")
+
+        [line] = price_discounts(
+            [discount], Decimal("20.00"), note="Called ahead", applied_by=admin_id
+        )
+        as_json = line.as_dict()
+
+        assert as_json["discount_id"] == str(discount.id)
+        assert as_json["label"] == "Late delivery"
+        assert as_json["amount"] == 2.0
+        assert as_json["source"] == "manual"
+        assert as_json["reason"] == "late_delivery"
+        assert as_json["note"] == "Called ahead"
+        assert as_json["applied_by"] == str(admin_id)
 
 
-class TestReprice:
-    def test_percentage_follows_a_new_fee(self) -> None:
-        stored = as_dicts(apply_manual(_manual(value=10), Decimal("12.00")))
+class TestOrphanLines:
+    """Lines from before discounts were rows still have to work."""
 
-        [line] = reprice(stored, Decimal("20.00"))
+    def test_a_percentage_follows_the_fee(self) -> None:
+        stored = [{"kind": "percentage", "value": 10.0, "amount": 2.0, "label": "Discount (10%)"}]
 
-        assert line["amount"] == 2.0
-        assert line["value"] == 10.0
+        assert reprice_orphans(stored, Decimal("40.00"))[0]["amount"] == 4.0
 
-    def test_fixed_amount_is_capped_down_to_a_smaller_fee(self) -> None:
-        stored = as_dicts(apply_manual(_manual(kind="fixed_amount", value=9), Decimal("12.00")))
+    def test_a_fixed_amount_is_capped_down(self) -> None:
+        stored = [{"kind": "fixed_amount", "value": 9.0, "amount": 9.0, "label": "Discount"}]
 
-        [line] = reprice(stored, Decimal("4.00"))
+        [line] = reprice_orphans(stored, Decimal("4.00"))
 
         assert line["amount"] == 4.0
-        # The agreed terms survive, so a later fee rise restores the full amount.
-        assert line["value"] == 9.0
-        assert reprice([line], Decimal("12.00"))[0]["amount"] == 9.0
+        # Terms survive, so a later fee rise restores the full amount.
+        assert reprice_orphans([line], Decimal("12.00"))[0]["amount"] == 9.0
 
-    def test_a_line_worth_nothing_is_dropped(self) -> None:
-        stored = as_dicts(apply_manual(_manual(value=10), Decimal("12.00")))
+    def test_they_are_priced_before_selected_discounts(self) -> None:
+        orphan = [{"kind": "fixed_amount", "value": 8.0, "amount": 8.0, "label": "Discount"}]
 
-        assert reprice(stored, Decimal("0.00")) == []
+        lines = build_lines(
+            gross_fee=Decimal("10.00"),
+            discounts=[_discount("fixed_amount", "5")],
+            orphan_lines=orphan,
+        )
 
-    def test_no_lines_reprice_to_no_lines(self) -> None:
-        assert reprice(None, Decimal("12.00")) == []
+        assert [line["amount"] for line in lines] == [8.0, 2.0]
+        assert total_of(lines) == Decimal("10.00")
 
 
 class TestTotalOf:
     def test_sums_the_lines(self) -> None:
-        lines = [{"amount": 1.2}, {"amount": 3.45}]
+        assert total_of([{"amount": 1.2}, {"amount": 3.45}]) == Decimal("4.65")
 
-        assert total_of(lines) == Decimal("4.65")
-
-    def test_no_lines_total_zero(self) -> None:
+    def test_no_lines_total_nothing(self) -> None:
         assert total_of([]) == Decimal("0.00")
 
-    def test_unreadable_amount_is_skipped(self) -> None:
+    def test_an_unreadable_amount_is_skipped(self) -> None:
         assert total_of([{"amount": "oops"}, {"amount": 2}]) == Decimal("2.00")
 
+    def test_matches_the_dicts_the_order_stores(self) -> None:
+        lines = as_dicts(price_discounts([_discount("percentage", "10")], Decimal("20.00")))
 
-class TestManualDiscountInput:
-    def test_rejects_a_percentage_over_one_hundred(self) -> None:
-        with pytest.raises(ValidationError):
-            _manual(value=101)
-
-    def test_rejects_a_value_of_zero(self) -> None:
-        with pytest.raises(ValidationError):
-            _manual(value=0)
-
-    def test_other_reason_requires_a_note(self) -> None:
-        with pytest.raises(ValidationError):
-            _manual(reason="other")
-
-    def test_other_reason_accepts_a_note(self) -> None:
-        discount = _manual(reason="other", note="  Agreed with the vendor  ")
-
-        assert discount.note == "Agreed with the vendor"
-        assert discount.reason == ManualDiscountReason.other
-
-    def test_blank_note_is_stored_as_nothing(self) -> None:
-        assert _manual(note="   ").note is None
-
-    def test_kind_is_limited_to_the_two_mechanics(self) -> None:
-        assert _manual().kind == ManualDiscountKind.percentage
-        with pytest.raises(ValidationError):
-            _manual(kind="free_delivery")
+        assert total_of(lines) == Decimal("2.00")

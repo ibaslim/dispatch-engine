@@ -85,67 +85,145 @@
             (valueChange)="patch({ deliveryTips: $event })">
         </app-base-input>
 
-        <!-- MANUAL DISCOUNT: terms in, priced against the delivery fee -->
+        <!-- DISCOUNTS: picked from what an admin created -->
         <div class="space-y-2">
-            <app-button *ngIf="!value.manualDiscount" variant="primary" type="button"
-                label="+ Add discount" (onClick)="addManualDiscount()">
-            </app-button>
-
-            <div *ngIf="value.manualDiscount"
-                class="space-y-3 rounded-md border border-gray-300 px-4 py-3 dark:border-[#5a5d5a]">
-                <div class="flex items-center justify-between gap-4">
-                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Discount</p>
-                    <app-button variant="icon" type="button" ariaLabel="Remove discount"
-                        (onClick)="removeManualDiscount()">
-                        <span class="text-red-600 dark:text-red-400">&#10005;</span>
-                    </app-button>
+            <div class="flex items-center justify-between gap-2">
+                <div>
+                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Discounts</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                        Comes off the delivery fee only, never the goods value, tax or tip.
+                    </p>
                 </div>
+                <app-button variant="primary" type="button"
+                    [label]="discountPickerOpen ? 'Done' : '+Add'"
+                    (onClick)="toggleDiscountPicker()">
+                </app-button>
+            </div>
 
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Comes off the delivery fee only, never the goods value, tax or tip.
+            <!-- Applied by themselves; a dispatcher can take one off this order -->
+            <div *ngIf="automaticRows().length"
+                class="rounded-md border border-gray-300 dark:border-[#5a5d5a]">
+                <p class="border-b border-gray-200 px-4 py-2 text-xs font-medium text-gray-600 dark:border-[#3a3d3a] dark:text-gray-300">
+                    Applied automatically. Untick to leave one off this order.
                 </p>
+                <label *ngFor="let row of automaticRows()"
+                    class="flex items-start gap-3 border-b border-gray-200 px-4 py-3 last:border-b-0 dark:border-[#3a3d3a]"
+                    [ngClass]="row.disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'">
+                    <input type="checkbox" class="mt-1 h-4 w-4 accent-[#3ddc97]"
+                        [checked]="row.checked" [disabled]="row.disabled" (change)="toggleAutomatic(row)">
+                    <span class="flex-1">
+                        <span class="block text-sm font-medium text-gray-900 dark:text-gray-100">{{ row.title }}</span>
+                        <span class="block text-xs text-gray-500 dark:text-gray-400">
+                            {{ row.note || row.when }}
+                        </span>
+                    </span>
+                    <span class="tabular-nums text-sm"
+                        [ngClass]="row.amount > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400'">
+                        -{{ money(row.amount) }}
+                    </span>
+                </label>
+            </div>
 
-                <div class="flex flex-wrap items-end gap-3">
-                    <div class="inline-flex overflow-hidden rounded-md border border-gray-300 dark:border-[#5a5d5a]">
-                        <button type="button" class="px-3 py-2 text-sm"
-                            [ngClass]="value.manualDiscount.kind === 'percentage'
-                                ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
-                                : 'text-gray-700 dark:text-gray-200'"
-                            (click)="setDiscountKind('percentage')">%</button>
-                        <button type="button" class="px-3 py-2 text-sm"
-                            [ngClass]="value.manualDiscount.kind === 'fixed_amount'
-                                ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
-                                : 'text-gray-700 dark:text-gray-200'"
-                            (click)="setDiscountKind('fixed_amount')">C$</button>
-                    </div>
-
-                    <div class="min-w-[8rem] flex-1">
-                        <app-base-input type="text" [showLabel]="false"
-                            [placeholder]="value.manualDiscount.kind === 'percentage' ? 'e.g. 10' : 'e.g. 5.00'"
-                            [value]="value.manualDiscount.value" (valueChange)="setDiscountValue($event)">
+            <!-- Coupon code -->
+            <div class="rounded-md border border-gray-300 px-4 py-3 dark:border-[#5a5d5a]">
+                <p class="mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">Coupon code</p>
+                <div class="flex items-end gap-2">
+                    <div class="flex-1">
+                        <app-base-input [showLabel]="false" placeholder="WELCOME10"
+                            [value]="value.couponCode" (valueChange)="setCouponCode($event)">
                         </app-base-input>
                     </div>
+                    <app-button variant="ghost-outline" type="button"
+                        [label]="couponChecking ? 'Checking...' : 'Check'"
+                        [disabled]="couponChecking || !value.couponCode?.trim()"
+                        (onClick)="onCheckCoupon()">
+                    </app-button>
+                </div>
+                <p *ngIf="couponCheckError" class="mt-1 text-xs text-red-600 dark:text-red-400">
+                    {{ couponCheckError }}
+                </p>
+                <p *ngIf="couponDiscount && !couponCheckError"
+                    class="mt-1 flex items-center justify-between gap-3 text-xs text-emerald-700 dark:text-emerald-300">
+                    <span>{{ couponDiscount.title }} unlocked</span>
+                    <span class="tabular-nums">-{{ money(couponAmountPreview()) }}</span>
+                </p>
+            </div>
 
-                    <div class="min-w-[12rem] flex-1">
-                        <app-dropdown-selector [showLabel]="false" placeholder="Reason"
-                            [options]="discountReasons" [value]="value.manualDiscount.reason"
-                            (valueChange)="setDiscountReason($event)">
-                        </app-dropdown-selector>
+            <!-- Picker -->
+            <div *ngIf="discountPickerOpen"
+                class="rounded-md border border-gray-300 dark:border-[#5a5d5a]">
+                <p *ngIf="!availableDiscounts.length" class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                    No discounts are set up yet. An admin can add them under
+                    Configurations &rsaquo; Discounts.
+                </p>
+                <div *ngFor="let discount of availableDiscounts"
+                    class="border-b border-gray-200 px-4 py-3 last:border-b-0 dark:border-[#3a3d3a]">
+                    <label class="flex cursor-pointer items-start gap-3">
+                        <input type="checkbox" class="mt-1 h-4 w-4 accent-[#3ddc97]"
+                            [checked]="isSelected(discount)" (change)="toggleDiscount(discount)">
+                        <span class="flex-1">
+                            <span class="block text-sm font-medium text-gray-900 dark:text-gray-100">{{ discount.title }}</span>
+                            <span class="block text-xs text-gray-500 dark:text-gray-400">
+                                {{ discountTerms(discount) }}
+                                <span *ngIf="discount.schedule_label !== 'Any day'"> &middot; {{ discount.schedule_label }}</span>
+                                <span *ngIf="discount.discount_type_title"> &middot; {{ discount.discount_type_title }}</span>
+                            </span>
+                        </span>
+                        <span class="tabular-nums text-sm"
+                            [ngClass]="previewAmount(discount) > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400'">
+                            -{{ money(previewAmount(discount)) }}
+                        </span>
+                    </label>
+
+                    <!-- This one's size is decided here, on the order -->
+                    <div *ngIf="isSelected(discount) && needsValue(discount)" class="mt-2 pl-7">
+                        <div class="flex items-start gap-2">
+                            <span class="mt-2.5 w-6 text-xs text-gray-500 dark:text-gray-400">{{ valueUnit(discount) }}</span>
+                            <div class="w-40">
+                                <app-base-input [showLabel]="false"
+                                    [placeholder]="discount.kind === 'percentage' ? 'e.g. 10' : 'e.g. 5.00'"
+                                    [value]="enteredValue(discount)"
+                                    [externalError]="valueError(discount) || ''"
+                                    [showExternalError]="!!valueError(discount)"
+                                    (valueChange)="setEnteredValue(discount, $event)">
+                                </app-base-input>
+                            </div>
+                        </div>
                     </div>
                 </div>
+            </div>
 
-                <app-textarea [label]="discountNoteRequired() ? 'Note (required)' : 'Note (optional)'"
-                    placeholder="What was agreed, and with whom" [value]="value.manualDiscount.note"
-                    (valueChange)="setDiscountNote($event)">
+            <!-- Chosen -->
+            <div *ngIf="selectedPicks().length"
+                class="space-y-2 rounded-md border border-gray-300 px-4 py-3 dark:border-[#5a5d5a]">
+                <div *ngFor="let pick of selectedPicks()" class="flex items-center justify-between gap-3">
+                    <span class="text-sm text-gray-900 dark:text-gray-100">{{ pick.discount.title }}</span>
+                    <span class="flex items-center gap-3">
+                        <span class="tabular-nums text-sm text-red-600 dark:text-red-400">
+                            -{{ money(previewAmount(pick.discount)) }}
+                        </span>
+                        <app-button variant="icon" type="button" ariaLabel="Remove discount"
+                            (onClick)="removeDiscount(pick.discount.id)">
+                            <span class="text-red-600 dark:text-red-400">&#10005;</span>
+                        </app-button>
+                    </span>
+                </div>
+
+                <!-- Note only shown for manual discounts (requires dispatcher context) -->
+                <app-textarea *ngIf="hasManualDiscountSelected()" label="Note (optional)" placeholder="What was agreed, and with whom"
+                    [value]="value.discountNote" (valueChange)="setDiscountNote($event)">
                 </app-textarea>
 
-                <app-error-message *ngIf="showSubmitValidation && discountError()" [show]="true"
-                    [messages]="[discountError()!]">
-                </app-error-message>
-
-                <p *ngIf="discountNotYetPriced()" class="text-xs text-gray-500 dark:text-gray-400">
-                    Nothing to take off yet — this applies once a delivery fee is quoted.
+                <p *ngIf="nothingToDiscountYet()" class="text-xs text-gray-500 dark:text-gray-400">
+                    Nothing to take off yet &mdash; this applies once a delivery fee is quoted.
                 </p>
+            </div>
+
+            <!-- Lines the server applied that are not in the list any more -->
+            <div *ngFor="let line of appliedOnlyLines()"
+                class="flex items-center justify-between gap-3 rounded-md border border-dashed border-gray-300 px-4 py-2 text-sm dark:border-[#5a5d5a]">
+                <span class="text-gray-600 dark:text-gray-300">{{ line.label }}</span>
+                <span class="tabular-nums text-red-600 dark:text-red-400">-{{ money(line.amount) }}</span>
             </div>
         </div>
 
@@ -171,13 +249,24 @@
                 <dd class="tabular-nums text-gray-900 dark:text-gray-100">{{ money(value.deliveryTips) }}</dd>
             </div>
 
-            <div *ngIf="value.discount > 0" class="flex justify-between gap-4 py-1">
-                <dt class="text-gray-600 dark:text-gray-300">
-                    {{ value.manualDiscount?.kind === 'percentage'
-                        ? 'Discount (' + value.manualDiscount?.value + '%)'
-                        : 'Discount' }}
-                </dt>
-                <dd class="tabular-nums text-red-600 dark:text-red-400">-{{ money(value.discount) }}</dd>
+            <div *ngFor="let row of automaticReceiptRows()" class="flex justify-between gap-4 py-1">
+                <dt class="text-gray-600 dark:text-gray-300">{{ row.title }}</dt>
+                <dd class="tabular-nums text-red-600 dark:text-red-400">-{{ money(row.amount) }}</dd>
+            </div>
+
+            <div *ngIf="couponDiscount && couponAmountPreview() > 0" class="flex justify-between gap-4 py-1">
+                <dt class="text-gray-600 dark:text-gray-300">{{ couponDiscount.public_label }}</dt>
+                <dd class="tabular-nums text-red-600 dark:text-red-400">-{{ money(couponAmountPreview()) }}</dd>
+            </div>
+
+            <div *ngFor="let line of discountLines()" class="flex justify-between gap-4 py-1">
+                <dt class="text-gray-600 dark:text-gray-300">{{ line.discount.public_label }}</dt>
+                <dd class="tabular-nums text-red-600 dark:text-red-400">-{{ money(line.amount) }}</dd>
+            </div>
+
+            <div *ngFor="let line of appliedOnlyLines()" class="flex justify-between gap-4 py-1">
+                <dt class="text-gray-600 dark:text-gray-300">{{ line.label }}</dt>
+                <dd class="tabular-nums text-red-600 dark:text-red-400">-{{ money(line.amount) }}</dd>
             </div>
 
             <div class="mt-2 flex justify-between gap-4 border-t border-gray-200 pt-2.5 dark:border-[#3a3d3a]">
