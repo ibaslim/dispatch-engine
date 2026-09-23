@@ -129,10 +129,6 @@
             class="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600 dark:bg-[#303330] dark:text-gray-300">
             {{ reasonLabels[discount.reason] }}
           </span>
-          <span *ngIf="usageFor(discount)?.uses"
-            class="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600 dark:bg-[#303330] dark:text-gray-300">
-            {{ money(usageFor(discount)!.total_amount) }} given
-          </span>
         </div>
       </article>
     </div>
@@ -306,7 +302,6 @@
         </div>
       </div>
 
-      <!-- Uses per customer hidden for now; usage_limit_per_tenant still saves as-is if already set. -->
       <app-base-input label="Total uses" type="number" [min]="1" [step]="1" placeholder="Unlimited"
         [value]="discountForm.usage_limit_total" (valueChange)="discountForm.usage_limit_total = $event">
       </app-base-input>

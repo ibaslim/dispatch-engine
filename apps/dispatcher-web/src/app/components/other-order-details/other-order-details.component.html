@@ -103,9 +103,6 @@
             <!-- Applied by themselves; a dispatcher can take one off this order -->
             <div *ngIf="automaticRows().length"
                 class="rounded-md border border-gray-300 dark:border-[#5a5d5a]">
-                <p class="border-b border-gray-200 px-4 py-2 text-xs font-medium text-gray-600 dark:border-[#3a3d3a] dark:text-gray-300">
-                    Applied automatically. Untick to leave one off this order.
-                </p>
                 <label *ngFor="let row of automaticRows()"
                     class="flex items-start gap-3 border-b border-gray-200 px-4 py-3 last:border-b-0 dark:border-[#3a3d3a]"
                     [ngClass]="row.disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'">

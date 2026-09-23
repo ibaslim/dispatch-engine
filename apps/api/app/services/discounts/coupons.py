@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.discount import Coupon, Discount, DiscountStatus, DiscountTrigger
 from app.services.discounts import schedule as schedule_rules
-from app.services.discounts.selection import DiscountSelectionError, _tenant_use_count
+from app.services.discounts.selection import DiscountSelectionError
 
 # 0/O and 1/I are left out: too easy to mix up when read aloud or typed by hand.
 ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -110,7 +110,6 @@ async def validate(
     code: str,
     *,
     tenant_id: UUID | None,
-    order_id: UUID | None,
     pickup_at: datetime | None,
     pickup_time_specified: bool = True,
     now: datetime | None = None,
@@ -158,10 +157,6 @@ async def validate(
         and discount.redemption_count >= discount.usage_limit_total
     ):
         raise DiscountSelectionError(f"{name} has reached its usage limit.")
-    if discount.usage_limit_per_tenant is not None and tenant_id is not None:
-        used = await _tenant_use_count(db, discount.id, tenant_id, order_id)
-        if used >= discount.usage_limit_per_tenant:
-            raise DiscountSelectionError(f"{name} has reached its limit for this customer.")
 
     return discount, coupon
 

@@ -25,7 +25,6 @@ const DISCOUNT = {
   starts_at: null,
   ends_at: null,
   usage_limit_total: null,
-  usage_limit_per_tenant: null,
   redemption_count: 0,
 };
 
@@ -42,7 +41,6 @@ describe('DiscountsComponent', () => {
 
     http.expectOne((req) => req.url === '/api/v1/discounts').flush([DISCOUNT]);
     http.expectOne('/api/v1/discounts/types').flush(seed.types ?? []);
-    http.expectOne('/api/v1/discounts/reports/usage').flush([]);
     await fixture.whenStable();
     fixture.detectChanges();
     return fixture;

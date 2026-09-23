@@ -21,7 +21,6 @@ from app.models.discount import Discount, DiscountStatus, DiscountTrigger
 from app.services.discounts import schedule as schedule_rules
 from app.services.discounts.engine import ZERO, amount_for
 from app.services.discounts.mechanics import quantize
-from app.services.discounts.selection import _tenant_use_count
 
 
 async def eligible_automatic(
@@ -29,8 +28,6 @@ async def eligible_automatic(
     *,
     pickup_at: datetime,
     pickup_time_specified: bool = True,
-    tenant_id: UUID | None = None,
-    order_id: UUID | None = None,
     now: datetime | None = None,
     already_applied: Iterable[UUID] = (),
 ) -> list[Discount]:
@@ -71,10 +68,6 @@ async def eligible_automatic(
             and discount.redemption_count >= discount.usage_limit_total
         ):
             continue
-        if discount.usage_limit_per_tenant is not None and tenant_id is not None:
-            used = await _tenant_use_count(db, discount.id, tenant_id, order_id)
-            if used >= discount.usage_limit_per_tenant:
-                continue
         eligible.append(discount)
     return eligible
 

@@ -233,7 +233,6 @@ export class CouponFormComponent implements OnChanges {
       starts_at: this.form.starts_at ? new Date(this.form.starts_at).toISOString() : null,
       ends_at: this.form.ends_at ? new Date(this.form.ends_at).toISOString() : null,
       usage_limit_total: this.optionalNumber(this.form.usage_limit_total),
-      usage_limit_per_tenant: null,
     };
   }
 

@@ -241,8 +241,6 @@ async def _automatic_discounts(
     *,
     pickup_at: datetime | None,
     pickup_time_specified: bool,
-    tenant_id: UUID | None,
-    order_id: UUID | None,
     gross_fee: Decimal,
     opted_out: list,
     already_applied: set | None = None,
@@ -254,8 +252,6 @@ async def _automatic_discounts(
         db,
         pickup_at=pickup_at,
         pickup_time_specified=pickup_time_specified,
-        tenant_id=tenant_id,
-        order_id=order_id,
         already_applied=already_applied or (),
     )
     winner = choose_best(eligible, gross_fee, as_uuids(opted_out))
@@ -266,8 +262,6 @@ async def _selected_or_http_error(
     db: AsyncSession,
     choices: list,
     *,
-    tenant_id: UUID | None,
-    order_id: UUID | None = None,
     pickup_at: datetime | None = None,
     pickup_time_specified: bool = True,
     already_applied: set | None = None,
@@ -276,8 +270,6 @@ async def _selected_or_http_error(
         return await load_selected(
             db,
             choices,
-            tenant_id=tenant_id,
-            order_id=order_id,
             pickup_at=pickup_at,
             pickup_time_specified=pickup_time_specified,
             already_applied=already_applied,
@@ -291,7 +283,6 @@ async def _coupon_or_http_error(
     code: str,
     *,
     tenant_id: UUID | None,
-    order_id: UUID | None,
     pickup_at: datetime | None,
     pickup_time_specified: bool,
 ):
@@ -300,7 +291,6 @@ async def _coupon_or_http_error(
             db,
             code,
             tenant_id=tenant_id,
-            order_id=order_id,
             pickup_at=pickup_at,
             pickup_time_specified=pickup_time_specified,
         )
@@ -600,7 +590,6 @@ async def create_order(
         selected, entered_values = await _selected_or_http_error(
             db,
             data.pop("discounts", []) or [],
-            tenant_id=data.get("vendor_id"),
             pickup_at=data.get("pickup_planned_at"),
             pickup_time_specified=bool(data.get("pickup_time_specified", True)),
         )
@@ -616,7 +605,6 @@ async def create_order(
                 db,
                 coupon_code,
                 tenant_id=data.get("vendor_id"),
-                order_id=None,
                 pickup_at=data.get("pickup_planned_at"),
                 pickup_time_specified=bool(data.get("pickup_time_specified", True)),
             )
@@ -626,8 +614,6 @@ async def create_order(
             db,
             pickup_at=data.get("pickup_planned_at"),
             pickup_time_specified=bool(data.get("pickup_time_specified", True)),
-            tenant_id=data.get("vendor_id"),
-            order_id=None,
             gross_fee=quote.delivery_fee,
             opted_out=opted_out,
         )
@@ -671,16 +657,7 @@ async def create_order(
         try:
             if coupon_to_claim is not None:
                 await coupon_rules.claim(db, coupon_to_claim)
-            await redemptions.sync(
-                db,
-                order,
-                order.applied_discounts,
-                selected,
-                applied_by=current_user.id,
-                coupon_ids=(
-                    {coupon_discount.id: coupon_to_claim.id} if coupon_discount else None
-                ),
-            )
+            await redemptions.sync(db, [], order.applied_discounts, selected)
         except DiscountSelectionError as exc:
             await db.rollback()
             raise HTTPException(status_code=409, detail=exc.message) from exc
@@ -829,8 +806,6 @@ async def update_order(
         selected, entered_values = await _selected_or_http_error(
             db,
             requested_choices,
-            tenant_id=vendor_id,
-            order_id=order.id,
             # An edit re-checks the schedule against the pickup time it now has.
             pickup_at=pickup_at,
             pickup_time_specified=pickup_specified,
@@ -850,7 +825,6 @@ async def update_order(
                 db,
                 effective_coupon_code,
                 tenant_id=vendor_id,
-                order_id=order.id,
                 pickup_at=pickup_at,
                 pickup_time_specified=pickup_specified,
             )
@@ -897,8 +871,6 @@ async def update_order(
                 db,
                 pickup_at=pickup_at,
                 pickup_time_specified=pickup_specified,
-                tenant_id=vendor_id,
-                order_id=order.id,
                 gross_fee=quote.delivery_fee,
                 opted_out=opted_out,
                 already_applied=automatic_applied_ids(existing_lines),
@@ -940,8 +912,6 @@ async def update_order(
                     db,
                     pickup_at=pickup_at,
                     pickup_time_specified=pickup_specified,
-                    tenant_id=vendor_id,
-                    order_id=order.id,
                     gross_fee=gross_fee,
                     opted_out=opted_out,
                     already_applied=automatic_applied_ids(existing_lines),
@@ -999,18 +969,7 @@ async def update_order(
                     await coupon_rules.release_by_code(db, previous_coupon_code)
                 if coupon_to_claim is not None:
                     await coupon_rules.claim(db, coupon_to_claim)
-                await redemptions.sync(
-                    db,
-                    order,
-                    order.applied_discounts,
-                    selected,
-                    applied_by=current_user.id,
-                    coupon_ids=(
-                        {coupon_discount.id: coupon_to_claim.id}
-                        if coupon_discount and coupon_to_claim
-                        else None
-                    ),
-                )
+                await redemptions.sync(db, existing_lines, order.applied_discounts, selected)
             except DiscountSelectionError as exc:
                 await db.rollback()
                 raise HTTPException(status_code=409, detail=exc.message) from exc
@@ -1063,8 +1022,9 @@ async def delete_order(
         raise HTTPException(status_code=404, detail="Order not found")
 
     was_published = bool(order.published)
-    # The redemption rows outlive the order, but the uses go back to the pool.
-    await redemptions.void_for_order(db, order.id, "order_deleted")
+    # Deleting the order deletes its discount history with it; the uses it
+    # held still go back to the pool.
+    await redemptions.release_lines(db, order.applied_discounts)
     if order.coupon_code:
         await coupon_rules.release_by_code(db, order.coupon_code)
     await db.delete(order)

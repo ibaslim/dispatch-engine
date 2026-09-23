@@ -110,7 +110,6 @@ class DiscountInput(BaseModel):
     ends_at: Optional[datetime] = None
 
     usage_limit_total: Optional[int] = Field(default=None, ge=1)
-    usage_limit_per_tenant: Optional[int] = Field(default=None, ge=1)
 
     @model_validator(mode="after")
     def _validate(self):
@@ -151,7 +150,6 @@ class DiscountUpdate(BaseModel):
     ends_at: Optional[datetime] = None
 
     usage_limit_total: Optional[int] = Field(default=None, ge=1)
-    usage_limit_per_tenant: Optional[int] = Field(default=None, ge=1)
 
 
 class DiscountOut(BaseModel):
@@ -182,7 +180,6 @@ class DiscountOut(BaseModel):
     ends_at: Optional[datetime] = None
 
     usage_limit_total: Optional[int] = None
-    usage_limit_per_tenant: Optional[int] = None
     redemption_count: int = 0
 
     created_at: Optional[datetime] = None
@@ -196,34 +193,6 @@ class AutomaticOfferOut(BaseModel):
     # applied: taking effect. opted_out: removed from this order. outranked: a bigger
     # offer applies instead. waiting: no delivery fee to take anything off yet.
     state: Literal["applied", "opted_out", "outranked", "waiting"]
-
-
-class RedemptionOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
-    discount_id: UUID
-    order_id: Optional[UUID] = None
-    order_number: Optional[str] = None
-    tenant_id: Optional[UUID] = None
-    source: DiscountTrigger
-    amount: float
-    status: str
-    reason: Optional[str] = None
-    note: Optional[str] = None
-    applied_by: Optional[UUID] = None
-    created_at: Optional[datetime] = None
-    voided_at: Optional[datetime] = None
-    voided_reason: Optional[str] = None
-
-
-class DiscountUsageOut(BaseModel):
-    """One row of the per-discount report."""
-    discount_id: UUID
-    title: str
-    reason: Optional[str] = None
-    uses: int
-    total_amount: float
 
 
 # -------------------------

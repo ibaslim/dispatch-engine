@@ -67,11 +67,6 @@ class DiscountReason(str, enum.Enum):
     other = "other"
 
 
-class RedemptionStatus(str, enum.Enum):
-    applied = "applied"
-    voided = "voided"
-
-
 class DiscountType(Base, UUIDMixin, TimestampMixin):
     """An admin-managed grouping, e.g. "Service recovery". Carries no pricing."""
 
@@ -156,7 +151,6 @@ class Discount(Base, UUIDMixin, TimestampMixin):
     ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     usage_limit_total: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    usage_limit_per_tenant: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Kept in step atomically, so a limit needs no COUNT on the order path.
     redemption_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
@@ -172,12 +166,9 @@ class Discount(Base, UUIDMixin, TimestampMixin):
     discount_type: Mapped[Optional["DiscountType"]] = relationship(
         "DiscountType", back_populates="discounts"
     )
-    # passive_deletes: both FKs are ON DELETE CASCADE, so Postgres removes the
+    # passive_deletes: the FK is ON DELETE CASCADE, so Postgres removes the
     # children itself. Without this, SQLAlchemy tries to null their discount_id
     # first, which fails since that column is NOT NULL.
-    redemptions: Mapped[list["DiscountRedemption"]] = relationship(
-        "DiscountRedemption", back_populates="discount", passive_deletes=True
-    )
     coupons: Mapped[list["Coupon"]] = relationship(
         "Coupon", back_populates="discount", passive_deletes=True
     )
@@ -225,70 +216,3 @@ class Coupon(Base, UUIDMixin, TimestampMixin):
     )
 
     discount: Mapped["Discount"] = relationship("Discount", back_populates="coupons")
-
-
-class DiscountRedemption(Base, UUIDMixin):
-    """One use of one discount on one order. Survives the order being deleted."""
-
-    __tablename__ = "discount_redemptions"
-    __table_args__ = (
-        # One live use per discount per order; a voided row may sit beside it.
-        Index(
-            "uq_discount_redemption_live",
-            "discount_id",
-            "order_id",
-            unique=True,
-            postgresql_where=text("status = 'applied' AND order_id IS NOT NULL"),
-        ),
-        Index("ix_discount_redemptions_discount_tenant", "discount_id", "tenant_id", "status"),
-    )
-
-    discount_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("discounts.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    # Which code unlocked it, when a coupon was the trigger.
-    coupon_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("coupons.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    order_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("orders.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    # Copied so a deleted order is still identifiable in reports.
-    order_number: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
-    tenant_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
-    )
-
-    source: Mapped[str] = mapped_column(
-        SAEnum(DiscountTrigger, name="discount_trigger_enum", create_type=False), nullable=False
-    )
-    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    status: Mapped[str] = mapped_column(
-        SAEnum(RedemptionStatus, name="redemption_status_enum"),
-        nullable=False,
-        default=RedemptionStatus.applied,
-    )
-    reason: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
-    note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    applied_by: Mapped[Optional[uuid.UUID]] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
-    # The discount's terms when it was applied, so later edits can't rewrite history.
-    snapshot: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-
-    voided_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    voided_reason: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("now()"), nullable=False
-    )
-
-    discount: Mapped["Discount"] = relationship("Discount", back_populates="redemptions")

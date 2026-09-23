@@ -1,41 +1,30 @@
-"""Records which discount was used on which order, and keeps the counters true.
+"""Keeps each discount's and coupon's usage counters true to what an order carries.
 
-A redemption row outlives its order: the order id is cleared on delete but the
-row stays, so usage limits, the per-reason report and the audit trail survive.
+There is no separate ledger table: an order's own `applied_discounts` column is
+the record of what it has, and deleting the order deletes that record with it.
+This module only keeps `Discount.redemption_count` and `Coupon.used_count` in
+step, atomically, so a usage limit can never be oversold.
 """
-from datetime import datetime, timezone
-from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import or_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.discount import (
-    Discount,
-    DiscountRedemption,
-    DiscountTrigger,
-    RedemptionStatus,
-)
-from app.models.order import Order
+from app.models.discount import Discount
 from app.services.discounts.selection import DiscountSelectionError
 
 
-def _snapshot(discount: Discount) -> dict:
-    """The terms as they stood, so editing the discount can't rewrite history."""
-    return {
-        "title": discount.title,
-        "public_label": discount.public_label,
-        "kind": getattr(discount.kind, "value", discount.kind),
-        "value": str(discount.value),
-        "max_discount_amount": (
-            str(discount.max_discount_amount) if discount.max_discount_amount is not None else None
-        ),
-        "min_gross_fee": (
-            str(discount.min_gross_fee) if discount.min_gross_fee is not None else None
-        ),
-        "min_net_fee": str(discount.min_net_fee),
-        "discount_type_id": str(discount.discount_type_id) if discount.discount_type_id else None,
-    }
+def _line_discount_ids(lines: list[dict] | None) -> set[UUID]:
+    ids: set[UUID] = set()
+    for line in lines or []:
+        raw = line.get("discount_id")
+        if not raw:
+            continue
+        try:
+            ids.add(UUID(str(raw)))
+        except (TypeError, ValueError):
+            continue
+    return ids
 
 
 async def _claim(db: AsyncSession, discount: Discount) -> None:
@@ -63,95 +52,32 @@ async def _release(db: AsyncSession, discount_id: UUID) -> None:
     )
 
 
-async def live_redemptions(db: AsyncSession, order_id: UUID) -> list[DiscountRedemption]:
-    return list(
-        (
-            await db.scalars(
-                select(DiscountRedemption).where(
-                    DiscountRedemption.order_id == order_id,
-                    DiscountRedemption.status == RedemptionStatus.applied,
-                )
-            )
-        ).all()
-    )
-
-
-async def void(
-    db: AsyncSession,
-    redemption: DiscountRedemption,
-    reason: str,
-) -> None:
-    redemption.status = RedemptionStatus.voided
-    redemption.voided_at = datetime.now(timezone.utc)
-    redemption.voided_reason = reason
-    await _release(db, redemption.discount_id)
-
-
-async def void_for_order(db: AsyncSession, order_id: UUID, reason: str) -> None:
-    for redemption in await live_redemptions(db, order_id):
-        await void(db, redemption, reason)
-
-
 async def sync(
     db: AsyncSession,
-    order: Order,
-    lines: list[dict],
+    previous_lines: list[dict] | None,
+    new_lines: list[dict] | None,
     discounts: list[Discount],
-    *,
-    applied_by: UUID | None = None,
-    coupon_ids: dict[UUID, UUID] | None = None,
 ) -> None:
-    """Make the order's redemptions match the lines it now carries.
+    """Claims a use for each discount newly on the order, releases each dropped one.
 
-    Kept discounts have their amount refreshed, dropped ones are voided, and new
-    ones claim a use. Runs in the caller's transaction, with the order itself.
-    `coupon_ids` names the code behind a discount, when one triggered it.
+    `discounts` only needs to cover the newly-claimed ids; a discount being
+    released is looked up by id alone, since releasing never needs its row.
     """
-    coupon_ids = coupon_ids or {}
     by_id = {discount.id: discount for discount in discounts}
-    amounts: dict[UUID, Decimal] = {}
-    notes: dict[UUID, str | None] = {}
-    for line in lines:
-        raw_id = line.get("discount_id")
-        if not raw_id:
-            continue
-        discount_id = UUID(str(raw_id))
-        amounts[discount_id] = Decimal(str(line.get("amount") or 0))
-        notes[discount_id] = line.get("note")
+    previous_ids = _line_discount_ids(previous_lines)
+    new_ids = _line_discount_ids(new_lines)
 
-    existing = {
-        redemption.discount_id: redemption
-        for redemption in await live_redemptions(db, order.id)
-    }
+    for discount_id in previous_ids - new_ids:
+        await _release(db, discount_id)
 
-    for discount_id, redemption in existing.items():
-        if discount_id not in amounts:
-            await void(db, redemption, "no_longer_applied")
-
-    for discount_id, amount in amounts.items():
-        redemption = existing.get(discount_id)
-        if redemption is not None:
-            redemption.amount = amount
-            redemption.note = notes.get(discount_id)
-            redemption.order_number = order.order_number
-            continue
+    for discount_id in new_ids - previous_ids:
         discount = by_id.get(discount_id)
         if discount is None:
             continue
         await _claim(db, discount)
-        db.add(
-            DiscountRedemption(
-                discount_id=discount.id,
-                coupon_id=coupon_ids.get(discount_id),
-                order_id=order.id,
-                order_number=order.order_number,
-                tenant_id=order.vendor_id,
-                source=discount.trigger,
-                amount=amount,
-                status=RedemptionStatus.applied,
-                reason=getattr(discount.reason, "value", discount.reason),
-                note=notes.get(discount_id),
-                applied_by=applied_by if discount.trigger == DiscountTrigger.manual else None,
-                snapshot=_snapshot(discount),
-            )
-        )
+
+
+async def release_lines(db: AsyncSession, lines: list[dict] | None) -> None:
+    """Returns every discount an order (being deleted) was holding to the pool."""
+    for discount_id in _line_discount_ids(lines):
+        await _release(db, discount_id)

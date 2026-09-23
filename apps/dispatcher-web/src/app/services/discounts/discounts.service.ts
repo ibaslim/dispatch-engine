@@ -67,7 +67,6 @@ export interface Discount {
   starts_at: string | null;
   ends_at: string | null;
   usage_limit_total: number | null;
-  usage_limit_per_tenant: number | null;
   redemption_count: number;
 }
 
@@ -89,7 +88,6 @@ export interface DiscountInput {
   starts_at: string | null;
   ends_at: string | null;
   usage_limit_total: number | null;
-  usage_limit_per_tenant: number | null;
 }
 
 /** What became of an automatic discount an order could get. */
@@ -99,24 +97,6 @@ export interface AutomaticOffer {
   discount: Discount;
   amount: number;
   state: AutomaticState;
-}
-
-export interface DiscountUsage {
-  discount_id: string;
-  title: string;
-  reason: string | null;
-  uses: number;
-  total_amount: number;
-}
-
-export interface DiscountRedemption {
-  id: string;
-  order_number: string | null;
-  amount: number;
-  status: string;
-  note: string | null;
-  created_at: string | null;
-  voided_reason: string | null;
 }
 
 // ── Coupons ──────────────────────────────────────────────────────────────
@@ -225,15 +205,6 @@ export class DiscountsService {
 
   deleteDiscount(id: string): Observable<void> {
     return this.http.delete<void>(`${BASE}/${id}`);
-  }
-
-  // ── Reports ──────────────────────────────────────────────────────────────
-  getUsage(): Observable<DiscountUsage[]> {
-    return this.http.get<DiscountUsage[]>(`${BASE}/reports/usage`);
-  }
-
-  getRedemptions(id: string): Observable<DiscountRedemption[]> {
-    return this.http.get<DiscountRedemption[]>(`${BASE}/${id}/redemptions`);
   }
 
   // ── Coupons ──────────────────────────────────────────────────────────────

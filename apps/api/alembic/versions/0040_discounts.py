@@ -1,11 +1,14 @@
-"""Admin-created discounts, coupon codes, their types, and one row per use.
+"""Admin-created discounts, coupon codes, and their types.
 
 A dispatcher picks a discount on the order form instead of typing an amount, or
 an automatic discount applies itself, or a coupon code unlocks one. Terms live
-in `discounts`, naming in `discount_types`, codes in `coupons`, and every
-application is recorded in `discount_redemptions` for limits and reporting.
-Orders also gain `opted_out_discount_ids`, so removing an automatic discount
-from an order sticks rather than being re-applied on the next edit.
+in `discounts`, naming in `discount_types`, codes in `coupons`. There is no
+separate ledger of uses: an order's own `applied_discounts` column is the
+record, so deleting an order deletes its discount history with it; only the
+atomic `redemption_count`/`used_count` counters survive independently, to keep
+a usage limit from ever being oversold. Orders also gain
+`opted_out_discount_ids`, so removing an automatic discount from an order
+sticks rather than being re-applied on the next edit.
 
 Revision ID: 0040
 Revises: 0039
@@ -40,7 +43,6 @@ ENUM_VALUES: dict[str, tuple[str, ...]] = {
         "price_correction",
         "other",
     ),
-    "redemption_status_enum": ("applied", "voided"),
 }
 
 
@@ -54,7 +56,6 @@ VALUE_MODE = _column_type("discount_value_mode_enum")
 TRIGGER = _column_type("discount_trigger_enum")
 STATUS = _column_type("discount_status_enum")
 REASON = _column_type("discount_reason_enum")
-REDEMPTION_STATUS = _column_type("redemption_status_enum")
 
 
 def _tables() -> set[str]:
@@ -109,7 +110,7 @@ def upgrade() -> None:
             sa.Column("starts_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("ends_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("usage_limit_total", sa.Integer(), nullable=True),
-            sa.Column("usage_limit_per_tenant", sa.Integer(), nullable=True),
+            # Kept in step atomically, so a limit needs no COUNT on the order path.
             sa.Column("redemption_count", sa.Integer(), nullable=False, server_default="0"),
             sa.Column(
                 "created_by",
@@ -184,69 +185,6 @@ def upgrade() -> None:
         op.create_index("ix_coupons_discount_id", "coupons", ["discount_id"])
         op.create_index("ix_coupons_batch_label", "coupons", ["batch_label"])
 
-    if "discount_redemptions" not in tables:
-        op.create_table(
-            "discount_redemptions",
-            sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-            sa.Column(
-                "discount_id",
-                postgresql.UUID(as_uuid=True),
-                sa.ForeignKey("discounts.id", ondelete="CASCADE"),
-                nullable=False,
-            ),
-            # Which code unlocked it, when a coupon was the trigger.
-            sa.Column(
-                "coupon_id",
-                postgresql.UUID(as_uuid=True),
-                sa.ForeignKey("coupons.id", ondelete="SET NULL"),
-                nullable=True,
-            ),
-            sa.Column(
-                "order_id",
-                postgresql.UUID(as_uuid=True),
-                sa.ForeignKey("orders.id", ondelete="SET NULL"),
-                nullable=True,
-            ),
-            sa.Column("order_number", sa.String(32), nullable=True),
-            sa.Column(
-                "tenant_id",
-                postgresql.UUID(as_uuid=True),
-                sa.ForeignKey("tenants.id", ondelete="SET NULL"),
-                nullable=True,
-            ),
-            sa.Column("source", TRIGGER, nullable=False),
-            sa.Column("amount", sa.Numeric(10, 2), nullable=False),
-            sa.Column("status", REDEMPTION_STATUS, nullable=False, server_default="applied"),
-            sa.Column("reason", sa.String(40), nullable=True),
-            sa.Column("note", sa.String(500), nullable=True),
-            sa.Column(
-                "applied_by",
-                postgresql.UUID(as_uuid=True),
-                sa.ForeignKey("users.id", ondelete="SET NULL"),
-                nullable=True,
-            ),
-            sa.Column("snapshot", sa.JSON(), nullable=False, server_default="{}"),
-            sa.Column("voided_at", sa.DateTime(timezone=True), nullable=True),
-            sa.Column("voided_reason", sa.String(40), nullable=True),
-            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        )
-        op.create_index("ix_discount_redemptions_discount_id", "discount_redemptions", ["discount_id"])
-        op.create_index("ix_discount_redemptions_coupon_id", "discount_redemptions", ["coupon_id"])
-        op.create_index("ix_discount_redemptions_order_id", "discount_redemptions", ["order_id"])
-        op.create_index(
-            "ix_discount_redemptions_discount_tenant",
-            "discount_redemptions",
-            ["discount_id", "tenant_id", "status"],
-        )
-        # One live use per discount per order; voided rows may sit beside it.
-        op.create_index(
-            "uq_discount_redemption_live",
-            "discount_redemptions",
-            ["discount_id", "order_id"],
-            unique=True,
-            postgresql_where=sa.text("status = 'applied' AND order_id IS NOT NULL"),
-        )
-
     if "opted_out_discount_ids" not in _columns("orders"):
         op.add_column(
             "orders",
@@ -258,8 +196,6 @@ def downgrade() -> None:
     tables = _tables()
     if "opted_out_discount_ids" in _columns("orders"):
         op.drop_column("orders", "opted_out_discount_ids")
-    if "discount_redemptions" in tables:
-        op.drop_table("discount_redemptions")
     if "coupons" in tables:
         op.drop_table("coupons")
     if "discounts" in tables:

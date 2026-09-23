@@ -8,17 +8,15 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.discount import (
     Discount,
     DiscountKind,
-    DiscountRedemption,
     DiscountStatus,
     DiscountTrigger,
     DiscountValueMode,
-    RedemptionStatus,
 )
 from app.services.discounts import schedule as schedule_rules
 
@@ -61,23 +59,6 @@ class DiscountSelectionError(Exception):
         self.status_code = status_code
 
 
-async def _tenant_use_count(
-    db: AsyncSession,
-    discount_id: UUID,
-    tenant_id: UUID,
-    exclude_order_id: UUID | None,
-) -> int:
-    """Live uses by this tenant, ignoring the order being edited."""
-    query = select(func.count(DiscountRedemption.id)).where(
-        DiscountRedemption.discount_id == discount_id,
-        DiscountRedemption.tenant_id == tenant_id,
-        DiscountRedemption.status == RedemptionStatus.applied,
-    )
-    if exclude_order_id is not None:
-        query = query.where(DiscountRedemption.order_id != exclude_order_id)
-    return int(await db.scalar(query) or 0)
-
-
 def _check_entered_value(discount: Discount, value: Decimal | None) -> None:
     """A discount whose value is typed on the order needs that value to be sane."""
     if discount.value_mode != DiscountValueMode.entered:
@@ -94,8 +75,6 @@ async def load_selected(
     db: AsyncSession,
     choices: list[object],
     *,
-    tenant_id: UUID | None = None,
-    order_id: UUID | None = None,
     now: datetime | None = None,
     pickup_at: datetime | None = None,
     pickup_time_specified: bool = True,
@@ -161,12 +140,6 @@ async def load_selected(
             and discount.redemption_count >= discount.usage_limit_total
         ):
             raise DiscountSelectionError(f"{name} has reached its usage limit.")
-        if discount.usage_limit_per_tenant is not None and tenant_id is not None:
-            used = await _tenant_use_count(db, discount.id, tenant_id, order_id)
-            if used >= discount.usage_limit_per_tenant:
-                raise DiscountSelectionError(
-                    f"{name} has reached its limit for this customer."
-                )
         _check_entered_value(discount, by_id[discount_id].value)
         if by_id[discount_id].value is not None:
             entered[discount_id] = by_id[discount_id].value

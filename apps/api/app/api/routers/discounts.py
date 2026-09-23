@@ -1,4 +1,4 @@
-"""Admin CRUD for discount types and discounts, plus their usage reports."""
+"""Admin CRUD for discount types and discounts."""
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -15,11 +15,9 @@ from app.models.order import Order
 from app.models.discount import (
     Coupon,
     Discount,
-    DiscountRedemption,
     DiscountStatus,
     DiscountTrigger,
     DiscountType,
-    RedemptionStatus,
 )
 from app.services.discounts import (
     amount_for,
@@ -44,8 +42,6 @@ from app.schemas.discount import (
     DiscountTypeInput,
     DiscountTypeOut,
     DiscountUpdate,
-    DiscountUsageOut,
-    RedemptionOut,
 )
 
 router = APIRouter()
@@ -255,8 +251,6 @@ async def automatic_offers(
         db,
         pickup_at=moment,
         pickup_time_specified=time_specified,
-        tenant_id=vendor_id,
-        order_id=order_id,
         already_applied=carried,
     )
     fee = quantize(Decimal(str(delivery_fee)))
@@ -393,7 +387,6 @@ async def check_coupon(
             db,
             code,
             tenant_id=vendor_id,
-            order_id=None,
             pickup_at=moment,
             pickup_time_specified=time_specified,
         )
@@ -523,60 +516,3 @@ async def update_coupon(
     await db.refresh(coupon)
     return CouponOut.model_validate(coupon)
 
-
-# -------------------------
-# REPORTS
-# -------------------------
-@router.get("/{discount_id}/redemptions", response_model=list[RedemptionOut])
-async def list_redemptions(
-    discount_id: uuid.UUID,
-    _: PlatformAdmin,
-    db: AsyncSession = Depends(get_db),
-    limit: int = Query(default=100, le=500),
-    offset: int = Query(default=0, ge=0),
-):
-    await _get(db, discount_id)
-    rows = (
-        await db.scalars(
-            select(DiscountRedemption)
-            .where(DiscountRedemption.discount_id == discount_id)
-            .order_by(DiscountRedemption.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
-    ).all()
-    return [RedemptionOut.model_validate(row) for row in rows]
-
-
-@router.get("/reports/usage", response_model=list[DiscountUsageOut])
-async def usage_report(_: PlatformAdmin, db: AsyncSession = Depends(get_db)):
-    """What each discount has given away, live uses only."""
-    rows = (
-        await db.execute(
-            select(
-                Discount.id,
-                Discount.title,
-                Discount.reason,
-                func.count(DiscountRedemption.id),
-                func.coalesce(func.sum(DiscountRedemption.amount), 0),
-            )
-            .join(
-                DiscountRedemption,
-                (DiscountRedemption.discount_id == Discount.id)
-                & (DiscountRedemption.status == RedemptionStatus.applied),
-                isouter=True,
-            )
-            .group_by(Discount.id, Discount.title, Discount.reason)
-            .order_by(Discount.title)
-        )
-    ).all()
-    return [
-        DiscountUsageOut(
-            discount_id=row[0],
-            title=row[1],
-            reason=getattr(row[2], "value", row[2]),
-            uses=int(row[3] or 0),
-            total_amount=float(row[4] or 0),
-        )
-        for row in rows
-    ]

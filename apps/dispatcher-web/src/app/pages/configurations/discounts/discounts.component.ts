@@ -25,7 +25,6 @@ import {
   DiscountStatus,
   DiscountTrigger,
   DiscountType,
-  DiscountUsage,
   DiscountValueMode,
   DiscountsService,
 } from '@services/discounts/discounts.service';
@@ -60,7 +59,6 @@ interface DiscountForm {
   starts_at: string;
   ends_at: string;
   usage_limit_total: string;
-  usage_limit_per_tenant: string;
   /** Terms are fixed once it has been given, so the form locks them. */
   redemption_count: number;
 }
@@ -191,7 +189,6 @@ export class DiscountsComponent implements OnInit {
 
   discounts: Discount[] = [];
   types: DiscountType[] = [];
-  usage: DiscountUsage[] = [];
 
   discountForm: DiscountForm | null = null;
   typeForm: { id: string | null; title: string; description: string } | null = null;
@@ -254,16 +251,14 @@ export class DiscountsComponent implements OnInit {
     this.isLoading = true;
     this.errorMessage = '';
     try {
-      const [discounts, types, usage] = await Promise.all([
+      const [discounts, types] = await Promise.all([
         firstValueFrom(this.service.getDiscounts(this.currentFilters())),
         firstValueFrom(this.service.getTypes()),
-        firstValueFrom(this.service.getUsage()),
       ]);
       this.discounts = discounts;
       this.types = types;
       this.typeOptions = types.map((type) => ({ value: type.id, label: type.title }));
       this.typeFilterOptions = [{ value: 'all', label: 'All types' }, ...this.typeOptions];
-      this.usage = usage;
     } catch (error) {
       this.errorMessage = this.errorText(error, 'Failed to load discounts.');
     } finally {
@@ -324,10 +319,6 @@ export class DiscountsComponent implements OnInit {
     return this.types.filter((item) => item.title.toLowerCase().includes(query));
   }
 
-  usageFor(discount: Discount): DiscountUsage | undefined {
-    return this.usage.find((row) => row.discount_id === discount.id);
-  }
-
   statusClass(status: DiscountStatus): string {
     if (status === 'active') return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300';
     if (status === 'draft') return 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300';
@@ -362,7 +353,6 @@ export class DiscountsComponent implements OnInit {
           starts_at: this.toDateInput(discount.starts_at),
           ends_at: this.toDateInput(discount.ends_at),
           usage_limit_total: discount.usage_limit_total?.toString() ?? '',
-          usage_limit_per_tenant: discount.usage_limit_per_tenant?.toString() ?? '',
           redemption_count: discount.redemption_count,
         }
       : {
@@ -384,7 +374,6 @@ export class DiscountsComponent implements OnInit {
           starts_at: '',
           ends_at: '',
           usage_limit_total: '',
-          usage_limit_per_tenant: '',
           redemption_count: 0,
         };
   }
@@ -559,7 +548,6 @@ export class DiscountsComponent implements OnInit {
       starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
       ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
       usage_limit_total: this.optionalNumber(form.usage_limit_total),
-      usage_limit_per_tenant: this.optionalNumber(form.usage_limit_per_tenant),
     };
   }
 
