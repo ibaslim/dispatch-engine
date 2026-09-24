@@ -22,8 +22,11 @@
         </div>
 
         <div class="lg:border-l lg:border-gray-200 lg:dark:border-[#5a5d5a] lg:pl-10 mt-6 lg:mt-0 space-y-8">
-            <app-other-order-details [value]="value.details" (valueChange)="patch({ details: $event })"
-                [routeQuote]="value.routeQuote" [showSubmitValidation]="showSubmitValidation">
+            <app-other-order-details [value]="value.details" (valueChange)="onDetailsChange($event)"
+                [routeQuote]="value.routeQuote" [showSubmitValidation]="showSubmitValidation"
+                [availableDiscounts]="availableDiscounts" [couponDiscount]="couponDiscount"
+                [couponCheckError]="couponCheckError" [couponChecking]="isCheckingCoupon"
+                (checkCoupon)="checkCoupon()">
                 <div order-details-leading class="space-y-3">
                     <div>
                         <label class="block text-sm text-gray-600 dark:text-gray-200">Delivery Category <span class="text-red-500">*</span></label>

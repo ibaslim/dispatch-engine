@@ -1,0 +1,374 @@
+<div class="p-6 sm:p-4 text-gray-900 dark:text-gray-100">
+  <div class="max-w-6xl mx-auto">
+
+    <div class="flex items-start justify-between gap-4 mb-6">
+      <div>
+        <h2 class="text-xl font-semibold">Discounts</h2>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Discounts a dispatcher can apply on an order. They come off the delivery fee only,
+          never the goods value, tax or tip.
+        </p>
+      </div>
+      <app-button *ngIf="tab === 'discounts'" variant="primary" label="+ Add discount"
+        [extraClasses]="addButtonClasses" (onClick)="openDiscount()">
+      </app-button>
+      <app-button *ngIf="tab === 'coupons'" variant="primary" label="+ New coupon"
+        [extraClasses]="addButtonClasses" (onClick)="openCouponForm()">
+      </app-button>
+      <app-button *ngIf="tab === 'types'" variant="primary" label="+ Add type"
+        [extraClasses]="addButtonClasses" (onClick)="openType()">
+      </app-button>
+    </div>
+
+    <div *ngIf="errorMessage"
+      class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+      {{ errorMessage }}
+    </div>
+
+    <!-- Sub-tabs -->
+    <div class="mb-5 flex gap-1 border-b border-gray-200 dark:border-[#2a2d2a]">
+      <button type="button" (click)="setTab('discounts')"
+        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors"
+        [ngClass]="tab === 'discounts' ? 'text-[#3ddc97] border-[#3ddc97]' : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white'">
+        Discounts
+      </button>
+      <button type="button" (click)="setTab('coupons')"
+        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors"
+        [ngClass]="tab === 'coupons' ? 'text-[#3ddc97] border-[#3ddc97]' : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white'">
+        Coupons
+      </button>
+      <button type="button" (click)="setTab('types')"
+        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors"
+        [ngClass]="tab === 'types' ? 'text-[#3ddc97] border-[#3ddc97]' : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white'">
+        Types
+      </button>
+    </div>
+
+    <div class="mb-5 flex flex-wrap items-end gap-3">
+      <div class="relative max-w-md flex-1 min-w-[200px]">
+        <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+        <input type="search" [(ngModel)]="searchQuery"
+          [placeholder]="tab === 'coupons' ? 'Search coupons...' : 'Search discounts...'"
+          class="h-10 w-full rounded-lg border border-gray-300 bg-white pl-10 pr-3 text-sm outline-none focus:border-[#3ddc97] focus:ring-2 focus:ring-[#3ddc97]/20 dark:border-[#4a4d4a] dark:bg-[#232623]">
+      </div>
+
+      <!-- A coupon has no type (always sent as null), so this filter is discount-only. -->
+      <div *ngIf="tab === 'discounts'" class="w-44">
+        <app-dropdown-selector label="Type" [options]="typeFilterOptions" [value]="typeFilter"
+          (valueChange)="setTypeFilter($event)">
+        </app-dropdown-selector>
+      </div>
+
+      <div *ngIf="tab === 'discounts' || tab === 'coupons'" class="w-44">
+        <app-dropdown-selector label="Status" [options]="statusFilterOptions" [value]="statusFilter"
+          (valueChange)="setStatusFilter($event)">
+        </app-dropdown-selector>
+      </div>
+    </div>
+
+    <div *ngIf="isLoading"
+      class="rounded-xl border border-gray-200 bg-white p-10 text-center text-sm text-gray-500 dark:border-[#343734] dark:bg-[#232623] dark:text-gray-400">
+      <i class="ph ph-spinner-gap animate-spin mr-2"></i> Loading discounts...
+    </div>
+
+    <!-- Discounts / Coupons: the same trigger === 'code' discounts, sliced into their own tab -->
+    <div *ngIf="!isLoading && (tab === 'discounts' || tab === 'coupons')" class="grid gap-4 md:grid-cols-2">
+      <p *ngIf="!filteredDiscounts.length"
+        class="rounded-xl border border-dashed border-gray-300 p-10 text-center text-sm text-gray-500 md:col-span-2 dark:border-[#3a3d3a] dark:text-gray-400">
+        {{ tab === 'coupons'
+          ? 'No coupons yet. Create one and generate codes for it below.'
+          : 'No discounts yet. Add one and it appears on the order form for dispatchers to pick.' }}
+      </p>
+
+      <article *ngFor="let discount of filteredDiscounts"
+        class="rounded-xl border border-gray-200 bg-white p-5 dark:border-[#343734] dark:bg-[#232623]">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h3 class="font-semibold">{{ discount.title }}</h3>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ discountTerms(discount) }}</p>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <span *ngIf="discount.schedule_label !== 'Any day'">
+                <i class="ph ph-calendar-dots"></i> {{ discount.schedule_label }}
+              </span>
+              <span *ngIf="discount.discount_type_title">
+                <span *ngIf="discount.schedule_label !== 'Any day'"> &middot; </span>
+                {{ discount.discount_type_title }}
+              </span>
+            </p>
+          </div>
+          <div class="flex gap-1">
+            <app-button *ngIf="discount.trigger === 'code'" variant="icon" [ariaLabel]="'Codes for ' + discount.title"
+              (onClick)="openCouponCodes(discount.id, discount.public_label || discount.title)">
+              <i class="ph ph-ticket text-gray-600 dark:text-gray-300"></i>
+            </app-button>
+            <app-button variant="icon" [ariaLabel]="'Edit ' + discount.title"
+              (onClick)="discount.trigger === 'code' ? openCouponForm(discount) : openDiscount(discount)">
+              <i class="ph ph-pencil-simple text-gray-600 dark:text-gray-300"></i>
+            </app-button>
+            <app-button variant="icon" [ariaLabel]="'Delete ' + discount.title"
+              (onClick)="requestDelete('discount', discount.id, discount.title)">
+              <i class="ph ph-trash text-red-600 dark:text-red-400"></i>
+            </app-button>
+          </div>
+        </div>
+
+        <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <span class="rounded-full px-2.5 py-1 font-medium" [ngClass]="statusClass(discount.status)">
+            {{ discount.status | titlecase }}
+          </span>
+          <span class="rounded-full px-2.5 py-1 font-medium"
+            [ngClass]="discount.trigger === 'automatic' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+              : discount.trigger === 'code' ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+              : 'bg-gray-100 text-gray-600 dark:bg-[#303330] dark:text-gray-300'">
+            {{ discount.trigger === 'automatic' ? 'Auto' : discount.trigger === 'code' ? 'Coupon' : 'Manual' }}
+          </span>
+          <span class="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600 dark:bg-[#303330] dark:text-gray-300">
+            {{ limitLabel(discount) }}
+          </span>
+          <span *ngIf="discount.reason"
+            class="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600 dark:bg-[#303330] dark:text-gray-300">
+            {{ reasonLabels[discount.reason] }}
+          </span>
+        </div>
+      </article>
+    </div>
+
+    <!-- Types -->
+    <div *ngIf="!isLoading && tab === 'types'" class="grid gap-4 md:grid-cols-2">
+      <p *ngIf="!filteredTypes.length"
+        class="rounded-xl border border-dashed border-gray-300 p-10 text-center text-sm text-gray-500 md:col-span-2 dark:border-[#3a3d3a] dark:text-gray-400">
+        No types yet. Types group discounts for reporting, such as "Service recovery".
+      </p>
+
+      <article *ngFor="let type of filteredTypes"
+        class="rounded-xl border border-gray-200 bg-white p-5 dark:border-[#343734] dark:bg-[#232623]">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h3 class="font-semibold">{{ type.title }}</h3>
+            <p *ngIf="type.description" class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ type.description }}</p>
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              {{ type.discount_count }} {{ type.discount_count === 1 ? 'discount' : 'discounts' }}
+            </p>
+          </div>
+          <div class="flex gap-1">
+            <app-button variant="icon" [ariaLabel]="'Edit ' + type.title" (onClick)="openType(type)">
+              <i class="ph ph-pencil-simple text-gray-600 dark:text-gray-300"></i>
+            </app-button>
+            <app-button variant="icon" [ariaLabel]="'Delete ' + type.title"
+              (onClick)="requestDelete('type', type.id, type.title)">
+              <i class="ph ph-trash text-red-600 dark:text-red-400"></i>
+            </app-button>
+          </div>
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+
+<!-- Discount editor: manual/automatic only. A coupon opens app-coupon-form below instead. -->
+<app-popup [open]="discountForm !== null" [title]="discountForm?.id ? 'Edit discount' : 'New discount'"
+  widthClass="max-w-xl" (close)="closeDiscount()">
+  <div *ngIf="discountForm" class="space-y-6 px-2">
+
+    <p *ngIf="termsLocked"
+      class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+      Already given to a customer, so the amount is fixed. Naming, schedule and limits can still change.
+    </p>
+
+    <!-- Naming -->
+    <section class="space-y-4">
+      <app-base-input label="Name" placeholder="Late delivery" [value]="discountForm.title"
+        [externalError]="fieldError('title') || ''" [showExternalError]="hasError('title')"
+        (valueChange)="discountForm.title = $event; markTouched('title')">
+      </app-base-input>
+
+      <div class="grid gap-4 sm:grid-cols-2">
+        <app-base-input label="Receipt label" placeholder="Same as the name"
+          [value]="discountForm.public_label" (valueChange)="discountForm.public_label = $event">
+        </app-base-input>
+
+        <div>
+          <app-dropdown-selector label="Type" [required]="true" placeholder="Select a type"
+            [options]="typeOptions" [value]="discountForm.discount_type_id"
+            (valueChange)="discountForm.discount_type_id = $event; markTouched('type')">
+          </app-dropdown-selector>
+          <app-error-message [show]="hasError('type')" [messages]="[fieldError('type') || '']">
+          </app-error-message>
+        </div>
+      </div>
+    </section>
+
+    <!-- What it takes off -->
+    <section class="space-y-4 border-t border-gray-200 pt-5 dark:border-[#3a3d3a]">
+      <h4 class="text-sm font-semibold">What it takes off</h4>
+
+      <!-- How the discount reaches an order -->
+      <div>
+        <app-dropdown-selector label="How it applies (trigger)" [options]="triggerOptions"
+          [value]="discountForm.trigger" (valueChange)="setTrigger($event)">
+        </app-dropdown-selector>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <span *ngIf="discountForm.trigger === 'automatic'">
+            Applies on its own when the order's pickup date matches the schedule. A dispatcher can still
+            remove it from an order.
+          </span>
+          <span *ngIf="discountForm.trigger === 'manual'">
+            Dispatcher selects it manually on the order form.
+          </span>
+        </p>
+        <app-error-message [show]="hasError('trigger')" [messages]="[fieldError('trigger') || '']">
+        </app-error-message>
+      </div>
+
+      <div class="grid gap-4" [ngClass]="isAutomatic ? 'sm:grid-cols-2' : 'sm:grid-cols-3'">
+        <app-dropdown-selector label="Mechanic" [options]="kindOptions" [disabled]="termsLocked"
+          [value]="discountForm.kind" (valueChange)="setKind($event)">
+        </app-dropdown-selector>
+
+        <app-dropdown-selector *ngIf="!isAutomatic" label="Who sets the amount"
+          [options]="valueModeChoices()" [disabled]="termsLocked" [value]="discountForm.value_mode"
+          (valueChange)="setValueMode($event)">
+        </app-dropdown-selector>
+
+        <div>
+          <app-base-input type="number" [min]="0" [step]="0.01" [disabled]="termsLocked"
+            [label]="discountForm.value_mode === 'entered' ? 'Suggested value' : valueLabel"
+            [placeholder]="discountForm.value_mode === 'entered' ? 'Leave empty, the dispatcher decides' : ''"
+            [value]="discountForm.value" [externalError]="fieldError('value') || ''"
+            [showExternalError]="hasError('value')"
+            (valueChange)="discountForm.value = $event; markTouched('value')">
+          </app-base-input>
+          <p *ngIf="discountForm.value_mode === 'entered' && !hasError('value')"
+            class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            A goodwill discount has no set size. Optional, and the dispatcher can change it.
+          </p>
+        </div>
+      </div>
+
+      <div class="grid gap-4" [ngClass]="discountForm.kind === 'percentage' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'">
+        <app-base-input *ngIf="discountForm.kind === 'percentage'" label="Most it can take" type="number"
+          [min]="0" [step]="0.01" [disabled]="termsLocked" placeholder="No cap"
+          [value]="discountForm.max_discount_amount"
+          (valueChange)="discountForm.max_discount_amount = $event">
+        </app-base-input>
+
+        <app-base-input label="Smallest fee it works on" type="number" [min]="0" [step]="0.01"
+          [disabled]="termsLocked" placeholder="Any fee" [value]="discountForm.min_gross_fee"
+          (valueChange)="discountForm.min_gross_fee = $event">
+        </app-base-input>
+
+        <app-base-input label="Fee left afterwards" type="number" [min]="0" [step]="0.01"
+          [disabled]="termsLocked" [value]="discountForm.min_net_fee"
+          (valueChange)="discountForm.min_net_fee = $event">
+        </app-base-input>
+      </div>
+    </section>
+
+    <!-- When it applies -->
+    <section class="border-t border-gray-200 pt-5 dark:border-[#3a3d3a]">
+      <app-schedule-editor [schedule]="discountForm.schedule" [saveAttempted]="saveAttempted"
+        (scheduleChange)="discountForm.schedule = $event">
+      </app-schedule-editor>
+      <p *ngIf="appliesToEveryOrder"
+        class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+        An automatic discount with no schedule takes something off every order. Choose when it applies above.
+      </p>
+    </section>
+
+    <!-- Availability -->
+    <section class="space-y-4 border-t border-gray-200 pt-5 dark:border-[#3a3d3a]">
+      <h4 class="text-sm font-semibold">Availability</h4>
+
+      <div class="grid gap-4 sm:grid-cols-3">
+        <app-dropdown-selector label="Status" [options]="statusOptions" [value]="discountForm.status"
+          (valueChange)="setStatus($event)">
+        </app-dropdown-selector>
+
+        <div>
+          <app-base-input label="Live from" type="date" [value]="discountForm.starts_at"
+            (valueChange)="discountForm.starts_at = $event">
+          </app-base-input>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Empty starts it now.</p>
+        </div>
+
+        <div>
+          <app-base-input label="Live until" type="date" [value]="discountForm.ends_at"
+            [externalError]="fieldError('ends_at') || ''" [showExternalError]="hasError('ends_at')"
+            (valueChange)="discountForm.ends_at = $event; markTouched('ends_at')">
+          </app-base-input>
+          <p *ngIf="!hasError('ends_at')" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Empty runs it forever.
+          </p>
+        </div>
+      </div>
+
+      <app-base-input label="Total uses" type="number" [min]="1" [step]="1" placeholder="Unlimited"
+        [value]="discountForm.usage_limit_total" (valueChange)="discountForm.usage_limit_total = $event">
+      </app-base-input>
+
+      <app-textarea label="Notes" placeholder="When to use this discount" [value]="discountForm.description"
+        (valueChange)="discountForm.description = $event">
+      </app-textarea>
+    </section>
+  </div>
+
+  <div modal-footer class="flex items-center justify-between gap-3">
+    <app-error-message [show]="saveAttempted && !!discountFormError()"
+      [messages]="[discountFormError() || '']">
+    </app-error-message>
+    <div class="ml-auto flex gap-2">
+      <app-button variant="ghost-outline" label="Cancel" (onClick)="closeDiscount()"></app-button>
+      <app-button variant="primary" [label]="isSaving ? 'Saving...' : 'Save discount'"
+        [extraClasses]="addButtonClasses" [disabled]="isSaving" (onClick)="saveDiscount()">
+      </app-button>
+    </div>
+  </div>
+</app-popup>
+
+<!-- Type editor -->
+<app-popup [open]="typeForm !== null" [title]="typeForm?.id ? 'Edit type' : 'New type'"
+  widthClass="max-w-md" (close)="closeType()">
+  <div *ngIf="typeForm" class="space-y-4 px-2">
+    <app-base-input label="Name" placeholder="Service recovery" [value]="typeForm.title"
+      (valueChange)="typeForm.title = $event">
+    </app-base-input>
+
+    <app-textarea label="Description" placeholder="What this group of discounts is for"
+      [value]="typeForm.description" (valueChange)="typeForm.description = $event">
+    </app-textarea>
+  </div>
+
+  <div modal-footer class="flex justify-end gap-2">
+    <app-button variant="ghost-outline" label="Cancel" (onClick)="closeType()"></app-button>
+    <app-button variant="primary" [label]="isSaving ? 'Saving...' : 'Save type'"
+      [extraClasses]="addButtonClasses" [disabled]="isSaving || !typeForm?.title?.trim()"
+      (onClick)="saveType()">
+    </app-button>
+  </div>
+</app-popup>
+
+<!-- Delete confirmation -->
+<app-popup [open]="deleteTarget !== null" title="Delete" widthClass="max-w-md"
+  (close)="deleteTarget = null">
+  <div class="p-3 text-sm text-gray-600 dark:text-gray-300">
+    Delete <strong>{{ deleteTarget?.name }}</strong>? This cannot be undone.
+  </div>
+  <div modal-footer class="flex justify-end gap-3">
+    <app-button variant="ghost-outline" label="Cancel" [disabled]="isDeleting"
+      (onClick)="deleteTarget = null">
+    </app-button>
+    <app-button variant="danger" [label]="isDeleting ? 'Deleting...' : 'Delete'" [disabled]="isDeleting"
+      (onClick)="confirmDelete()">
+    </app-button>
+  </div>
+</app-popup>
+
+<!-- Coupon editor: a fully separate form from the discount editor above -->
+<app-coupon-form [open]="couponEditorOpen" [discount]="couponEditorTarget"
+  (closed)="closeCouponForm()" (saved)="onCouponSaved($event)">
+</app-coupon-form>
+
+<!-- Coupon codes: reached from a card's "+ Code" button, or right after a new coupon is saved -->
+<app-coupon-codes [open]="couponCodesOpen" [discountId]="couponCodesDiscountId"
+  [discountLabel]="couponCodesDiscountLabel" (closed)="closeCouponCodes()">
+</app-coupon-codes>

@@ -1,0 +1,112 @@
+<div>
+  <h4 class="text-sm font-semibold">When it applies</h4>
+  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Checked against the order's pickup date.</p>
+</div>
+
+<div class="mt-4 flex flex-wrap gap-1.5">
+  <button *ngFor="let preset of schedulePresets" type="button" (click)="applyPreset(preset.id)"
+    class="inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
+    [ngClass]="activePreset() === preset.id
+      ? 'border-[#24b879] bg-[#24b879] text-[#071a12] hover:bg-[#3ddc97]'
+      : 'border-gray-300 text-gray-600 hover:border-gray-400 dark:border-[#5a5d5a] dark:text-gray-300'">
+    {{ preset.label }}
+  </button>
+</div>
+
+<div *ngIf="showScheduleFields()" class="mt-4 space-y-4">
+  <!-- Weekdays -->
+  <div *ngIf="form.schedule_kind === 'weekly'">
+    <span class="text-sm text-gray-600 dark:text-gray-200">Days</span>
+    <div class="mt-1 flex flex-wrap gap-1.5">
+      <button *ngFor="let day of weekdays" type="button"
+        (click)="toggleDay(day.value); markTouched('days')"
+        class="inline-flex h-10 w-12 items-center justify-center rounded-md border text-xs font-medium transition-colors"
+        [ngClass]="hasDay(day.value)
+          ? 'border-[#24b879] bg-[#24b879] text-[#071a12] hover:bg-[#3ddc97]'
+          : 'border-gray-300 text-gray-600 dark:border-[#5a5d5a] dark:text-gray-300'">
+        {{ day.label }}
+      </button>
+    </div>
+    <app-error-message [show]="hasError('days')" [messages]="[fieldError('days') || '']">
+    </app-error-message>
+  </div>
+
+  <!-- A date every year -->
+  <div *ngIf="form.schedule_kind === 'annual'" class="grid gap-4 sm:grid-cols-3">
+    <app-base-input label="Month" type="number" [min]="1" [max]="12" placeholder="12"
+      [value]="form.month" [externalError]="fieldError('month') || ''"
+      [showExternalError]="hasError('month')"
+      (valueChange)="update({ month: $event }); markTouched('month')">
+    </app-base-input>
+    <app-base-input label="Day" type="number" [min]="1" [max]="31" placeholder="25"
+      [value]="form.day" [externalError]="fieldError('day') || ''"
+      [showExternalError]="hasError('day')"
+      (valueChange)="update({ day: $event }); markTouched('day')">
+    </app-base-input>
+    <app-base-input label="Days it runs" type="number" [min]="1" [max]="90"
+      [value]="form.duration_days" (valueChange)="update({ duration_days: $event })">
+    </app-base-input>
+  </div>
+
+  <!-- A moving date every year -->
+  <div *ngIf="form.schedule_kind === 'annual_nth_weekday'" class="space-y-4">
+    <p class="text-xs text-gray-500 dark:text-gray-400">
+      For an occasion that moves each year. Black Friday, for instance, is the fourth Thursday
+      of November plus one day.
+    </p>
+    <div class="grid gap-4 sm:grid-cols-3">
+      <app-dropdown-selector label="Which one" [options]="nthOptions" [value]="form.nth"
+        (valueChange)="update({ nth: $event })">
+      </app-dropdown-selector>
+      <app-dropdown-selector label="Weekday" [options]="weekdayOptions" [value]="form.weekday"
+        (valueChange)="update({ weekday: $event })">
+      </app-dropdown-selector>
+      <app-base-input label="Month" type="number" [min]="1" [max]="12" placeholder="11"
+        [value]="form.month" [externalError]="fieldError('month') || ''"
+        [showExternalError]="hasError('month')"
+        (valueChange)="update({ month: $event }); markTouched('month')">
+      </app-base-input>
+    </div>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <app-base-input label="Shift by days" type="number" [min]="-14" [max]="14"
+        [value]="form.offset_days" (valueChange)="update({ offset_days: $event })">
+      </app-base-input>
+      <app-base-input label="Days it runs" type="number" [min]="1" [max]="90"
+        [value]="form.duration_days" (valueChange)="update({ duration_days: $event })">
+      </app-base-input>
+    </div>
+  </div>
+
+  <!-- Chosen dates -->
+  <div *ngIf="form.schedule_kind === 'date_list'">
+    <app-textarea label="Dates" placeholder="2026-11-27, 2026-12-24" [value]="form.dates"
+      (valueChange)="update({ dates: $event }); markTouched('dates')">
+    </app-textarea>
+    <app-error-message [show]="hasError('dates')" [messages]="[fieldError('dates') || '']">
+    </app-error-message>
+    <p *ngIf="!hasError('dates')" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+      Comma separated, as YYYY-MM-DD.
+    </p>
+  </div>
+
+  <!-- Hours, for off-peak style offers -->
+  <div class="grid gap-4 sm:grid-cols-2">
+    <app-base-input label="From" type="time" [value]="form.time_start"
+      (valueChange)="update({ time_start: $event })">
+    </app-base-input>
+    <div>
+      <app-base-input label="To" type="time" [value]="form.time_end"
+        [externalError]="fieldError('time_end') || ''" [showExternalError]="hasError('time_end')"
+        (valueChange)="update({ time_end: $event }); markTouched('time_end')">
+      </app-base-input>
+      <p *ngIf="!hasError('time_end')" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        Optional. Leave both empty for the whole day.
+      </p>
+    </div>
+  </div>
+</div>
+
+<p class="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-sm dark:bg-[#1E201E]">
+  <span class="text-gray-500 dark:text-gray-400">Applies:</span>
+  <span class="font-medium">{{ schedulePreview() }}</span>
+</p>

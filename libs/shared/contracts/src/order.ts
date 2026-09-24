@@ -65,6 +65,30 @@ export interface AppliedCharge {
   amount: number;
 }
 
+export type DiscountKind = 'percentage' | 'fixed_amount';
+
+export type DiscountReason =
+  | 'late_delivery'
+  | 'damaged_item'
+  | 'wrong_address_our_fault'
+  | 'sales_goodwill'
+  | 'price_correction'
+  | 'other';
+
+/** One priced discount line. Discounts only ever come off the delivery fee. */
+export interface AppliedDiscount {
+  /** The discount row it came from; null for lines that predate discount rows. */
+  discount_id: string | null;
+  source: 'manual' | 'automatic' | 'code';
+  kind: string;
+  label: string;
+  value: number;
+  amount: number;
+  reason: string | null;
+  note: string | null;
+  applied_by: string | null;
+}
+
 export interface DriverInfo {
   id: string;
   name: string;
@@ -154,7 +178,12 @@ export interface OrderResponse {
   pst_amount: number;
   delivery_fees: number;
   delivery_tips: number;
+  /** Server-priced: the sum of `applied_discounts`, never sent by a client. */
   discount: number;
+  applied_discounts: AppliedDiscount[];
+  /** Automatic discounts a dispatcher removed from this order. */
+  opted_out_discount_ids: string[];
+  coupon_code: string | null;
   total: number;
 
   instructions: string | null;

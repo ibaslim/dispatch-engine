@@ -310,6 +310,23 @@ def _tax_lines(order: Any) -> list[tuple[str, Any]]:
     ]
 
 
+def _discount_lines(order: Any) -> list[tuple[str, float]]:
+    """(label, amount) per discount applied, skipping any that is zero.
+
+    Falls back to the single `discount` total for a payload queued before the
+    per-line breakdown existed.
+    """
+    lines = [
+        (str(_field(entry, "label") or "Discount"), _num(_field(entry, "amount")))
+        for entry in _field(order, "applied_discounts", []) or []
+    ]
+    lines = [(label, amount) for label, amount in lines if amount > 0]
+    if lines:
+        return lines
+    total = _num(_field(order, "discount"))
+    return [("Discount", total)] if total > 0 else []
+
+
 def _format_order_status(value: Any) -> str:
     raw = getattr(value, "value", value)
     return str(raw or "").replace("_", " ").title()
@@ -565,11 +582,6 @@ def build_order_recipient_email(order: Any, tracking_url: str) -> str:
         for item in items
     )
 
-    discount_val = _field(order, "discount")
-    try:
-        has_discount = float(discount_val or 0) > 0
-    except (TypeError, ValueError):
-        has_discount = False
     tax_rows = "".join(
         f"""
         <tr>
@@ -579,15 +591,14 @@ def build_order_recipient_email(order: Any, tracking_url: str) -> str:
         """
         for label, amount in _tax_lines(order)
     )
-    discount_row = (
+    discount_row = "".join(
         f"""
         <tr>
-            <td style="padding: 4px 0; color: #6b7280;">Discount</td>
-            <td style="padding: 4px 0; text-align: right; color: #DC2626;">-{_html(_money(discount_val))}</td>
+            <td style="padding: 4px 0; color: #6b7280;">{_html(label)}</td>
+            <td style="padding: 4px 0; text-align: right; color: #DC2626;">-{_html(_money(amount))}</td>
         </tr>
         """
-        if has_discount
-        else ""
+        for label, amount in _discount_lines(order)
     )
 
     return f"""
@@ -827,19 +838,14 @@ def build_order_invoice_pdf(order: Any) -> bytes:
         ("Delivery fees", _money(_field(order, "delivery_fees")), False),
         ("Tips", _money(_field(order, "delivery_tips")), False),
     ]
-    discount_val = _field(order, "discount")
     rows = []
     for label, value, _ in line_items:
         rows.append([_p(label, MUTED), Paragraph(_html(value), RIGHT_MUTED)])
-    try:
-        has_discount = float(discount_val or 0) > 0
-    except (TypeError, ValueError):
-        has_discount = False
-    if has_discount:
+    for label, amount in _discount_lines(order):
         rows.append([
-            _p("Discount", MUTED),
+            _p(label, MUTED),
             Paragraph(
-                f"-{_html(_money(discount_val))}",
+                f"-{_html(_money(amount))}",
                 ParagraphStyle("disc", parent=RIGHT_MUTED, textColor=ALERT),
             ),
         ])

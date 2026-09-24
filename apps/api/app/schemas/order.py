@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from pydantic import AfterValidator, BaseModel, Field, model_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
 from typing import Annotated, List, Optional, Dict, Any
 from app.models.order import OrderStatus, ActivityStatus
 from uuid import UUID
@@ -62,6 +62,25 @@ class OrderItem(BaseModel):
     itemName: str
     itemPrice: float
     itemQty: int
+
+
+class DiscountSelection(BaseModel):
+    """A discount picked for an order, with the value typed for it if it needs one."""
+    discount_id: UUID
+    value: Optional[float] = Field(default=None, gt=0)
+
+
+class AppliedDiscountResponse(BaseModel):
+    """One priced discount line as stored on the order."""
+    discount_id: Optional[str] = None
+    source: str
+    kind: str
+    label: str
+    value: float = 0
+    amount: float = 0
+    reason: Optional[str] = None
+    note: Optional[str] = None
+    applied_by: Optional[str] = None
 
 
 class PublicOrderTracking(BaseModel):
@@ -141,7 +160,14 @@ class OrderCreate(BaseModel):
     pst_amount: float = 0
     delivery_fees: float
     delivery_tips: float
-    discount: float
+    # `discount` is not accepted from the client: it picks discounts, and the
+    # server prices them, capped at the delivery fee.
+    discounts: List[DiscountSelection] = Field(default_factory=list)
+    discount_note: Optional[str] = Field(default=None, max_length=500)
+    # Automatic discounts to leave off this order.
+    opted_out_discount_ids: List[UUID] = Field(default_factory=list)
+    # A coupon code, resolved server-side to whichever discount it unlocks.
+    coupon_code: Optional[str] = Field(default=None, max_length=40)
     total: float
 
     instructions: Optional[str] = None
@@ -206,7 +232,14 @@ class OrderUpdate(BaseModel):
     pst_amount: Optional[float] = None
     delivery_fees: Optional[float] = None
     delivery_tips: Optional[float] = None
-    discount: Optional[float] = None
+    # Sending discounts replaces the order's discounts; an empty list clears
+    # them. Leaving it out keeps whatever the order already has.
+    discounts: Optional[List[DiscountSelection]] = None
+    discount_note: Optional[str] = Field(default=None, max_length=500)
+    opted_out_discount_ids: Optional[List[UUID]] = None
+    # Sending it replaces the order's coupon; null clears it. Leaving it out
+    # keeps whatever the order already has.
+    coupon_code: Optional[str] = Field(default=None, max_length=40)
     total: Optional[float] = None
 
     instructions: Optional[str] = None
@@ -241,6 +274,19 @@ class OrderResponse(OrderCreate):
     status: OrderStatus
     activity_status: ActivityStatus
     ready_for_pickup: bool
+    # Server-priced: the total plus the line per discount it came from.
+    discount: float = 0
+    applied_discounts: List[AppliedDiscountResponse] = Field(default_factory=list)
+    coupon_code: Optional[str] = None
+    # Input-only; the applied lines above are what a client reads back.
+    discounts: List[DiscountSelection] = Field(default_factory=list, exclude=True)
+    discount_note: Optional[str] = Field(default=None, exclude=True)
+
+    @field_validator("applied_discounts", "opted_out_discount_ids", mode="before")
+    @classmethod
+    def _no_lines_is_an_empty_list(cls, value):
+        """An order created before the breakdown existed carries no lines."""
+        return value or []
     published: bool = False
     published_at: Optional[datetime] = None
     order_placed_time: Optional[str] = None
