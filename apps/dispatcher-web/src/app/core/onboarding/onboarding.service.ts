@@ -38,9 +38,12 @@ export class OnboardingService {
     return res;
   }
 
-  async uploadDocument(applicationId: string, file: File): Promise<void> {
+  async uploadDocument(applicationId: string, file: File, documentType?: string): Promise<void> {
     const formData = new FormData();
     formData.append('file', file, file.name);
+    if (documentType) {
+      formData.append('document_type', documentType);
+    }
     await firstValueFrom(
       this.http.post<void>(`/api/v1/onboarding/applications/${applicationId}/document`, formData)
     );

@@ -8,11 +8,13 @@ import type { AcceptInvitationRequest, LoginResponse } from '@dispatch/shared/co
 import { TenantRole } from '@dispatch/shared/domain';
 import { AuthService } from '../../core/auth/auth.service';
 import { ToastService } from '../../core/toast/toast.service';
+import { PasswordInputComponent } from '../../components/password-input/password-input.component';
+import { BaseInputComponent } from '../../components/base-input/base-input.component';
 
 @Component({
   selector: 'app-invite-accept',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, PasswordInputComponent, BaseInputComponent],
   template: `
     <div class="min-h-screen flex items-center justify-center bg-gray-50">
       <div class="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-md">
@@ -37,19 +39,15 @@ import { ToastService } from '../../core/toast/toast.service';
 
             <div class="space-y-4">
               <div>
-                <label for="username" class="block text-sm font-medium text-gray-700">
-                  Username <span class="text-red-500">*</span>
-                </label>
-                <input
-                  id="username"
+                <app-base-input
+                  label="Username"
                   name="username"
-                  type="text"
-                  [(ngModel)]="username"
-                  (blur)="checkUsernameAvailability()"
-                  required
-                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                   placeholder="Choose a unique username"
-                />
+                  [required]="true"
+                  [value]="username"
+                  (valueChange)="username = $event"
+                  (blurred)="checkUsernameAvailability()">
+                </app-base-input>
                 @if (usernameChecking()) {
                   <p class="mt-1 text-sm text-gray-500">Checking availability...</p>
                 }
@@ -62,32 +60,27 @@ import { ToastService } from '../../core/toast/toast.service';
               </div>
 
               <div>
-                <label for="password" class="block text-sm font-medium text-gray-700">
-                  New password
-                </label>
-                <input
-                  id="password"
+                <app-password-input
+                  label="New password"
                   name="password"
-                  type="password"
-                  required
-                  [(ngModel)]="password"
-                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  autocomplete="new-password"
                   placeholder="Minimum 8 characters"
-                />
+                  [required]="true"
+                  [minlength]="8"
+                  [value]="password"
+                  (valueChange)="password = $event">
+                </app-password-input>
               </div>
 
               <div>
-                <label for="confirmPassword" class="block text-sm font-medium text-gray-700">
-                  Confirm password
-                </label>
-                <input
-                  id="confirmPassword"
+                <app-password-input
+                  label="Confirm password"
                   name="confirmPassword"
-                  type="password"
-                  required
-                  [(ngModel)]="confirmPassword"
-                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                />
+                  autocomplete="new-password"
+                  [required]="true"
+                  [value]="confirmPassword"
+                  (valueChange)="confirmPassword = $event">
+                </app-password-input>
               </div>
             </div>
 
@@ -100,7 +93,7 @@ import { ToastService } from '../../core/toast/toast.service';
             </button>
           </form>
         }
-      </div>k
+      </div>
     </div>
   `
 })

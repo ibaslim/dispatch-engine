@@ -1,14 +1,13 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { ButtonComponent } from '../../components/button/button.component';
-import { PageComponent } from '../../components/page/page.component';
-import { OnboardingService } from '../../core/onboarding/onboarding.service';
+import { ButtonComponent } from '@components/button/button.component';
+import { OnboardingService } from '@core/onboarding/onboarding.service';
 
 @Component({
   selector: 'app-onboarding-pending',
   standalone: true,
-  imports: [CommonModule, PageComponent, ButtonComponent],
+  imports: [CommonModule, ButtonComponent],
   templateUrl: './onboarding-pending.component.html',
 })
 export class OnboardingPendingComponent {
