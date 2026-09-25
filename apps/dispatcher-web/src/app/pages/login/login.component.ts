@@ -3,11 +3,13 @@ import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { PasswordInputComponent } from '../../components/password-input/password-input.component';
+import { BaseInputComponent } from '../../components/base-input/base-input.component';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, PasswordInputComponent, BaseInputComponent],
   template: `
     <div class="min-h-screen flex items-center justify-center bg-gray-50">
       <div class="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-md">
@@ -29,34 +31,26 @@ import { AuthService } from '../../core/auth/auth.service';
 
           <div class="space-y-4">
             <div>
-              <label for="email" class="block text-sm font-medium text-gray-700">
-                Email address
-              </label>
-              <input
-                id="email"
-                name="email"
+              <app-base-input
+                label="Email address"
                 type="email"
-                autocomplete="email"
-                required
-                [(ngModel)]="email"
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                name="email"
                 placeholder="you@example.com"
-              />
+                [required]="true"
+                [value]="email"
+                (valueChange)="email = $event">
+              </app-base-input>
             </div>
 
             <div>
-              <label for="password" class="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <input
-                id="password"
+              <app-password-input
+                label="Password"
                 name="password"
-                type="password"
                 autocomplete="current-password"
-                required
-                [(ngModel)]="password"
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              />
+                [required]="true"
+                [value]="password"
+                (valueChange)="password = $event">
+              </app-password-input>
             </div>
           </div>
 

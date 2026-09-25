@@ -81,6 +81,60 @@ async def create_tenant_admin_invitation(
     return invitation
 
 
+INVITABLE_PLATFORM_ROLES = {RoleEnum.operational_admin.value, RoleEnum.accounts_admin.value}
+
+
+async def create_platform_user_invitation(
+    db: AsyncSession,
+    email: str,
+    name: str,
+    role: str,
+    invited_by: User,
+) -> Invitation:
+    """
+    Invite a user directly into a platform-level role (no tenant).
+    Platform admin only. Applicant still goes through the onboarding
+    application + document review flow before the role is granted.
+    """
+    if role not in INVITABLE_PLATFORM_ROLES:
+        raise ValueError("Unsupported platform role.")
+
+    token = generate_secure_token(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        hours=settings.invitation_token_expire_hours
+    )
+
+    invitation = Invitation(
+        email=email.lower(),
+        name=name,
+        token=token,
+        role=role,
+        tenant_id=None,
+        tenant_name=None,
+        expires_at=expires_at,
+        invited_by_id=invited_by.id,
+    )
+    db.add(invitation)
+    await db.commit()
+    await db.refresh(invitation)
+
+    try:
+        send_invitation_email.delay(
+            email=email,
+            name=name,
+            tenant_name="Dispatch Engine",
+            invite_token=token,
+            accept_url=(
+                f"{settings.dispatcher_web_base_url}/invite/accept?token={quote(token)}&role={role}"
+            ),
+            role=role,
+        )
+    except Exception:
+        pass  # Don't fail if Celery is unavailable
+
+    return invitation
+
+
 def _normalize_invite_role(role: str) -> str:
     normalized = role.strip().lower().replace(" ", "_")
     mapping = {

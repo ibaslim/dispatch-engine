@@ -23,6 +23,8 @@ class RoleEnum(str, enum.Enum):
     driver = "driver"
     vendor = "vendor"
     individual = "individual"
+    operational_admin = "operational_admin"
+    accounts_admin = "accounts_admin"
 
 
 class User(Base, UUIDMixin, TimestampMixin):

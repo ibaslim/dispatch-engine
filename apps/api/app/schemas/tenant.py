@@ -18,6 +18,12 @@ class InviteTenantUserRequest(BaseModel):
     role: str
 
 
+class InvitePlatformUserRequest(BaseModel):
+    email: EmailStr
+    name: str
+    role: str
+
+
 class PendingInvitationResponse(BaseModel):
     id: UUID
     email: EmailStr
