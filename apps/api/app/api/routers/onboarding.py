@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from app.core.deps import CurrentUserAllowInactive, TenantAdmin, get_db, _get_current_user_allow_inactive
-from fastapi import APIRouter,Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter,Depends, File, Form, HTTPException, UploadFile, status
 from pathlib import Path
 from sqlalchemy import desc, select
 from sqlalchemy.orm import selectinload
@@ -69,6 +69,17 @@ EXTENSION_CONTENT_TYPE_MAP = {
     ".heif": {"image/heif", "image/heic"},
     ".tif": {"image/tiff"},
     ".tiff": {"image/tiff"},
+}
+
+PLATFORM_LEVEL_ROLES = {RoleEnum.operational_admin.value, RoleEnum.accounts_admin.value}
+
+# Basic, per-role document checklist. Keys are the `document_type` tag a
+# client passes when uploading via upload_application_document.
+REQUIRED_DOCUMENTS: dict[str, set[str]] = {
+    RoleEnum.individual.value: {"government_id"},
+    RoleEnum.vendor.value: {"government_id", "business_license"},
+    RoleEnum.operational_admin.value: {"government_id"},
+    RoleEnum.accounts_admin.value: {"government_id"},
 }
 
 
@@ -184,6 +195,16 @@ async def submit_application(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Unsupported role for onboarding.",
         )
+
+    required_docs = REQUIRED_DOCUMENTS.get(req.role)
+    if required_docs:
+        uploaded_docs = set((req.data or {}).get("documents") or {})
+        missing = required_docs - uploaded_docs
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Missing required documents: {', '.join(sorted(missing))}.",
+            )
 
     result = await db.execute(
         select(OnboardingApplication)
@@ -325,6 +346,9 @@ async def approve_application(
             if application.role == RoleEnum.driver.value:
                 await _ensure_default_driver_payroll(db, tenant)
 
+    if application.role in PLATFORM_LEVEL_ROLES:
+        user.is_platform_admin = True
+
     user.is_active = True
 
     role_result = await db.execute(
@@ -432,6 +456,7 @@ async def download_application_document(
 async def upload_application_document(
     application_id: str,
     file: UploadFile = File(...),
+    document_type: str | None = Form(None),
     current_user: User = Depends(_get_current_user_allow_inactive),
     db: AsyncSession = Depends(get_db),
 ) -> None:
@@ -504,6 +529,15 @@ async def upload_application_document(
                 out_file.write(chunk)
 
         os.replace(temp_filepath, final_filepath)
+
+        if document_type:
+            data = dict(application.data or {})
+            documents = dict(data.get("documents") or {})
+            documents[document_type] = safe_filename
+            data["documents"] = documents
+            application.data = data
+            db.add(application)
+            await db.commit()
 
     except HTTPException:
         if temp_filepath.exists():

@@ -4,43 +4,31 @@ import { FormsModule } from '@angular/forms';
 import { ErrorMessageComponent } from '../error-message/error-message.component';
 
 @Component({
-  selector: 'app-base-input',
+  selector: 'app-password-input',
   standalone: true,
   imports: [CommonModule, FormsModule, ErrorMessageComponent],
-  templateUrl: './base-input.component.html',
-    styles: [`:host { display: block; }`]
+  templateUrl: './password-input.component.html',
+  styles: [`:host { display: block; }`],
 })
-export class BaseInputComponent {
-  @Input() label = '';
+export class PasswordInputComponent {
+  @Input() label = 'Password';
   @Input() placeholder = '';
-  @Input() value: string | number = '';
+  @Input() value = '';
   @Input() required = false;
   @Input() disabled = false;
   @Input() showLabel = true;
 
-  @Input() type: 'text' | 'number' | 'email' | 'date' | 'time' = 'text';
-  @Input() hasSuffix = false;
-
   @Input() name = '';
-  @Input() pattern?: string;
-  @Input() min?: number;
-  @Input() max?: number;
-  @Input() step?: number;
+  @Input() autocomplete: 'current-password' | 'new-password' = 'current-password';
+  @Input() minlength?: number;
 
   @Input() errorMessages: { [key: string]: string } = {};
   @Input() externalError = '';
-  @Input() showExternalError = false;
-
   @Input() showSubmitValidation = false;
 
   @Output() valueChange = new EventEmitter<string>();
-  @Output() blurred = new EventEmitter<void>();
 
-  onBlur(): void {
-    this.interacted = true;
-    this.blurred.emit();
-  }
-
+  visible = false;
   private interacted = false;
 
   onInputValue(v: string): void {
@@ -49,22 +37,21 @@ export class BaseInputComponent {
     this.valueChange.emit(v);
   }
 
-  getName(): string {
-    return this.name || this.label?.replace(/\s+/g, '_').toLowerCase() || 'field';
+  toggleVisibility(): void {
+    this.visible = !this.visible;
   }
 
-  isPatternInvalid(): boolean {
-    if (!this.pattern || !this.value) return false;
-    return !new RegExp(this.pattern).test(String(this.value));
+  getName(): string {
+    return this.name || this.label?.replace(/\s+/g, '_').toLowerCase() || 'password';
   }
 
   get showError(): boolean {
     if (!this.interacted && !this.showSubmitValidation) return false;
 
     const requiredError = this.required && !this.value;
-    const patternError = this.isPatternInvalid();
+    const minLengthError = !!this.minlength && !!this.value && this.value.length < this.minlength;
 
-    return requiredError || patternError || !!this.externalError;
+    return requiredError || minLengthError || !!this.externalError;
   }
 
   get errorList(): string[] {
@@ -76,8 +63,10 @@ export class BaseInputComponent {
       list.push(this.errorMessages['required'] || 'This field is required.');
     }
 
-    if (this.isPatternInvalid()) {
-      list.push(this.errorMessages['pattern'] || 'Invalid format.');
+    if (this.minlength && this.value && this.value.length < this.minlength) {
+      list.push(
+        this.errorMessages['minlength'] || `Must be at least ${this.minlength} characters.`
+      );
     }
 
     if (this.externalError) {

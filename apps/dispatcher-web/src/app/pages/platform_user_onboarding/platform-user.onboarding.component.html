@@ -1,0 +1,35 @@
+<app-page
+  containerClass="w-full px-4 py-10 sm:px-6 lg:px-8 bg-gray-50 dark:bg-[#17181a] text-gray-900 dark:text-gray-100 min-h-screen"
+  contentClass="w-full">
+  <app-onboarding-form
+    [title]="title"
+    subtitle="Confirm your details and upload the required documents to complete your registration."
+    [form]="form"
+    [showSubmitValidation]="showSubmitValidation"
+    [emailError]="emailError"
+    [submitMessage]="submitMessage"
+    (onSubmit)="applyForApproval()"
+    (formChange)="form = $event">
+
+    <div class="md:col-span-2">
+      <div class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
+        Document Uploads
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <app-file-upload
+          label="Government-issued ID"
+          hint="JPG, PNG or PDF · Max 10MB"
+          icon="ph-identification-card"
+          [required]="true"
+          [fileName]="form.governmentIdFile?.name || null"
+          [error]="governmentIdFileError"
+          [showSubmitValidation]="showSubmitValidation"
+          missingMessage="Government-issued ID is required."
+          (fileChange)="onGovernmentIdChange($event)">
+        </app-file-upload>
+      </div>
+    </div>
+
+    <div class="md:col-span-2 h-px bg-gray-200 dark:bg-[#2a2d2a] my-1"></div>
+  </app-onboarding-form>
+</app-page>

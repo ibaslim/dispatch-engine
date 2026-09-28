@@ -31,6 +31,7 @@ export class NavbarComponent implements OnInit, OnDestroy {
     { label: 'Reports', route: '/reports' },
     { label: 'Drivers', route: '/drivers' },
     { label: 'Configurations', route: '/configurations' },
+    { label: 'Platform Users', route: '/platform-users' },
     { label: 'Tenant Management', route: '/tenants' },
   ];
 

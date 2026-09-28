@@ -3,8 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import select
 from app.core.deps import get_db, PlatformAdmin
-from app.schemas.tenant import InviteTenantAdminRequest, SuspendTenantRequest
-from app.services.invitation_service import create_tenant_admin_invitation
+from app.schemas.tenant import InvitePlatformUserRequest, InviteTenantAdminRequest, SuspendTenantRequest
+from app.services.invitation_service import (
+    INVITABLE_PLATFORM_ROLES,
+    create_platform_user_invitation,
+    create_tenant_admin_invitation,
+)
 from app.models.tenant import Tenant
 from app.workers.tasks import send_tenant_suspended_email, send_tenant_unsuspended_email
 
@@ -22,6 +26,26 @@ async def invite_tenant_admin(
         email=req.email,
         name=req.name,
         tenant_name=req.tenant_name,
+        invited_by=current_user,
+    )
+
+
+@router.post("/users/invite", status_code=status.HTTP_204_NO_CONTENT)
+async def invite_platform_user(
+    req: InvitePlatformUserRequest,
+    current_user: PlatformAdmin,
+    db: AsyncSession = Depends(get_db),
+):
+    if req.role not in INVITABLE_PLATFORM_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported platform role.",
+        )
+    await create_platform_user_invitation(
+        db=db,
+        email=req.email,
+        name=req.name,
+        role=req.role,
         invited_by=current_user,
     )
 

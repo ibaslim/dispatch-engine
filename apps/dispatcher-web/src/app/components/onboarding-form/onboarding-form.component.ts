@@ -24,6 +24,7 @@ export interface OnboardingFormValues {
   drivingHistoryFile?: File | null;
   photoIdFile?: File | null;
   profilePictureFile?: File | null;
+  governmentIdFile?: File | null;
 }
 
 @Component({

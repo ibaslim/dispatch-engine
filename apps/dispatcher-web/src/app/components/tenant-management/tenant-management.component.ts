@@ -7,17 +7,17 @@ import { SideDrawerComponent } from '../side-drawer/Side-drawer.component';
 import { PopupComponent } from '../popup/popup.component';
 import { BaseInputComponent } from '../base-input/base-input.component';
 import { DropdownSelectorComponent } from '../dropdown-selector/dropdown-selector.component';
-import { SelectOption } from '../../models/dropdown-selector/dropdown-selector.model';
-import { TableColumn } from '../../models/table.model';
-import { TenantRole } from '@dispatch/shared/domain';
+import { SelectOption } from '@models/dropdown-selector/dropdown-selector.model';
+import { TableColumn } from '@models/table.model';
+import { PLATFORM_LEVEL_ROLES, TenantRole } from '@dispatch/shared/domain';
 import type { OnboardingApplicationResponse, OnboardingStatus } from '@dispatch/shared/contracts';
-import { OnboardingService } from '../../core/onboarding/onboarding.service';
+import { OnboardingService } from '@core/onboarding/onboarding.service';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { ToastService } from '../../core/toast/toast.service';
+import { ToastService } from '@core/toast/toast.service';
 import {SearchBarComponent} from "../search-bar/search-bar.component";
 
-const ROLE_LABELS: Record<TenantRole, string> = {
+const ROLE_LABELS: Record<string, string> = {
   [TenantRole.Vendor]: 'Partner',
   [TenantRole.Driver]: 'Driver',
   [TenantRole.Individual]: 'Individual',
@@ -259,10 +259,16 @@ get filteredTenants() {
 }
   private async loadTenants(): Promise<void> {
     try {
-      const [applications, invitations] = await Promise.all([
+      const [allApplications, allInvitations] = await Promise.all([
         this.onboarding.listApplications(),
         this.loadInvitations(),
       ]);
+      const applications = allApplications.filter(
+        (application) => !PLATFORM_LEVEL_ROLES.includes(application.role as any)
+      );
+      const invitations = allInvitations.filter(
+        (invite) => !PLATFORM_LEVEL_ROLES.includes(invite.role as any)
+      );
       this.pendingApplications = applications;
       const tenantIds = applications
         .map((application) => application.tenant_id)
@@ -376,6 +382,21 @@ get filteredTenants() {
       // File names stored with keys ending in FileName -> render as file entry
       if (key.toLowerCase().endsWith('filename') && typeof value === 'string' && value) {
         entries.push({ label: this.toTitleCase(key.replace(/FileName$/i, 'Document')), value: value, isFile: true, fileName: value });
+        continue;
+      }
+
+      // documents: { document_type: fileName } -> render each as a file entry
+      if (key === 'documents' && typeof value === 'object' && value !== null) {
+        for (const [docType, fileName] of Object.entries(value as Record<string, unknown>)) {
+          if (typeof fileName === 'string' && fileName) {
+            entries.push({
+              label: this.toTitleCase(docType),
+              value: fileName,
+              isFile: true,
+              fileName,
+            });
+          }
+        }
         continue;
       }
 
@@ -523,7 +544,7 @@ get filteredTenants() {
       .replace(/^./, (char) => char.toUpperCase());
   }
 
-  getRoleLabel(role: TenantRole): string {
+  getRoleLabel(role: string): string {
     return ROLE_LABELS[role] ?? role;
   }
 

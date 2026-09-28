@@ -55,6 +55,22 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'onboarding/operational_admin',
+    loadComponent: () =>
+      import('./pages/platform_user_onboarding/platform-user.onboarding.component').then(
+        (m) => m.PlatformUserOnboardingComponent
+      ),
+    data: { role: 'operational_admin' },
+  },
+  {
+    path: 'onboarding/accounts_admin',
+    loadComponent: () =>
+      import('./pages/platform_user_onboarding/platform-user.onboarding.component').then(
+        (m) => m.PlatformUserOnboardingComponent
+      ),
+    data: { role: 'accounts_admin' },
+  },
+  {
     path: 'suspended',
     canActivate: [authGuard],
     loadComponent: () =>
@@ -118,6 +134,14 @@ export const routes: Routes = [
             (m) => m.TenantManagementComponent
           ),
       },
+  {
+    path: 'platform-users',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/platform-users/platform-users.component').then(
+        (m) => m.PlatformUsersComponent
+      ),
+  },
   {
     path: 'configurations',
     canActivate: [authGuard],
