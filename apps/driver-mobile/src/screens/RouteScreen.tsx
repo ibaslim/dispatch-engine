@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Clipboard,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -16,13 +15,7 @@ import { useTheme } from '@theme';
 import type { RouteStop, UnplaceableStop } from '@dispatch/shared/contracts';
 import { formatDistance } from '@utils/distance';
 import { formatDuration } from '@utils/duration';
-import {
-  MAX_STOPS_PER_LAUNCH,
-  buildRouteUrl,
-  canOpenRoute,
-  openDirections,
-  openRoute,
-} from '@utils/linking';
+import { MAX_STOPS_PER_LAUNCH, canOpenRoute, openDirections, openRoute } from '@utils/linking';
 
 interface Props {
   onBack: () => void;
@@ -124,13 +117,6 @@ export function RouteScreen({ onBack, onStopPress }: Props) {
 
   const stops = plan?.stops ?? [];
   const overflow = Math.max(0, stops.length - MAX_STOPS_PER_LAUNCH);
-  const mapsUrl = buildRouteUrl(stops);
-
-  function copyLink() {
-    if (!mapsUrl) return;
-    Clipboard.setString(mapsUrl);
-    show('Link copied. Paste it into Google Maps on the web.', { variant: 'success' });
-  }
 
   async function launch() {
     if (stops.length === 0) return;
@@ -215,17 +201,6 @@ export function RouteScreen({ onBack, onStopPress }: Props) {
           </ScrollView>
 
           <View className="gap-2 px-5 pb-4">
-            {mapsUrl ? (
-              <View className="gap-2 rounded-xl border border-border bg-surface p-3">
-                <Text className="text-[12px] font-bold text-foreground">
-                  Link handed to Google Maps
-                </Text>
-                <Text selectable className="text-[11px] leading-4 text-muted">
-                  {mapsUrl}
-                </Text>
-                <Button title="Copy link" variant="outline" size="sm" onPress={copyLink} />
-              </View>
-            ) : null}
             {overflow > 0 ? (
               <Text className="text-center text-[12px] text-muted">
                 Google Maps takes {MAX_STOPS_PER_LAUNCH} stops at a time. Open it again after stop{' '}

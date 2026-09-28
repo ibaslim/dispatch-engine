@@ -4,14 +4,6 @@ import { useRouter } from 'expo-router';
 import { useToast } from '@components/ui';
 import { usePublishedOrders } from '@contexts';
 
-interface AcceptOptions {
-  /**
-   * Replace the current route instead of pushing. Use from the offer detail
-   * screen so Back doesn't return to an offer that no longer exists.
-   */
-  replace?: boolean;
-}
-
 /**
  * Claiming a broadcast offer, with the outcome messaging that goes with it.
  *
@@ -20,8 +12,7 @@ interface AcceptOptions {
  * drivers, reported as information rather than failure.
  */
 export function useAcceptOffer(): {
-  acceptOffer: (orderId: string, options?: AcceptOptions) => Promise<void>;
-  /** The offer currently being claimed, for the button's spinner. */
+  acceptOffer: (orderId: string) => Promise<void>;
   acceptingId: string | null;
 } {
   const { accept } = usePublishedOrders();
@@ -30,19 +21,15 @@ export function useAcceptOffer(): {
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
   const acceptOffer = useCallback(
-    async (orderId: string, { replace = false }: AcceptOptions = {}) => {
+    async (orderId: string) => {
       setAcceptingId(orderId);
       try {
         const outcome = await accept(orderId);
 
         if (outcome.result === 'accepted') {
           show('Order accepted. It is now in your jobs.', { variant: 'success' });
-          const href = { pathname: '/order/[id]', params: { id: outcome.order.id } } as const;
-          if (replace) {
-            router.replace(href);
-          } else {
-            router.push(href);
-          }
+          router.replace('/orders');
+          router.push({ pathname: '/order/[id]', params: { id: outcome.order.id } });
           return;
         }
 

@@ -91,10 +91,20 @@ class RoutePlan:
 # ---------------------------------------------------------------------------
 
 def outstanding_stop(order: Order) -> tuple[StopKind, float | None, float | None, str | None, str | None, str | None] | None:
-    """The one stop this order still needs, or None once it's delivered."""
+    """The one stop this order still needs, or None once it's delivered, timed, or disputed.
+
+    A stop with a specific wall-clock time attached (`*_time_specified`) is the
+    driver's to manage on their own schedule, so it never enters optimization.
+    A disputed order is stalled on dispatch, not on driving order, so it stays
+    out of the run until the report is resolved.
+    """
     if order.activity_status == ActivityStatus.delivered:
         return None
+    if order.incident_report:
+        return None
     if order.activity_status in _PICKUP_PENDING:
+        if order.pickup_time_specified:
+            return None
         return (
             "pickup",
             order.pickup_latitude,
@@ -103,6 +113,8 @@ def outstanding_stop(order: Order) -> tuple[StopKind, float | None, float | None
             order.pickup_address,
             order.pickup_name,
         )
+    if order.delivery_time_specified:
+        return None
     return (
         "drop",
         order.delivery_latitude,

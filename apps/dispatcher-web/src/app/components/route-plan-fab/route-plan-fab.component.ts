@@ -4,7 +4,6 @@ import { Component, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { PopupComponent } from '@components/popup/popup.component';
 import { ButtonComponent } from '@components/button/button.component';
-import { ToastService } from '@core/toast/toast.service';
 import { LocationError, LocationPermissionService } from '@core/location/location-permission.service';
 import type { RoutePlan, RouteStop } from '@dispatch/shared/contracts';
 import { OrdersService } from '../../services/orders/orders.service';
@@ -20,7 +19,6 @@ export const MAX_STOPS_PER_LINK = 10;
 })
 export class RoutePlanFabComponent {
   private readonly orders = inject(OrdersService);
-  private readonly toast = inject(ToastService);
   readonly location = inject(LocationPermissionService);
 
   readonly maxStopsPerLink = MAX_STOPS_PER_LINK;
@@ -80,17 +78,6 @@ export class RoutePlanFabComponent {
   openInMaps(): void {
     const url = this.mapsUrl;
     if (url) window.open(url, '_blank', 'noopener');
-  }
-
-  async copyLink(): Promise<void> {
-    const url = this.mapsUrl;
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      this.toast.success('Google Maps link copied.');
-    } catch {
-      this.toast.error('Could not copy the link.');
-    }
   }
 
   formatDuration(seconds: number | null): string | null {

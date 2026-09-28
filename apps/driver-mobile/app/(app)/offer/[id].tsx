@@ -19,7 +19,7 @@ export default function OfferDetailRoute() {
     <OfferDetailScreen
       order={order}
       accepting={acceptingId === id}
-      onAccept={() => acceptOffer(id, { replace: true })}
+      onAccept={() => acceptOffer(id)}
       onBack={() => router.back()}
     />
   );
