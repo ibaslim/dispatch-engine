@@ -810,7 +810,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (!value.deliveryCategoryId || !value.routeQuote) return true;
 
     const hasValidItem = (value.details.items || []).some((item) =>
-      item.itemName.trim() && toNumber(item.itemPrice) > 0 && toNumber(item.itemQty) > 0
+      item.itemName.trim() && toNumber(item.itemQty) > 0
     );
     if (!hasValidItem) return true;
 
