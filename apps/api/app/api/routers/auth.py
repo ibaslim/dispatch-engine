@@ -4,6 +4,7 @@ import sqlalchemy as sa
 from typing import Union
 
 from app.core.deps import get_db, CurrentUserAllowInactiveAndSuspended
+from app.core.rate_limit import rate_limit
 from app.schemas.auth import (
     LoginRequest, TokenResponse, RefreshRequest,
     MeResponse, ForgotPasswordRequest, ResetPasswordRequest, PendingApprovalResponse,
@@ -18,7 +19,14 @@ from app.models.tenant import Tenant
 router = APIRouter()
 
 
-@router.post("/login", response_model=Union[TokenResponse, PendingApprovalResponse, SuspendedAccountResponse])
+@router.post(
+    "/login",
+    response_model=Union[TokenResponse, PendingApprovalResponse, SuspendedAccountResponse],
+    # IP-scoped: caps credential-stuffing/brute-force attempts before they reach
+    # the DB. Not per-account — an attacker can still spread guesses across
+    # accounts from one IP, but that's a much slower attack to run at scale.
+    dependencies=[Depends(rate_limit(times=5, seconds=60))],
+)
 async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await authenticate_user(db, req.email, req.password)
     

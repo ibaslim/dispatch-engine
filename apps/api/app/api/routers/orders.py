@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.deps import CurrentUser
+from app.core.rate_limit import identify_user_or_ip, rate_limit
 from app.core.redis import get_redis
 from app.db.session import get_db
 from app.models.order import Order, OrderStatus, ActivityStatus
@@ -1908,7 +1909,14 @@ async def assign_driver(
 # -------------------------
 # GET ROUTE PLAN
 # -------------------------
-@router.get("/route-plan", response_model=RoutePlanResponse)
+@router.get(
+    "/route-plan",
+    response_model=RoutePlanResponse,
+    # Per-driver, not per-IP: this call bills against the Google Routes API, so
+    # the limit has to follow the account that's spending the quota, not the
+    # network it happens to be on.
+    dependencies=[Depends(rate_limit(times=1, seconds=10, identifier=identify_user_or_ip))],
+)
 async def get_route_plan(
     current_user: CurrentUser,
     latitude: float | None = Query(default=None, ge=-90, le=90),
