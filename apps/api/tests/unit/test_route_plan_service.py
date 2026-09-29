@@ -23,7 +23,16 @@ from app.services.route_plan_service import (
 pytestmark = pytest.mark.unit
 
 
-def make_order(activity_status, *, pickup=(49.28, -123.12), drop=(49.30, -123.10), number="ORD01"):
+def make_order(
+    activity_status,
+    *,
+    pickup=(49.28, -123.12),
+    drop=(49.30, -123.10),
+    number="ORD01",
+    pickup_time_specified=False,
+    delivery_time_specified=False,
+    incident_report=None,
+):
     """An Order stand-in carrying only the columns the service reads."""
     return SimpleNamespace(
         id="11111111-1111-1111-1111-111111111111",
@@ -34,11 +43,14 @@ def make_order(activity_status, *, pickup=(49.28, -123.12), drop=(49.30, -123.10
         pickup_place_id="pickup-place",
         pickup_address="1 Pickup St",
         pickup_name="Sender",
+        pickup_time_specified=pickup_time_specified,
         delivery_latitude=drop[0] if drop else None,
         delivery_longitude=drop[1] if drop else None,
         delivery_place_id="drop-place",
         delivery_address="2 Drop Ave",
         delivery_name="Recipient",
+        delivery_time_specified=delivery_time_specified,
+        incident_report=incident_report,
     )
 
 
@@ -75,6 +87,31 @@ class TestDeriveStops:
 
     def test_delivered_orders_leave_the_run(self):
         stops, unplaceable = derive_stops([make_order(ActivityStatus.delivered)])
+
+        assert stops == []
+        assert unplaceable == []
+
+    def test_a_pickup_with_a_specific_time_is_left_out_of_optimization(self):
+        """The driver already has an appointment time to hit; reordering it would fight that."""
+        order = make_order(ActivityStatus.driver_not_assigned, pickup_time_specified=True)
+        stops, unplaceable = derive_stops([order])
+
+        assert stops == []
+        assert unplaceable == []
+
+    def test_a_drop_with_a_specific_time_is_left_out_of_optimization(self):
+        order = make_order(ActivityStatus.picked_up, delivery_time_specified=True)
+        stops, unplaceable = derive_stops([order])
+
+        assert stops == []
+        assert unplaceable == []
+
+    def test_a_disputed_order_is_left_out_of_optimization(self):
+        """A dispute stalls the order on dispatch, not on driving order."""
+        order = make_order(
+            ActivityStatus.driver_not_assigned, incident_report={"reason": "damaged"}
+        )
+        stops, unplaceable = derive_stops([order])
 
         assert stops == []
         assert unplaceable == []

@@ -134,12 +134,15 @@ export function OrdersScreen({ onOrderPress, onRoutePress }: Props) {
   const [submitting, setSubmitting] = useState(false);
 
   // Everything still on the driver's plate. Delivered and completed jobs have
-  // left the Orders tab for Activity.
+  // left the Orders tab for Activity. Newest first, so a driver coming back
+  // online sees what just landed without scrolling past the whole shift.
   const active = useMemo(
     () =>
-      orders.filter(
-        (order) => order.activity_status !== 'delivered' && order.status !== 'completed',
-      ),
+      orders
+        .filter((order) => order.activity_status !== 'delivered' && order.status !== 'completed')
+        .sort(
+          (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
+        ),
     [orders],
   );
 

@@ -83,7 +83,6 @@
     <!-- Always rendered: the popup only checks for footer content once, when it opens. -->
     <div modal-footer class="flex flex-wrap items-center justify-end gap-2">
         <ng-container *ngIf="!loading && stops.length > 0; else closeOnly">
-            <app-button variant="ghost-outline" label="Copy link" (onClick)="copyLink()"></app-button>
             <app-button variant="primary" label="Open in Google Maps" (onClick)="openInMaps()"></app-button>
         </ng-container>
         <ng-template #closeOnly>
