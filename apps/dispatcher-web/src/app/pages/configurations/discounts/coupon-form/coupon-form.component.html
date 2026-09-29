@@ -50,8 +50,8 @@
         <span class="font-medium">{{ summaryLine() }}</span>
       </p>
 
-      <div class="grid gap-4 sm:grid-cols-3">
-        <app-base-input label="Most it can take" type="number"
+      <div class="grid gap-4" [ngClass]="form.kind === 'percentage' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'">
+        <app-base-input *ngIf="form.kind === 'percentage'" label="Most it can take" type="number"
           [min]="0" [step]="0.01" [disabled]="termsLocked" placeholder="No cap"
           [value]="form.max_discount_amount" (valueChange)="form.max_discount_amount = $event">
         </app-base-input>
