@@ -41,5 +41,9 @@
         </p>
     </div>
 
+    <p *ngIf="zoneMismatch" class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+        <i class="ph ph-warning"></i> This address is outside our operational zones.
+    </p>
+
     <app-error-message [show]="showError" [messages]="errorList"></app-error-message>
 </div>

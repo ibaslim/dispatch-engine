@@ -34,6 +34,12 @@ export interface SelectedGooglePlace {
   operationalZoneName?: string;
 }
 
+export interface GoogleAddressComponent {
+  longText?: string;
+  shortText?: string;
+  types: string[];
+}
+
 interface PlacePredictionSelectEvent extends Event {
   placePrediction: {
     toPlace: () => {
@@ -41,6 +47,7 @@ interface PlacePredictionSelectEvent extends Event {
       formattedAddress?: string;
       displayName?: string;
       location?: { lat: () => number; lng: () => number };
+      addressComponents?: GoogleAddressComponent[];
       fetchFields: (options: { fields: string[] }) => Promise<void>;
     };
   };

@@ -239,7 +239,7 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
       details: {
         items: (order.items || []).map((item) => ({
           itemName: item.itemName,
-          itemPrice: String(item.itemPrice),
+          itemPrice: item.itemPrice == null ? '' : String(item.itemPrice),
           itemQty: String(item.itemQty)
         })),
         subtotal: order.subtotal,
@@ -330,10 +330,10 @@ export function toOrderPayload(value: NewOrderFormValue): Record<string, unknown
     delivery_planned_at: deliveryAt.plannedAt,
     delivery_time_specified: deliveryAt.timeSpecified,
     items: value.details.items
-      .filter((item) => item.itemName.trim() && toNumber(item.itemPrice) > 0 && toNumber(item.itemQty) > 0)
+      .filter((item) => item.itemName.trim() && toNumber(item.itemQty) > 0)
       .map((item) => ({
         itemName: item.itemName.trim(),
-        itemPrice: toNumber(item.itemPrice),
+        itemPrice: item.itemPrice.trim() === '' ? null : toNumber(item.itemPrice),
         itemQty: Math.round(toNumber(item.itemQty))
       })),
     subtotal: value.details.subtotal,

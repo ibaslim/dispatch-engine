@@ -109,7 +109,6 @@ export class OtherOrderDetailsComponent {
     const priceFilled = item.itemPrice !== '' && item.itemPrice !== null && item.itemPrice !== undefined;
     const qtyFilled = item.itemQty !== '' && item.itemQty !== null && item.itemQty !== undefined;
 
-    if (nameFilled && !priceFilled) errors.push('Price is required');
     if (nameFilled && !qtyFilled) errors.push('Quantity is required');
 
     if (priceFilled && price <= 0) errors.push('Price must be greater than 0');
@@ -420,16 +419,15 @@ export class OtherOrderDetailsComponent {
 
     return items.some(item => {
       const nameFilled = !!item.itemName?.trim();
-      const price = this.toNumber(item.itemPrice);
       const qty = this.toNumber(item.itemQty);
 
-      return nameFilled && price > 0 && qty > 0;
+      return nameFilled && qty > 0;
     });
   }
 
   getItemsValidationError(): string {
     if (!this.hasValidItems()) {
-      return 'At least 1 item with name, price, and quantity is required.';
+      return 'At least 1 item with name and quantity is required.';
     }
     return '';
   }

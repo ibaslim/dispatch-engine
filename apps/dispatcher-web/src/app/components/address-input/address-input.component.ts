@@ -16,12 +16,13 @@ import { FormsModule, NgModel } from '@angular/forms';
 import { ButtonComponent } from '../button/button.component';
 import { ErrorMessageComponent } from '../error-message/error-message.component';
 import {
+  GoogleAddressComponent,
   GoogleMapsService,
   GooglePlaceAutocompleteElement,
   SelectedGooglePlace,
-} from '../../services/google-maps/google-maps.service';
-import { OperationalZone } from '../../services/delivery-configuration/delivery-configuration.service';
-import { ToastService } from '../../core/toast/toast.service';
+} from '@services/google-maps/google-maps.service';
+import { OperationalZone } from '@services/delivery-configuration/delivery-configuration.service';
+import { ToastService } from '@core/toast/toast.service';
 
 @Component({
   selector: 'app-address-input',
@@ -138,6 +139,9 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
   manualValue = '';
   manualTouched = false;
   manualMatchedRegion = '';
+  // Set on a real (non-manual) Places selection that resolved to a city
+  // outside every configured operational zone.
+  zoneMismatch = false;
   private autocomplete?: GooglePlaceAutocompleteElement;
   private readonly onAutocompleteInput = () => this.onInput(this.autocomplete?.value ?? '');
   // Keep the custom element mounted when an individual prediction request fails.
@@ -158,6 +162,7 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
       this.manualFallback = true;
       this.manualValue = '';
       this.manualMatchedRegion = '';
+      this.zoneMismatch = false;
       this.placeChange.emit(null);
     });
     void this.initializeAutocomplete();
@@ -177,6 +182,7 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
   onInput(v: string): void {
     this.valueChange.emit(v);
     this.placeChange.emit(null);
+    this.zoneMismatch = false;
   }
 
   openInGoogleMaps(): void {
@@ -236,19 +242,31 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
     if (!this.googleMaps.isPlaceSelection(event)) return;
     try {
       const place = event.placePrediction.toPlace();
-      await place.fetchFields({ fields: ['id', 'formattedAddress', 'displayName', 'location'] });
+      // addressComponents rides along in this same request — Places API (New)
+      // bills per call, not per field, so this costs nothing extra and avoids
+      // a second lookup (client- or server-side) just to learn the city.
+      await place.fetchFields({
+        fields: ['id', 'formattedAddress', 'displayName', 'location', 'addressComponents'],
+      });
       const address = place.formattedAddress || place.displayName || this.autocomplete?.value || '';
       if (this.autocomplete) this.autocomplete.value = address;
       this.valueChange.emit(address);
       if (!place.id || !place.location) {
         this.placeChange.emit(null);
+        this.zoneMismatch = false;
         return;
       }
+      const match = this.matchZoneFromComponents(place.addressComponents);
+      // Only flag a mismatch once the zones list has actually loaded — an
+      // empty list just means "not fetched yet", never "nothing is in zone".
+      this.zoneMismatch = this.operationalZones.length > 0 && !match;
       this.placeChange.emit({
         placeId: place.id,
         formattedAddress: address,
         latitude: place.location.lat(),
         longitude: place.location.lng(),
+        operationalZoneId: match?.zone.id,
+        operationalZoneName: match?.zone.name,
       });
     } catch (error) {
       if (this.googleMaps.isQuotaError(error)) {
@@ -279,6 +297,31 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
         'Google address lookup quota is exhausted. Enter pickup and delivery addresses manually.'
       );
     }
+  }
+
+  /** City + province from Google's structured components, matched exactly against
+   * a zone's cities — the same fields and comparison the backend's own zone
+   * resolution (`_resolve_location`) uses, so the two never disagree. */
+  private matchZoneFromComponents(
+    components: GoogleAddressComponent[] | undefined,
+  ): { zone: OperationalZone } | null {
+    if (!components?.length) return null;
+    const city = this.componentText(components, 'locality', 'postal_town');
+    const province = this.componentText(components, 'administrative_area_level_1');
+    if (!city || !province) return null;
+
+    for (const zone of this.operationalZones) {
+      const hit = zone.cities.some(
+        (c) => c.name.toLocaleLowerCase() === city && c.state_name.toLocaleLowerCase() === province,
+      );
+      if (hit) return { zone };
+    }
+    return null;
+  }
+
+  private componentText(components: GoogleAddressComponent[], ...types: string[]): string {
+    const found = components.find((c) => types.some((type) => c.types.includes(type)));
+    return (found?.longText ?? '').toLocaleLowerCase().trim();
   }
 
   private findOperationalMatch(address: string): { zone: OperationalZone; matchedName: string } | null {

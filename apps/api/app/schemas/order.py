@@ -60,7 +60,7 @@ class DriverInfo(BaseModel):
 
 class OrderItem(BaseModel):
     itemName: str
-    itemPrice: float
+    itemPrice: Optional[float] = None
     itemQty: int
 
 

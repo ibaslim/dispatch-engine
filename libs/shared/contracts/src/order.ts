@@ -54,7 +54,7 @@ export type PaymentMethod = 'cash_on_delivery' | 'credit_card';
 
 export interface OrderItem {
   itemName: string;
-  itemPrice: number;
+  itemPrice: number | null;
   itemQty: number;
 }
 
