@@ -1,9 +1,10 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi_limiter import FastAPILimiter
 
 from app.core.config import settings
-from app.core.redis import init_redis, close_redis
+from app.core.redis import init_redis, close_redis, get_redis_client
 from app.api.routers import (
     auth,
     platform,
@@ -34,6 +35,9 @@ from app.services.driver_presence_service import assert_presence_window_sane
 async def lifespan(application: FastAPI):
     # --- Startup ---
     await init_redis()
+    # Shares the app's own Redis pool rather than opening a second connection;
+    # closed by close_redis() below, so FastAPILimiter.close() is never called.
+    await FastAPILimiter.init(get_redis_client())
     await init_db()
     await seed_platform_admin()
     await seed_locations()

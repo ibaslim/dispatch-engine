@@ -61,3 +61,14 @@ async def get_redis() -> AsyncGenerator[aioredis.Redis, None]:
             "Ensure init_redis() is called during application startup."
         )
     yield _pool
+
+
+def get_redis_client() -> aioredis.Redis:
+    """Non-DI accessor for startup code (e.g. FastAPILimiter.init) that needs
+    the pool before any request — and thus any ``Depends`` — exists."""
+    if _pool is None:
+        raise RuntimeError(
+            "Redis pool is not initialised. "
+            "Ensure init_redis() is called during application startup."
+        )
+    return _pool

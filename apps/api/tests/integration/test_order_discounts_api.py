@@ -4,15 +4,8 @@ The create path runs the Google Maps quote, so these exercise PATCH, which
 prices without a quote whenever the address and category are untouched.
 """
 import pytest
-from sqlalchemy import select
 
-from app.models.discount import (
-    Discount,
-    DiscountKind,
-    DiscountRedemption,
-    DiscountValueMode,
-    RedemptionStatus,
-)
+from app.models.discount import Discount, DiscountKind, DiscountValueMode
 from tests.factories import DiscountFactory, OrderFactory
 
 pytestmark = pytest.mark.asyncio
@@ -226,7 +219,15 @@ class TestRefusedSelections:
 
 
 class TestRedemptions:
-    async def test_applying_one_records_a_redemption(self, db, tenant, platform_admin_client):
+    """There's no separate ledger table — see app/services/discounts/redemptions.py.
+    An order's own `applied_discounts` column is the record of what it has, and
+    `Discount.redemption_count` / `Coupon.used_count` are atomic counters kept in
+    step with it, so a usage limit can never be oversold.
+    """
+
+    async def test_applying_one_prices_a_line_and_claims_a_use(
+        self, db, tenant, platform_admin_client
+    ):
         order = await _order(db, vendor=tenant)
         discount = await DiscountFactory.create(db, title="Late delivery")
 
@@ -234,23 +235,15 @@ class TestRedemptions:
             f"{ORDERS}/{order.id}", json={"discounts": [{"discount_id": str(discount.id)}]}
         )
 
-        redemption = await db.scalar(
-            select(DiscountRedemption).where(DiscountRedemption.discount_id == discount.id)
-        )
-        assert redemption.status == RedemptionStatus.applied
-        assert float(redemption.amount) == 2.0
-        assert redemption.order_id == order.id
-        assert redemption.order_number == order.order_number
-        assert redemption.tenant_id == tenant.id
-        # The terms are copied, so editing the discount later cannot rewrite them.
-        assert redemption.snapshot["value"] == "10.00"
+        await db.refresh(order)
+        [line] = order.applied_discounts
+        assert line["discount_id"] == str(discount.id)
+        assert line["amount"] == 2.0
 
         await db.refresh(discount)
         assert discount.redemption_count == 1
 
-    async def test_removing_one_voids_its_redemption_and_frees_the_use(
-        self, db, platform_admin_client
-    ):
+    async def test_removing_one_drops_its_line_and_frees_the_use(self, db, platform_admin_client):
         order = await _order(db)
         discount = await DiscountFactory.create(db)
         await platform_admin_client.patch(
@@ -259,15 +252,12 @@ class TestRedemptions:
 
         await platform_admin_client.patch(f"{ORDERS}/{order.id}", json={"discounts": []})
 
-        redemption = await db.scalar(
-            select(DiscountRedemption).where(DiscountRedemption.discount_id == discount.id)
-        )
-        assert redemption.status == RedemptionStatus.voided
-        assert redemption.voided_reason == "no_longer_applied"
+        await db.refresh(order)
+        assert order.applied_discounts == []
         await db.refresh(discount)
         assert discount.redemption_count == 0
 
-    async def test_a_changed_fee_updates_the_recorded_amount(self, db, platform_admin_client):
+    async def test_a_changed_fee_reprices_the_line(self, db, platform_admin_client):
         order = await _order(db)
         discount = await DiscountFactory.create(db)
         await platform_admin_client.patch(
@@ -276,14 +266,11 @@ class TestRedemptions:
 
         await platform_admin_client.patch(f"{ORDERS}/{order.id}", json={"delivery_fees": 40.0})
 
-        redemption = await db.scalar(
-            select(DiscountRedemption).where(DiscountRedemption.discount_id == discount.id)
-        )
-        assert float(redemption.amount) == 4.0
+        await db.refresh(order)
+        [line] = order.applied_discounts
+        assert line["amount"] == 4.0
 
-    async def test_deleting_the_order_keeps_the_record_and_frees_the_use(
-        self, db, platform_admin_client
-    ):
+    async def test_deleting_the_order_frees_the_use(self, db, platform_admin_client):
         order = await _order(db)
         discount = await DiscountFactory.create(db)
         await platform_admin_client.patch(
@@ -292,14 +279,9 @@ class TestRedemptions:
 
         await platform_admin_client.delete(f"{ORDERS}/{order.id}")
 
-        redemption = await db.scalar(
-            select(DiscountRedemption).where(DiscountRedemption.discount_id == discount.id)
-        )
-        assert redemption.status == RedemptionStatus.voided
-        assert redemption.voided_reason == "order_deleted"
-        assert redemption.order_id is None
-        # The order number survives, so the report still names it.
-        assert redemption.order_number == order.order_number
+        # The order and its applied_discounts line are gone with it — there is
+        # no separate ledger row to survive the delete, by design. Only the
+        # counter, which the deletion must still release, is left to check.
         assert (await db.get(Discount, discount.id)).redemption_count == 0
 
 
@@ -697,18 +679,18 @@ class TestAutomaticDiscounts:
         assert response.status_code == 200, response.json()
         assert response.json()["applied_discounts"] == []
 
-    async def test_it_records_a_redemption_with_no_admin(self, db, platform_admin_client):
+    async def test_it_applies_with_no_admin(self, db, platform_admin_client):
         order = await _order(db)
         promo = await self._thursday_promo(db)
 
         await platform_admin_client.patch(f"{ORDERS}/{order.id}", json={"delivery_fees": 30.0})
 
-        redemption = await db.scalar(
-            select(DiscountRedemption).where(DiscountRedemption.discount_id == promo.id)
-        )
-        assert redemption.source.value == "automatic"
-        assert redemption.applied_by is None
-        assert float(redemption.amount) == 3.0
+        await db.refresh(order)
+        [line] = order.applied_discounts
+        assert line["discount_id"] == str(promo.id)
+        assert line["source"] == "automatic"
+        assert line["applied_by"] is None
+        assert line["amount"] == 3.0
 
     async def test_a_dispatcher_cannot_pick_an_automatic_one_by_hand(
         self, db, platform_admin_client
