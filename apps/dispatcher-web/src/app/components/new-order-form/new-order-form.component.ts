@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, EventEmitter, HostListener, Input, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, HostListener, Input, OnChanges, OnDestroy, OnInit, Output, SimpleChanges } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { toPlannedAt } from '@dispatch/shared/contracts';
@@ -13,14 +13,14 @@ import {
   OperationalZone,
   Surcharge,
 } from '../../services/delivery-configuration/delivery-configuration.service';
-import { OrdersService } from '../../services/orders/orders.service';
+import { OrdersService, QuotePlace } from '../../services/orders/orders.service';
 import { DiscountPick, totalDiscount } from '@pages/orders/orders-formatting.util';
 import { Discount, DiscountsService } from '@services/discounts/discounts.service';
 import { ProofOfDeliveryComponent } from '../proof-of-delivery/proof-of-delivery.component';
 import { PickupFromComponent } from '../pickup-from/pickup-from.component';
 import { DeliverToComponent } from '../deliver-to/deliver-to.component';
 import { OtherOrderDetailsComponent } from '../other-order-details/other-order-details.component';
-import { GoogleMapsService } from '../../services/google-maps/google-maps.service';
+import { GoogleMapsService, SelectedGooglePlace } from '../../services/google-maps/google-maps.service';
 import { ToastService } from '../../core/toast/toast.service';
 
 @Component({
@@ -36,9 +36,11 @@ import { ToastService } from '../../core/toast/toast.service';
   ],
   templateUrl: './new-order-form.component.html'
 })
-export class NewOrderFormComponent implements OnInit {
+export class NewOrderFormComponent implements OnInit, OnChanges, OnDestroy {
   @Input() value: NewOrderFormValue = this.createDefaultValue();
   @Input() showSubmitValidation = false;
+  // Bumped by the parent when the server refused a stale fee, to fetch a fresh quote.
+  @Input() requoteTick = 0;
   // The schedule when editing began; stops left unchanged skip the past-date check.
   @Input() scheduleBaseline: ScheduleBaseline | null = null;
 
@@ -54,6 +56,9 @@ export class NewOrderFormComponent implements OnInit {
   isQuoting = false;
   quoteError = '';
   private quoteRequest = 0;
+  // The last quote's lock; the server reuses its route while the addresses stay the same.
+  private lastQuoteId: string | null = null;
+  private quoteTimer: ReturnType<typeof setTimeout> | null = null;
   private automaticRequest = 0;
 
   /** The discount a checked coupon code unlocks, once validated against the server. */
@@ -100,6 +105,11 @@ export class NewOrderFormComponent implements OnInit {
       this.availableDiscounts = discounts;
       void this.refreshAutomatic();
       // Tax rates belong to the pickup zone, so they arrive with the delivery quote.
+      // A reopened order is quoted once, so what is shown is what a save will charge.
+      const { pickup, delivery, deliveryCategoryId, routeQuote } = this.value;
+      if (routeQuote && !routeQuote.quote_id && pickup.location && delivery.location && deliveryCategoryId) {
+        void this.requestQuote(this.value);
+      }
     } catch {
       this.quoteError = 'Unable to load delivery categories.';
     }
@@ -300,10 +310,25 @@ export class NewOrderFormComponent implements OnInit {
     this.patchAndQuote({ surchargeIds });
   }
 
+  ngOnDestroy(): void {
+    if (this.quoteTimer) clearTimeout(this.quoteTimer);
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['requoteTick'] && !changes['requoteTick'].firstChange) {
+      const { pickup, delivery, deliveryCategoryId } = this.value;
+      if (pickup.location && delivery.location && deliveryCategoryId) void this.requestQuote(this.value);
+    }
+  }
+
   private patchAndQuote(partial: Partial<NewOrderFormValue>): void {
     const next = { ...this.value, ...partial, routeQuote: null };
     if (!next.pickup.location || !next.delivery.location || !next.deliveryCategoryId) {
       this.quoteRequest += 1;
+      if (this.quoteTimer) clearTimeout(this.quoteTimer);
+      this.quoteTimer = null;
+      this.lastQuoteId = null;
+      this.isQuoting = false;
       this.quoteError = '';
       this.valueChange.emit({
         ...next,
@@ -318,7 +343,28 @@ export class NewOrderFormComponent implements OnInit {
       return;
     }
     this.valueChange.emit(next);
-    void this.requestQuote(next);
+    // Wait for a burst of changes to settle, and drop any answer already in flight.
+    this.quoteRequest += 1;
+    this.isQuoting = true;
+    if (this.quoteTimer) clearTimeout(this.quoteTimer);
+    this.quoteTimer = setTimeout(() => {
+      this.quoteTimer = null;
+      void this.requestQuote(next);
+    }, 400);
+  }
+
+  /** The browser's place details for the server, or null when a lookup is still needed. */
+  private quotePlace(place: SelectedGooglePlace | null): QuotePlace | null {
+    if (!place || place.manual || !place.city || !place.province || !place.countryCode) return null;
+    return {
+      place_id: place.placeId,
+      formatted_address: place.formattedAddress,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      city: place.city,
+      province: place.province,
+      country_code: place.countryCode,
+    };
   }
 
   private async requestQuote(value: NewOrderFormValue): Promise<void> {
@@ -342,14 +388,19 @@ export class NewOrderFormComponent implements OnInit {
         surcharge_ids: value.surchargeIds,
         pickup_address: value.pickup.address,
         delivery_address: value.delivery.address,
+        quote_id: this.lastQuoteId,
+        pickup_place: this.quotePlace(value.pickup.location),
+        delivery_place: this.quotePlace(value.delivery.location),
       }));
       if (request !== this.quoteRequest) return;
+      this.lastQuoteId = quote.quote_id ?? null;
       const details = this.withQuotedCharges(this.value.details, quote);
       this.valueChange.emit({ ...this.value, details, routeQuote: quote });
       // The fee just changed, and automatic discounts come off the fee.
       void this.refreshAutomatic(quote.delivery_fee);
     } catch (error: unknown) {
       if (request !== this.quoteRequest) return;
+      this.lastQuoteId = null;
       if (error instanceof HttpErrorResponse && error.status === 429) {
         const firstNotification = this.googleMaps.enableManualFallback();
         if (firstNotification) {

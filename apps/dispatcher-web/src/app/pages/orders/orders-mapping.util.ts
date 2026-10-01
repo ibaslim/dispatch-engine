@@ -342,6 +342,10 @@ export function toOrderPayload(value: NewOrderFormValue): Record<string, unknown
     pst_rate: value.details.pstRate,
     pst_amount: value.details.pstAmount,
     delivery_fees: value.details.deliveryFees,
+    // Only a fresh quote carries an id; a reopened order's placeholder does not.
+    ...(value.routeQuote?.quote_id
+      ? { quote_id: value.routeQuote.quote_id, quoted_delivery_fee: value.routeQuote.delivery_fee }
+      : {}),
     delivery_tips: value.details.deliveryTips,
     // The server prices every discount; it only ever receives the choice,
     // plus the value for any discount whose amount is typed per order.

@@ -242,13 +242,11 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
     if (!this.googleMaps.isPlaceSelection(event)) return;
     try {
       const place = event.placePrediction.toPlace();
-      // addressComponents rides along in this same request — Places API (New)
-      // bills per call, not per field, so this costs nothing extra and avoids
-      // a second lookup (client- or server-side) just to learn the city.
+      // Essentials fields only: a Pro field such as displayName bills the whole call at the Pro rate.
       await place.fetchFields({
-        fields: ['id', 'formattedAddress', 'displayName', 'location', 'addressComponents'],
+        fields: ['id', 'formattedAddress', 'location', 'addressComponents'],
       });
-      const address = place.formattedAddress || place.displayName || this.autocomplete?.value || '';
+      const address = place.formattedAddress || this.autocomplete?.value || '';
       if (this.autocomplete) this.autocomplete.value = address;
       this.valueChange.emit(address);
       if (!place.id || !place.location) {
@@ -265,6 +263,9 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
         formattedAddress: address,
         latitude: place.location.lat(),
         longitude: place.location.lng(),
+        city: this.componentRaw(place.addressComponents, false, 'locality', 'postal_town'),
+        province: this.componentRaw(place.addressComponents, false, 'administrative_area_level_1'),
+        countryCode: this.componentRaw(place.addressComponents, true, 'country').toUpperCase(),
         operationalZoneId: match?.zone.id,
         operationalZoneName: match?.zone.name,
       });
@@ -317,6 +318,13 @@ export class AddressInputComponent implements AfterViewInit, OnChanges, OnDestro
       if (hit) return { zone };
     }
     return null;
+  }
+
+  private componentRaw(
+    components: GoogleAddressComponent[] | undefined, short: boolean, ...types: string[]
+  ): string {
+    const found = components?.find((c) => types.some((type) => c.types.includes(type)));
+    return ((short ? found?.shortText : found?.longText) ?? '').trim();
   }
 
   private componentText(components: GoogleAddressComponent[], ...types: string[]): string {

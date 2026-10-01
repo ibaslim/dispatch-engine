@@ -616,6 +616,17 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.isSavingOrder = false;
   }
 
+  requoteTick = 0;
+
+  /** True when the server refused a save because the fee moved; the form then re-quotes. */
+  private handleFeeChanged(error: any): boolean {
+    const detail = error?.error?.detail;
+    if (error?.status !== 409 || detail?.code !== 'delivery_fee_changed') return false;
+    this.requoteTick += 1;
+    this.setFeedback(detail.message, 'error');
+    return true;
+  }
+
   async saveNewOrder(): Promise<void> {
     if (this.isReadOnlyTenant) {
       this.setFeedback('Read-only access for tenant users.', 'info');
@@ -641,6 +652,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       this.formSubmitted.set(false);
       this.editingOrderId = null;
     } catch (error: any) {
+      if (this.handleFeeChanged(error)) return;
       this.setFeedback(error?.error?.detail || `Failed to save order.`, 'error');
     } finally {
       this.isSavingOrder = false;
@@ -678,6 +690,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       this.formSubmitted.set(false);
       this.editingOrderId = null;
     } catch (error: any) {
+      if (this.handleFeeChanged(error)) return;
       this.setFeedback(error?.error?.detail || 'Failed to publish order.', 'error');
     } finally {
       this.isPublishingOrder = false;
