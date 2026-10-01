@@ -833,10 +833,11 @@ async def update_order(
             str(value) for value in (update_data["opted_out_discount_ids"] or [])
         ]
     opted_out = update_data.get("opted_out_discount_ids", order.opted_out_discount_ids) or []
-    # A code a dispatcher entered or cleared; sending it replaces the order's coupon.
-    coupon_changed = "coupon_code" in update_data
-    if coupon_changed:
+    # The form sends the code on every save, so only one that differs from the order's counts as changed.
+    coupon_changed = False
+    if "coupon_code" in update_data:
         update_data["coupon_code"] = coupon_rules.normalize(update_data.get("coupon_code")) or None
+        coupon_changed = update_data["coupon_code"] != (coupon_rules.normalize(order.coupon_code) or None)
 
     tax_trigger_fields = {
         "subtotal", "items",

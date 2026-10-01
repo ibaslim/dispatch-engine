@@ -1,5 +1,4 @@
 import { CommonModule } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -34,6 +33,7 @@ import {
   discountTerms,
   money,
 } from '@pages/orders/orders-formatting.util';
+import { apiErrorMessage } from '../../../core/http/api-error.util';
 
 type Tab = 'discounts' | 'coupons' | 'types';
 
@@ -260,7 +260,7 @@ export class DiscountsComponent implements OnInit {
       this.typeOptions = types.map((type) => ({ value: type.id, label: type.title }));
       this.typeFilterOptions = [{ value: 'all', label: 'All types' }, ...this.typeOptions];
     } catch (error) {
-      this.errorMessage = this.errorText(error, 'Failed to load discounts.');
+      this.errorMessage = apiErrorMessage(error, 'Failed to load discounts.');
     } finally {
       this.isLoading = false;
     }
@@ -282,7 +282,7 @@ export class DiscountsComponent implements OnInit {
     try {
       this.discounts = await firstValueFrom(this.service.getDiscounts(this.currentFilters()));
     } catch (error) {
-      this.errorMessage = this.errorText(error, 'Failed to load discounts.');
+      this.errorMessage = apiErrorMessage(error, 'Failed to load discounts.');
     } finally {
       this.isLoading = false;
     }
@@ -466,7 +466,7 @@ export class DiscountsComponent implements OnInit {
       this.discountForm = null;
       await this.load();
     } catch (error) {
-      this.toast.error(this.errorText(error, 'Unable to save this discount.'));
+      this.toast.error(apiErrorMessage(error, 'Unable to save this discount.'));
     } finally {
       this.isSaving = false;
     }
@@ -490,7 +490,7 @@ export class DiscountsComponent implements OnInit {
       this.deleteTarget = null;
       await this.load();
     } catch (error) {
-      this.toast.error(this.errorText(error, `Unable to delete ${target.name}.`));
+      this.toast.error(apiErrorMessage(error, `Unable to delete ${target.name}.`));
     } finally {
       this.isDeleting = false;
     }
@@ -521,7 +521,7 @@ export class DiscountsComponent implements OnInit {
       this.typeForm = null;
       await this.load();
     } catch (error) {
-      this.toast.error(this.errorText(error, 'Unable to save this discount type.'));
+      this.toast.error(apiErrorMessage(error, 'Unable to save this discount type.'));
     } finally {
       this.isSaving = false;
     }
@@ -573,12 +573,5 @@ export class DiscountsComponent implements OnInit {
 
   private toDateInput(value: string | null): string {
     return value ? value.slice(0, 10) : '';
-  }
-
-  private errorText(error: unknown, fallback: string): string {
-    if (error instanceof HttpErrorResponse && typeof error.error?.detail === 'string') {
-      return error.error.detail;
-    }
-    return fallback;
   }
 }

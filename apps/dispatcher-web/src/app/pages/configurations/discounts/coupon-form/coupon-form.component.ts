@@ -1,5 +1,4 @@
 import { CommonModule } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   EventEmitter,
@@ -28,6 +27,7 @@ import {
 } from '@services/discounts/discounts.service';
 import { DISCOUNT_KIND_LABELS } from '@pages/orders/orders-formatting.util';
 import { ToastService } from '../../../../core/toast/toast.service';
+import { apiErrorMessage } from '../../../../core/http/api-error.util';
 
 /** The coupon's own discount terms. No type, no trigger picker, no "who sets
  * the amount" — all fixed, since a coupon is always trigger: 'code' with a
@@ -208,7 +208,7 @@ export class CouponFormComponent implements OnChanges {
       this.toast.success(`${payload.public_label} saved.`);
       this.saved.emit({ id, isNew: wasNew });
     } catch (error) {
-      this.toast.error(this.errorText(error, 'Unable to save this coupon.'));
+      this.toast.error(apiErrorMessage(error, 'Unable to save this coupon.'));
     } finally {
       this.isSaving = false;
     }
@@ -291,12 +291,5 @@ export class CouponFormComponent implements OnChanges {
 
   private toDateInput(value: string | null): string {
     return value ? value.slice(0, 10) : '';
-  }
-
-  private errorText(error: unknown, fallback: string): string {
-    if (error instanceof HttpErrorResponse && typeof error.error?.detail === 'string') {
-      return error.error.detail;
-    }
-    return fallback;
   }
 }
