@@ -29,6 +29,10 @@ export interface SelectedGooglePlace {
   formattedAddress: string;
   latitude: number;
   longitude: number;
+  // From the same lookup; sent with the quote so the server can skip its own Places call.
+  city?: string;
+  province?: string;
+  countryCode?: string;
   manual?: boolean;
   operationalZoneId?: string;
   operationalZoneName?: string;

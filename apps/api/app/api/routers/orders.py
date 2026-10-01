@@ -2,6 +2,7 @@ import base64
 import logging
 import mimetypes
 import os
+from dataclasses import dataclass
 from decimal import Decimal
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -30,9 +31,17 @@ from app.services.route_plan_service import Coords, build_route_plan
 from app.services.delivery_quote_service import (
     DeliveryQuote,
     DeliveryQuoteError,
+    PlaceDetails,
+    RouteFacts,
     build_delivery_quote,
     build_manual_delivery_quote,
     resolve_tax_rates,
+)
+from app.services.quote_lock_service import (
+    QUOTE_LOCK_TTL_SECONDS,
+    load_route_facts,
+    remaining_seconds,
+    store_route_facts,
 )
 from app.services.driver_payout_service import (
     apply_driver_payout_snapshot,
@@ -329,51 +338,119 @@ def _apply_tax(data: dict, gst_rate: Decimal, pst_rate: Decimal) -> None:
     data["pst_amount"] = float(pst_amount)
 
 
+@dataclass(frozen=True)
+class QuoteInput:
+    """What a delivery quote is priced from, however the request arrived."""
+
+    pickup_place_id: str | None
+    delivery_place_id: str | None
+    category_id: UUID | None
+    vendor_id: UUID | None = None
+    delivery_planned_at: datetime | None = None
+    delivery_time_specified: bool = False
+    surcharge_ids: list[UUID] | None = None
+    pickup_address: str | None = None
+    delivery_address: str | None = None
+
+
 async def _get_quote_or_http_error(
     db: AsyncSession,
-    pickup_place_id: str | None,
-    delivery_place_id: str | None,
-    category_id: UUID | None,
-    vendor_id: UUID | None = None,
-    delivery_planned_at: datetime | None = None,
-    delivery_time_specified: bool = False,
-    surcharge_ids: list[UUID] | None = None,
-    pickup_address: str | None = None,
-    delivery_address: str | None = None,
+    quote: QuoteInput,
+    *,
+    locked_facts: RouteFacts | None = None,
+    provided_places=None,
 ) -> DeliveryQuote:
-    if not pickup_place_id or not delivery_place_id:
+    if not quote.pickup_place_id or not quote.delivery_place_id:
         raise HTTPException(status_code=422, detail="Select valid pickup and delivery addresses.")
-    if not category_id:
+    if not quote.category_id:
         raise HTTPException(status_code=422, detail="Select a delivery category.")
+    shared = dict(
+        db=db,
+        category_id=quote.category_id,
+        vendor_id=quote.vendor_id,
+        delivery_planned_at=quote.delivery_planned_at,
+        delivery_time_specified=quote.delivery_time_specified,
+        surcharge_ids=quote.surcharge_ids,
+    )
     try:
-        is_manual = pickup_place_id.startswith("manual:") or delivery_place_id.startswith("manual:")
-        if is_manual:
-            if not pickup_place_id.startswith("manual:") or not delivery_place_id.startswith("manual:"):
+        pickup_manual = quote.pickup_place_id.startswith("manual:")
+        delivery_manual = quote.delivery_place_id.startswith("manual:")
+        if pickup_manual or delivery_manual:
+            if not (pickup_manual and delivery_manual):
                 raise DeliveryQuoteError(
                     "Google Maps is unavailable. Enter both pickup and delivery addresses manually."
                 )
             return await build_manual_delivery_quote(
-                db=db,
-                pickup_address=pickup_address or "",
-                delivery_address=delivery_address or "",
-                category_id=category_id,
-                vendor_id=vendor_id,
-                delivery_planned_at=delivery_planned_at,
-                delivery_time_specified=delivery_time_specified,
-                surcharge_ids=surcharge_ids,
+                pickup_address=quote.pickup_address or "",
+                delivery_address=quote.delivery_address or "",
+                **shared,
             )
         return await build_delivery_quote(
-            db=db,
-            pickup_place_id=pickup_place_id,
-            delivery_place_id=delivery_place_id,
-            category_id=category_id,
-            vendor_id=vendor_id,
-            delivery_planned_at=delivery_planned_at,
-            delivery_time_specified=delivery_time_specified,
-            surcharge_ids=surcharge_ids,
+            pickup_place_id=quote.pickup_place_id,
+            delivery_place_id=quote.delivery_place_id,
+            locked_facts=locked_facts,
+            provided_places=provided_places,
+            **shared,
         )
     except DeliveryQuoteError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+async def _locked_route_facts(redis, quote_id: str | None, quote: QuoteInput) -> RouteFacts | None:
+    """The route saved under quote_id, if it is still valid for these two places."""
+    if not quote_id:
+        return None
+    return await load_route_facts(
+        redis, quote_id, quote.pickup_place_id or "", quote.delivery_place_id or ""
+    )
+
+
+def _refuse_changed_fee(quote: DeliveryQuote, quoted_fee: float | None) -> None:
+    """409 with the new fee when it differs from the one the admin was shown."""
+    if quoted_fee is None or Decimal(str(quoted_fee)) == quote.delivery_fee:
+        return
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "code": "delivery_fee_changed",
+            "message": (
+                f"The delivery fee changed from {quoted_fee:.2f} to "
+                f"{quote.delivery_fee:.2f}. Review it and save again."
+            ),
+            "delivery_fee": float(quote.delivery_fee),
+        },
+    )
+
+
+async def _locked_quote_or_http_error(
+    db: AsyncSession,
+    redis,
+    quote_input: QuoteInput,
+    quote_id: str | None,
+    quoted_fee: float | None,
+) -> DeliveryQuote:
+    """Price with the route the admin was quoted, and refuse if the fee still differs.
+
+    An unknown, expired or mismatched quote_id falls back to a fresh Google quote.
+    """
+    locked_facts = await _locked_route_facts(redis, quote_id, quote_input)
+    quote = await _get_quote_or_http_error(db, quote_input, locked_facts=locked_facts)
+    _refuse_changed_fee(quote, quoted_fee)
+    return quote
+
+
+def _place_details(place) -> PlaceDetails | None:
+    if place is None:
+        return None
+    return PlaceDetails(
+        place_id=place.place_id,
+        formatted_address=place.formatted_address,
+        latitude=place.latitude,
+        longitude=place.longitude,
+        city=place.city,
+        province=place.province,
+        country_code=place.country_code.upper(),
+    )
 
 
 def _stamp_activity_status(order: Order, new_status: ActivityStatus) -> None:
@@ -532,22 +609,42 @@ async def quote_delivery(
     payload: DeliveryQuoteRequest,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
 ):
     if not current_user.is_platform_admin:
         raise HTTPException(status_code=403, detail="Platform admin access required.")
+    # Category, surcharge and time changes do not move the route, so they reuse it.
+    quote_input = QuoteInput(
+        pickup_place_id=payload.pickup_place_id,
+        delivery_place_id=payload.delivery_place_id,
+        category_id=payload.delivery_category_id,
+        vendor_id=payload.vendor_id,
+        delivery_planned_at=payload.delivery_planned_at,
+        delivery_time_specified=payload.delivery_time_specified,
+        surcharge_ids=payload.surcharge_ids,
+        pickup_address=payload.pickup_address,
+        delivery_address=payload.delivery_address,
+    )
+    locked_facts = await _locked_route_facts(redis, payload.quote_id, quote_input)
     quote = await _get_quote_or_http_error(
         db,
-        payload.pickup_place_id,
-        payload.delivery_place_id,
-        payload.delivery_category_id,
-        payload.vendor_id,
-        payload.delivery_planned_at,
-        payload.delivery_time_specified,
-        payload.surcharge_ids,
-        payload.pickup_address,
-        payload.delivery_address,
+        quote_input,
+        locked_facts=locked_facts,
+        provided_places=(
+            _place_details(payload.pickup_place),
+            _place_details(payload.delivery_place),
+        ),
     )
-    return _quote_response(quote)
+    response = _quote_response(quote)
+    if locked_facts is not None:
+        response.quote_id = payload.quote_id
+        response.quote_expires_in_seconds = await remaining_seconds(redis, payload.quote_id)
+    elif quote.route_facts is not None:
+        response.quote_id = await store_route_facts(
+            redis, payload.pickup_place_id, payload.delivery_place_id, quote.route_facts
+        )
+        response.quote_expires_in_seconds = QUOTE_LOCK_TTL_SECONDS
+    return response
 
 
 # -------------------------
@@ -558,6 +655,7 @@ async def create_order(
     payload: OrderCreate,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
 ):
     if not current_user.is_platform_admin:
         raise HTTPException(
@@ -566,6 +664,8 @@ async def create_order(
         )
     try:
         data = payload.model_dump()
+        quote_id = data.pop("quote_id", None)
+        quoted_fee = data.pop("quoted_delivery_fee", None)
 
         schedule_problem = schedule_error(
             data["pickup_planned_at"],
@@ -576,17 +676,22 @@ async def create_order(
         if schedule_problem:
             raise HTTPException(status_code=422, detail=schedule_problem)
 
-        quote = await _get_quote_or_http_error(
+        quote = await _locked_quote_or_http_error(
             db,
-            data.get("pickup_place_id"),
-            data.get("delivery_place_id"),
-            data.get("delivery_category_id"),
-            data.get("vendor_id"),
-            data.get("delivery_planned_at"),
-            data.get("delivery_time_specified"),
-            data.get("surcharge_ids"),
-            data.get("pickup_address"),
-            data.get("delivery_address"),
+            redis,
+            QuoteInput(
+                pickup_place_id=data.get("pickup_place_id"),
+                delivery_place_id=data.get("delivery_place_id"),
+                category_id=data.get("delivery_category_id"),
+                vendor_id=data.get("vendor_id"),
+                delivery_planned_at=data.get("delivery_planned_at"),
+                delivery_time_specified=bool(data.get("delivery_time_specified")),
+                surcharge_ids=data.get("surcharge_ids"),
+                pickup_address=data.get("pickup_address"),
+                delivery_address=data.get("delivery_address"),
+            ),
+            quote_id,
+            quoted_fee,
         )
         selected, entered_values = await _selected_or_http_error(
             db,
@@ -695,6 +800,7 @@ async def update_order(
     payload: OrderUpdate,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
 ):
     if not current_user.is_platform_admin:
         raise HTTPException(
@@ -711,6 +817,8 @@ async def update_order(
         raise HTTPException(status_code=404, detail="Order not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    quote_id = update_data.pop("quote_id", None)
+    quoted_fee = update_data.pop("quoted_delivery_fee", None)
     # The charge breakdown is always recalculated by the server.
     update_data.pop("applied_charges", None)
     # Sending the field at all replaces the order's discounts; [] clears them.
@@ -725,10 +833,11 @@ async def update_order(
             str(value) for value in (update_data["opted_out_discount_ids"] or [])
         ]
     opted_out = update_data.get("opted_out_discount_ids", order.opted_out_discount_ids) or []
-    # A code a dispatcher entered or cleared; sending it replaces the order's coupon.
-    coupon_changed = "coupon_code" in update_data
-    if coupon_changed:
+    # The form sends the code on every save, so only one that differs from the order's counts as changed.
+    coupon_changed = False
+    if "coupon_code" in update_data:
         update_data["coupon_code"] = coupon_rules.normalize(update_data.get("coupon_code")) or None
+        coupon_changed = update_data["coupon_code"] != (coupon_rules.normalize(order.coupon_code) or None)
 
     tax_trigger_fields = {
         "subtotal", "items",
@@ -843,17 +952,24 @@ async def update_order(
         )
 
     if quote_ran:
-        quote = await _get_quote_or_http_error(
+        quote = await _locked_quote_or_http_error(
             db,
-            update_data.get("pickup_place_id", order.pickup_place_id),
-            update_data.get("delivery_place_id", order.delivery_place_id),
-            update_data.get("delivery_category_id", order.delivery_category_id),
-            update_data.get("vendor_id", order.vendor_id),
-            update_data.get("delivery_planned_at", order.delivery_planned_at),
-            update_data.get("delivery_time_specified", order.delivery_time_specified),
-            update_data.get("surcharge_ids", order.surcharge_ids),
-            update_data.get("pickup_address", order.pickup_address),
-            update_data.get("delivery_address", order.delivery_address),
+            redis,
+            QuoteInput(
+                pickup_place_id=update_data.get("pickup_place_id", order.pickup_place_id),
+                delivery_place_id=update_data.get("delivery_place_id", order.delivery_place_id),
+                category_id=update_data.get("delivery_category_id", order.delivery_category_id),
+                vendor_id=update_data.get("vendor_id", order.vendor_id),
+                delivery_planned_at=update_data.get("delivery_planned_at", order.delivery_planned_at),
+                delivery_time_specified=bool(
+                    update_data.get("delivery_time_specified", order.delivery_time_specified)
+                ),
+                surcharge_ids=update_data.get("surcharge_ids", order.surcharge_ids),
+                pickup_address=update_data.get("pickup_address", order.pickup_address),
+                delivery_address=update_data.get("delivery_address", order.delivery_address),
+            ),
+            quote_id,
+            quoted_fee,
         )
         # The pickup zone/province may have changed with the address, so the
         # new quote's rates win over whatever the order was taxed at before.

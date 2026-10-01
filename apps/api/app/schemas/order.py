@@ -150,6 +150,9 @@ class OrderCreate(BaseModel):
     route_duration_seconds: Optional[int] = None
     surcharge_ids: List[UUID] = Field(default_factory=list)
     applied_charges: List[Dict[str, Any]] = Field(default_factory=list)
+    # From POST /orders/quote: reuse that route and refuse to save at a different fee.
+    quote_id: Optional[str] = None
+    quoted_delivery_fee: Optional[float] = None
 
     items: List[OrderItem]
 
@@ -222,6 +225,8 @@ class OrderUpdate(BaseModel):
     route_duration_seconds: Optional[int] = None
     surcharge_ids: Optional[List[UUID]] = None
     applied_charges: Optional[List[Dict[str, Any]]] = None
+    quote_id: Optional[str] = None
+    quoted_delivery_fee: Optional[float] = None
 
     items: Optional[List[OrderItem]] = None
 
@@ -326,6 +331,17 @@ class AssignDriverRequest(BaseModel):
 # -------------------------
 # DELIVERY QUOTE
 # -------------------------
+class PlaceInput(BaseModel):
+    """A place as the browser's Places lookup resolved it."""
+    place_id: str
+    formatted_address: str
+    latitude: float
+    longitude: float
+    city: str
+    province: str
+    country_code: str
+
+
 class DeliveryQuoteRequest(BaseModel):
     pickup_place_id: str
     delivery_place_id: str
@@ -336,6 +352,11 @@ class DeliveryQuoteRequest(BaseModel):
     delivery_planned_at: Optional[PlannedAt] = None
     delivery_time_specified: bool = False
     surcharge_ids: list[UUID] = Field(default_factory=list)
+    # A quote_id from an earlier quote for the same addresses: reuse its route.
+    quote_id: Optional[str] = None
+    # Place details the browser already fetched; the server looks up any that are missing.
+    pickup_place: Optional[PlaceInput] = None
+    delivery_place: Optional[PlaceInput] = None
 
 
 class AppliedChargeResponse(BaseModel):
@@ -367,6 +388,9 @@ class DeliveryQuoteResponse(BaseModel):
     gst_rate: float = 0
     pst_rate: float = 0
     manual_fallback: bool = False
+    # Present for Google-priced quotes; send back with create/edit to lock this route.
+    quote_id: Optional[str] = None
+    quote_expires_in_seconds: Optional[int] = None
 
 
 class RouteStopResponse(BaseModel):

@@ -1,5 +1,4 @@
 import { CommonModule } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   EventEmitter,
@@ -17,6 +16,7 @@ import { ButtonComponent } from '@components/button/button.component';
 import { PopupComponent } from '@components/popup/popup.component';
 import { Coupon, DiscountsService } from '@services/discounts/discounts.service';
 import { ToastService } from '../../../../core/toast/toast.service';
+import { apiErrorMessage } from '../../../../core/http/api-error.util';
 
 /** A single code to add by hand. */
 interface CouponCodeForm {
@@ -83,7 +83,7 @@ export class CouponCodesComponent implements OnChanges {
     try {
       this.coupons = await firstValueFrom(this.service.getCoupons(discountId));
     } catch (error) {
-      this.toast.error(this.errorText(error, 'Unable to load codes.'));
+      this.toast.error(apiErrorMessage(error, 'Unable to load codes.'));
     } finally {
       this.couponsLoading = false;
     }
@@ -109,7 +109,7 @@ export class CouponCodesComponent implements OnChanges {
       await this.loadCoupons(id);
       this.toast.success('Code added.');
     } catch (error) {
-      this.toast.error(this.errorText(error, 'Unable to add that code.'));
+      this.toast.error(apiErrorMessage(error, 'Unable to add that code.'));
     } finally {
       this.isCreatingCoupon = false;
     }
@@ -133,7 +133,7 @@ export class CouponCodesComponent implements OnChanges {
       await this.loadCoupons(id);
       this.toast.success(`${created.length} codes generated.`);
     } catch (error) {
-      this.toast.error(this.errorText(error, 'Unable to generate that batch.'));
+      this.toast.error(apiErrorMessage(error, 'Unable to generate that batch.'));
     } finally {
       this.isCreatingBatch = false;
     }
@@ -146,7 +146,7 @@ export class CouponCodesComponent implements OnChanges {
       await firstValueFrom(this.service.updateCoupon(id, coupon.id, { is_active: !coupon.is_active }));
       await this.loadCoupons(id);
     } catch (error) {
-      this.toast.error(this.errorText(error, 'Unable to update that code.'));
+      this.toast.error(apiErrorMessage(error, 'Unable to update that code.'));
     }
   }
 
@@ -156,7 +156,7 @@ export class CouponCodesComponent implements OnChanges {
     try {
       await this.service.exportCoupons(id, this.couponBatchFilter.trim() || undefined);
     } catch (error) {
-      this.toast.error(this.errorText(error, 'Unable to export codes.'));
+      this.toast.error(apiErrorMessage(error, 'Unable to export codes.'));
     }
   }
 
@@ -177,12 +177,5 @@ export class CouponCodesComponent implements OnChanges {
     if (!trimmed) return null;
     const parsed = Number(trimmed);
     return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  private errorText(error: unknown, fallback: string): string {
-    if (error instanceof HttpErrorResponse && typeof error.error?.detail === 'string') {
-      return error.error.detail;
-    }
-    return fallback;
   }
 }

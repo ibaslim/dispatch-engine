@@ -280,13 +280,14 @@ export function mapBackendOrder(order: BackendOrder, isDriver: boolean): OrderEn
   };
 }
 
-/** Which discounts a saved order carries, so the picker shows them ticked
- * with the value each was given. */
+/** Which discounts a dispatcher picked on a saved order, so the picker shows them ticked
+ * with the value each was given. Automatic and coupon discounts are left out: the server
+ * decides those again on every save, and refuses them as a hand-picked choice. */
 export function appliedDiscountSelections(
   applied: OrderResponse['applied_discounts'] | undefined,
 ): { discountId: string; value: string }[] {
   return (applied || [])
-    .filter((line) => !!line.discount_id)
+    .filter((line) => !!line.discount_id && line.source !== 'automatic' && line.source !== 'code')
     .map((line) => ({
       discountId: line.discount_id as string,
       value: line.value ? String(line.value) : '',
@@ -299,15 +300,20 @@ export function appliedDiscountNote(
   return (applied || []).find((line) => line.note)?.note || '';
 }
 
+/** The delivery date and time as the API takes them; a time only counts while its box is ticked. */
+export function deliveryPlannedAt(delivery: NewOrderFormValue['delivery']): { plannedAt: string; timeSpecified: boolean } {
+  return toPlannedAt(
+    delivery.deliveryDate,
+    delivery.deliveryTimeSpecified ? delivery.deliveryTime : null,
+  );
+}
+
 export function toOrderPayload(value: NewOrderFormValue): Record<string, unknown> {
   const pickupAt = toPlannedAt(
     value.pickup.pickupDate,
     value.pickup.pickupTimeSpecified ? value.pickup.pickupTime : null,
   );
-  const deliveryAt = toPlannedAt(
-    value.delivery.deliveryDate,
-    value.delivery.deliveryTimeSpecified ? value.delivery.deliveryTime : null,
-  );
+  const deliveryAt = deliveryPlannedAt(value.delivery);
   return {
     delivery_category_id: value.deliveryCategoryId || null,
     surcharge_ids: value.surchargeIds,
@@ -342,6 +348,10 @@ export function toOrderPayload(value: NewOrderFormValue): Record<string, unknown
     pst_rate: value.details.pstRate,
     pst_amount: value.details.pstAmount,
     delivery_fees: value.details.deliveryFees,
+    // Only a fresh quote carries an id; a reopened order's placeholder does not.
+    ...(value.routeQuote?.quote_id
+      ? { quote_id: value.routeQuote.quote_id, quoted_delivery_fee: value.routeQuote.delivery_fee }
+      : {}),
     delivery_tips: value.details.deliveryTips,
     // The server prices every discount; it only ever receives the choice,
     // plus the value for any discount whose amount is typed per order.

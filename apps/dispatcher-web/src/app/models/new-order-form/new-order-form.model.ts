@@ -154,6 +154,8 @@ export interface DeliveryRouteQuote {
     gst_rate: number;
     pst_rate: number;
     manual_fallback?: boolean;
+    // Locks the quoted route; send back with the order so it saves at this fee.
+    quote_id?: string | null;
 }
 
 export interface AppliedCharge {

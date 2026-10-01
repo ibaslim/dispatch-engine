@@ -18,6 +18,7 @@ import {
   taxLines,
   totalDiscount,
 } from '@pages/orders/orders-formatting.util';
+import { orderTotal, taxAmount } from '@pages/orders/order-totals.util';
 
 /** One automatic discount as the order form shows it. */
 export interface AutomaticRow {
@@ -382,17 +383,9 @@ export class OtherOrderDetailsComponent {
 
     // Each tax is rounded on its own so the receipt's GST and PST lines add up
     // to the tax total exactly, rather than to a separately rounded figure.
-    const gstAmount = this.round2((subtotal * gstRate) / 100);
-    const pstAmount = this.round2((subtotal * pstRate) / 100);
-
-    const total = this.round2(
-      subtotal +
-      gstAmount +
-      pstAmount +
-      deliveryFees +
-      deliveryTips -
-      discount
-    );
+    const gstAmount = taxAmount(subtotal, gstRate);
+    const pstAmount = taxAmount(subtotal, pstRate);
+    const total = orderTotal({ subtotal, gstAmount, pstAmount, deliveryFees, deliveryTips, discount });
 
     return {
       ...details,

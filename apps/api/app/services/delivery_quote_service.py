@@ -50,6 +50,16 @@ class ResolvedLocation:
 
 
 @dataclass(frozen=True)
+class RouteFacts:
+    """What Google said for an address pair; the only unstable input to a quote."""
+
+    pickup_place: PlaceDetails
+    delivery_place: PlaceDetails
+    distance_meters: int
+    duration_seconds: int
+
+
+@dataclass(frozen=True)
 class DeliveryQuote:
     pickup: ResolvedLocation
     delivery: ResolvedLocation
@@ -66,6 +76,7 @@ class DeliveryQuote:
     gst_rate: Decimal = Decimal("0.00")
     pst_rate: Decimal = Decimal("0.00")
     manual_fallback: bool = False
+    route_facts: RouteFacts | None = None
 
 
 @dataclass(frozen=True)
@@ -163,6 +174,42 @@ async def _fetch_place(client: httpx.AsyncClient, place_id: str) -> PlaceDetails
     )
 
 
+def _usable_place(provided: PlaceDetails | None, requested_id: str) -> bool:
+    """Details sent by the form are used only when complete and for the requested place."""
+    return bool(
+        provided
+        and provided.place_id == requested_id
+        and provided.formatted_address.strip()
+        and provided.city.strip()
+        and provided.province.strip()
+        and provided.country_code.strip()
+    )
+
+
+async def _resolve_place(
+    client: httpx.AsyncClient, place_id: str, provided: PlaceDetails | None
+) -> PlaceDetails:
+    """The form's place details when usable, otherwise a Google Places lookup."""
+    if _usable_place(provided, place_id):
+        return provided
+    return await _fetch_place(client, place_id)
+
+
+async def _resolve_places(
+    client: httpx.AsyncClient,
+    pickup_place_id: str,
+    delivery_place_id: str,
+    provided: tuple[PlaceDetails | None, PlaceDetails | None] | None,
+) -> tuple[PlaceDetails, PlaceDetails]:
+    pickup, delivery = provided or (None, None)
+    return tuple(
+        await asyncio.gather(
+            _resolve_place(client, pickup_place_id, pickup),
+            _resolve_place(client, delivery_place_id, delivery),
+        )
+    )
+
+
 async def _fetch_route(
     client: httpx.AsyncClient, pickup_place_id: str, delivery_place_id: str
 ) -> tuple[int, int]:
@@ -234,88 +281,73 @@ async def _resolve_location(db: AsyncSession, place: PlaceDetails) -> ResolvedLo
     return ResolvedLocation(place=place, city=row[0], zone=row[1])
 
 
-async def build_delivery_quote(
+@dataclass(frozen=True)
+class _Pricing:
+    base_price: Decimal
+    additional_per_km: Decimal
+
+
+async def _load_pricing(
     db: AsyncSession,
-    pickup_place_id: str,
-    delivery_place_id: str,
+    pickup: ResolvedLocation,
+    delivery: ResolvedLocation,
     category_id: UUID,
-    vendor_id: UUID | None = None,
-    delivery_planned_at: datetime | None = None,
-    delivery_time_specified: bool = False,
-    surcharge_ids: list[UUID] | None = None,
-) -> DeliveryQuote:
-    timeout = httpx.Timeout(12.0)
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            pickup_place, delivery_place = await asyncio.gather(
-                _fetch_place(client, pickup_place_id),
-                _fetch_place(client, delivery_place_id),
-            )
-            pickup = await _resolve_location(db, pickup_place)
-            delivery = await _resolve_location(db, delivery_place)
-
-            policy = await db.scalar(
-                select(DeliveryPolicy).where(DeliveryPolicy.key == "default")
-            )
-            allow_intercity = bool(policy and policy.allow_intercity)
-            if not allow_intercity and pickup.city.id != delivery.city.id:
-                raise DeliveryQuoteError(
-                    "Inter-city delivery is disabled. Pickup and delivery must be in the same city."
-                )
-
-            price = await db.scalar(
-                select(ZoneCategoryPrice)
-                .where(
-                    ZoneCategoryPrice.zone_id == pickup.zone.id,
-                    ZoneCategoryPrice.category_id == category_id,
-                )
-                .options(
-                    selectinload(ZoneCategoryPrice.partner_overrides).joinedload(
-                        PartnerZoneCategoryPrice.partner
-                    ),
-                    joinedload(ZoneCategoryPrice.category),
-                )
-            )
-            if price is None:
-                raise DeliveryQuoteError(
-                    "Pricing is not configured for this pickup zone and delivery category."
-                )
-
-            base_price = price.individual_price
-            additional_per_km = price.individual_out_of_radius_per_km
-            if vendor_id:
-                override = next(
-                    (item for item in price.partner_overrides if item.partner_id == vendor_id),
-                    None,
-                )
-                base_price = override.price if override else price.partner_price
-                additional_per_km = (
-                    override.out_of_radius_per_km
-                    if override
-                    else price.partner_out_of_radius_per_km
-                )
-
-            distance_meters, duration_seconds = await _fetch_route(
-                client, pickup.place.place_id, delivery.place.place_id
-            )
-    except httpx.HTTPError as exc:
+    vendor_id: UUID | None,
+    *,
+    manual: bool,
+) -> _Pricing:
+    """The pickup zone's price for this category and customer, after the route's checks."""
+    policy = await db.scalar(select(DeliveryPolicy).where(DeliveryPolicy.key == "default"))
+    if not bool(policy and policy.allow_intercity) and pickup.city.id != delivery.city.id:
         raise DeliveryQuoteError(
-            "Google Maps is temporarily unavailable.", status_code=503
-        ) from exc
-
-    extra_distance_km, distance_fee = calculate_delivery_fee(
-        distance_meters,
-        Decimal(pickup.zone.radius_km),
-        Decimal(base_price),
-        Decimal(additional_per_km),
+            "Inter-city delivery is disabled. Pickup and delivery must include the same configured city."
+            if manual
+            else "Inter-city delivery is disabled. Pickup and delivery must be in the same city."
+        )
+    price = await db.scalar(
+        select(ZoneCategoryPrice)
+        .where(
+            ZoneCategoryPrice.zone_id == pickup.zone.id,
+            ZoneCategoryPrice.category_id == category_id,
+        )
+        .options(
+            selectinload(ZoneCategoryPrice.partner_overrides).joinedload(
+                PartnerZoneCategoryPrice.partner
+            )
+        )
     )
-    applied_charges: list[AppliedCharge] = []
+    if price is None:
+        raise DeliveryQuoteError(
+            "Pricing is not configured for this pickup zone and delivery category."
+        )
+    base_price, additional_per_km = price.individual_price, price.individual_out_of_radius_per_km
+    if vendor_id:
+        override = next(
+            (item for item in price.partner_overrides if item.partner_id == vendor_id), None
+        )
+        base_price = override.price if override else price.partner_price
+        additional_per_km = (
+            override.out_of_radius_per_km if override else price.partner_out_of_radius_per_km
+        )
+    # A manual address has no route, so it is charged the fixed base price.
+    return _Pricing(Decimal(base_price), Decimal("0.00") if manual else Decimal(additional_per_km))
+
+
+async def _applied_charges(
+    db: AsyncSession,
+    distance_fee: Decimal,
+    delivery_planned_at: datetime | None,
+    delivery_time_specified: bool,
+    surcharge_ids: list[UUID] | None,
+) -> list[AppliedCharge]:
+    """After-hours, selected surcharges, then the occasion percentage on everything before it."""
+    charges: list[AppliedCharge] = []
     if delivery_planned_at and delivery_time_specified:
         requested_time = delivery_planned_at.time()
         after_hours = (
             await db.scalars(select(AfterHoursDelivery).order_by(AfterHoursDelivery.start_time))
         ).all()
-        applied_charges.extend(
+        charges.extend(
             AppliedCharge(
                 id=item.id,
                 kind="after_hours",
@@ -342,18 +374,15 @@ async def build_delivery_quote(
         ).all()
         if len(surcharges) != len(requested_surcharge_ids):
             raise DeliveryQuoteError("One or more selected surcharges no longer exist.")
-        applied_charges.extend(
+        charges.extend(
             AppliedCharge(
-                id=item.id,
-                kind="surcharge",
-                label=item.name,
-                amount=Decimal(item.extra_amount),
+                id=item.id, kind="surcharge", label=item.name, amount=Decimal(item.extra_amount)
             )
             for item in surcharges
         )
 
-    chargeable_delivery_fee = distance_fee + _sum_charges(applied_charges)
     if delivery_planned_at:
+        chargeable_fee = distance_fee + _sum_charges(charges)
         requested_date = delivery_planned_at.date()
         occasions = (
             await db.scalars(
@@ -362,22 +391,40 @@ async def build_delivery_quote(
                 )
             )
         ).all()
-        applied_charges.extend(
+        charges.extend(
             AppliedCharge(
                 id=item.id,
                 kind="special_occasion",
                 label=f"{item.name} ({Decimal(item.extra_percentage):g}%)",
-                amount=calculate_percentage_charge(
-                    chargeable_delivery_fee, Decimal(item.extra_percentage)
-                ),
+                amount=calculate_percentage_charge(chargeable_fee, Decimal(item.extra_percentage)),
             )
             for item in occasions
-            if _occasion_matches(item, requested_date)
-            and Decimal(item.extra_percentage) > 0
+            if _occasion_matches(item, requested_date) and Decimal(item.extra_percentage) > 0
         )
+    return charges
 
-    delivery_fee = (distance_fee + _sum_charges(applied_charges)).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP
+
+async def _price_route(
+    db: AsyncSession,
+    pickup: ResolvedLocation,
+    delivery: ResolvedLocation,
+    pricing: _Pricing,
+    distance_meters: int,
+    duration_seconds: int,
+    delivery_planned_at: datetime | None,
+    delivery_time_specified: bool,
+    surcharge_ids: list[UUID] | None,
+    *,
+    route_facts: RouteFacts | None,
+    manual: bool,
+) -> DeliveryQuote:
+    """Turn a resolved route and its pricing into the quote. The only place fees are added up."""
+    radius_km = Decimal(pickup.zone.radius_km)
+    extra_distance_km, distance_fee = calculate_delivery_fee(
+        distance_meters, radius_km, pricing.base_price, pricing.additional_per_km
+    )
+    charges = await _applied_charges(
+        db, distance_fee, delivery_planned_at, delivery_time_specified, surcharge_ids
     )
     gst_rate, pst_rate = await resolve_tax_rates(db, pickup.zone, pickup.city.state_id)
     return DeliveryQuote(
@@ -385,15 +432,62 @@ async def build_delivery_quote(
         delivery=delivery,
         distance_meters=distance_meters,
         duration_seconds=duration_seconds,
-        radius_km=Decimal(pickup.zone.radius_km),
+        radius_km=radius_km,
         extra_distance_km=extra_distance_km,
-        base_price=Decimal(base_price),
-        additional_per_km=Decimal(additional_per_km),
-        distance_charge=(distance_fee - Decimal(base_price)).quantize(Decimal("0.01")),
-        applied_charges=tuple(applied_charges),
-        delivery_fee=delivery_fee,
+        base_price=pricing.base_price,
+        additional_per_km=pricing.additional_per_km,
+        distance_charge=(distance_fee - pricing.base_price).quantize(Decimal("0.01")),
+        applied_charges=tuple(charges),
+        delivery_fee=(distance_fee + _sum_charges(charges)).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        ),
         gst_rate=gst_rate,
         pst_rate=pst_rate,
+        manual_fallback=manual,
+        route_facts=route_facts,
+    )
+
+
+async def build_delivery_quote(
+    db: AsyncSession,
+    pickup_place_id: str,
+    delivery_place_id: str,
+    category_id: UUID,
+    vendor_id: UUID | None = None,
+    delivery_planned_at: datetime | None = None,
+    delivery_time_specified: bool = False,
+    surcharge_ids: list[UUID] | None = None,
+    locked_facts: RouteFacts | None = None,
+    provided_places: tuple[PlaceDetails | None, PlaceDetails | None] | None = None,
+) -> DeliveryQuote:
+    """Price a route. `locked_facts` skips Google entirely; `provided_places` skips Places."""
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(12.0)) as client:
+            if locked_facts is not None:
+                pickup_place, delivery_place = locked_facts.pickup_place, locked_facts.delivery_place
+            else:
+                pickup_place, delivery_place = await _resolve_places(
+                    client, pickup_place_id, delivery_place_id, provided_places
+                )
+            pickup = await _resolve_location(db, pickup_place)
+            delivery = await _resolve_location(db, delivery_place)
+            # Checked before the route call so a refused quote never costs a Routes request.
+            pricing = await _load_pricing(db, pickup, delivery, category_id, vendor_id, manual=False)
+            if locked_facts is not None:
+                facts = locked_facts
+            else:
+                distance_meters, duration_seconds = await _fetch_route(
+                    client, pickup.place.place_id, delivery.place.place_id
+                )
+                facts = RouteFacts(pickup_place, delivery_place, distance_meters, duration_seconds)
+    except httpx.HTTPError as exc:
+        raise DeliveryQuoteError(
+            "Google Maps is temporarily unavailable.", status_code=503
+        ) from exc
+    return await _price_route(
+        db, pickup, delivery, pricing, facts.distance_meters, facts.duration_seconds,
+        delivery_planned_at, delivery_time_specified, surcharge_ids,
+        route_facts=facts, manual=False,
     )
 
 
@@ -470,120 +564,12 @@ async def build_manual_delivery_quote(
     delivery_time_specified: bool = False,
     surcharge_ids: list[UUID] | None = None,
 ) -> DeliveryQuote:
+    """Price typed addresses at the fixed base price; after-hours, surcharge and occasion charges apply."""
     pickup = await _resolve_manual_location(db, pickup_address)
     delivery = await _resolve_manual_location(db, delivery_address)
-    policy = await db.scalar(select(DeliveryPolicy).where(DeliveryPolicy.key == "default"))
-    if not bool(policy and policy.allow_intercity) and pickup.city.id != delivery.city.id:
-        raise DeliveryQuoteError(
-            "Inter-city delivery is disabled. Pickup and delivery must include the same configured city."
-        )
-
-    price = await db.scalar(
-        select(ZoneCategoryPrice)
-        .where(
-            ZoneCategoryPrice.zone_id == pickup.zone.id,
-            ZoneCategoryPrice.category_id == category_id,
-        )
-        .options(
-            selectinload(ZoneCategoryPrice.partner_overrides).joinedload(
-                PartnerZoneCategoryPrice.partner
-            )
-        )
-    )
-    if price is None:
-        raise DeliveryQuoteError(
-            "Pricing is not configured for this pickup zone and delivery category."
-        )
-    base_price = price.individual_price
-    if vendor_id:
-        override = next(
-            (item for item in price.partner_overrides if item.partner_id == vendor_id),
-            None,
-        )
-        base_price = override.price if override else price.partner_price
-
-    # Manual fallback intentionally uses fixed base pricing. Configured
-    # after-hours, selected surcharge and special-occasion charges still apply.
-    applied_charges: list[AppliedCharge] = []
-    if delivery_planned_at and delivery_time_specified:
-        requested_time = delivery_planned_at.time()
-        after_hours = (
-            await db.scalars(select(AfterHoursDelivery).order_by(AfterHoursDelivery.start_time))
-        ).all()
-        applied_charges.extend(
-            AppliedCharge(
-                id=item.id,
-                kind="after_hours",
-                label="After-hours delivery",
-                amount=Decimal(item.extra_amount),
-            )
-            for item in after_hours
-            if _within_time_range(requested_time, item.start_time, item.end_time)
-        )
-
-    try:
-        requested_surcharge_ids = list(
-            dict.fromkeys(UUID(str(value)) for value in (surcharge_ids or []))
-        )
-    except ValueError as exc:
-        raise DeliveryQuoteError("One or more selected surcharges are invalid.") from exc
-    if requested_surcharge_ids:
-        surcharges = list((await db.scalars(
-            select(Surcharge)
-            .where(Surcharge.id.in_(requested_surcharge_ids))
-            .order_by(Surcharge.name)
-        )).all())
-        if len(surcharges) != len(requested_surcharge_ids):
-            raise DeliveryQuoteError("One or more selected surcharges no longer exist.")
-        applied_charges.extend(
-            AppliedCharge(
-                id=item.id,
-                kind="surcharge",
-                label=item.name,
-                amount=Decimal(item.extra_amount),
-            )
-            for item in surcharges
-        )
-
-    chargeable_delivery_fee = Decimal(base_price) + _sum_charges(applied_charges)
-    if delivery_planned_at:
-        requested_date = delivery_planned_at.date()
-        occasions = list((await db.scalars(
-            select(SpecialOccasion).order_by(
-                SpecialOccasion.occasion_date, SpecialOccasion.name
-            )
-        )).all())
-        applied_charges.extend(
-            AppliedCharge(
-                id=item.id,
-                kind="special_occasion",
-                label=f"{item.name} ({Decimal(item.extra_percentage):g}%)",
-                amount=calculate_percentage_charge(
-                    chargeable_delivery_fee, Decimal(item.extra_percentage)
-                ),
-            )
-            for item in occasions
-            if _occasion_matches(item, requested_date)
-            and Decimal(item.extra_percentage) > 0
-        )
-
-    delivery_fee = (Decimal(base_price) + _sum_charges(applied_charges)).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP
-    )
-    gst_rate, pst_rate = await resolve_tax_rates(db, pickup.zone, pickup.city.state_id)
-    return DeliveryQuote(
-        pickup=pickup,
-        delivery=delivery,
-        distance_meters=0,
-        duration_seconds=0,
-        radius_km=Decimal(pickup.zone.radius_km),
-        extra_distance_km=Decimal("0.00"),
-        base_price=Decimal(base_price),
-        additional_per_km=Decimal("0.00"),
-        distance_charge=Decimal("0.00"),
-        applied_charges=tuple(applied_charges),
-        delivery_fee=delivery_fee,
-        gst_rate=gst_rate,
-        pst_rate=pst_rate,
-        manual_fallback=True,
+    pricing = await _load_pricing(db, pickup, delivery, category_id, vendor_id, manual=True)
+    return await _price_route(
+        db, pickup, delivery, pricing, 0, 0,
+        delivery_planned_at, delivery_time_specified, surcharge_ids,
+        route_facts=None, manual=True,
     )

@@ -4,6 +4,16 @@ import { Observable } from 'rxjs';
 import { DeliveryRouteQuote } from '../../models/new-order-form/new-order-form.model';
 import type { DriverOrder, RoutePlan } from '@dispatch/shared/contracts';
 
+export interface QuotePlace {
+  place_id: string;
+  formatted_address: string;
+  latitude: number;
+  longitude: number;
+  city: string;
+  province: string;
+  country_code: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class OrdersService {
   private readonly baseUrl = '/api/v1/orders';
@@ -38,6 +48,9 @@ export class OrdersService {
     surcharge_ids?: string[];
     pickup_address?: string;
     delivery_address?: string;
+    quote_id?: string | null;
+    pickup_place?: QuotePlace | null;
+    delivery_place?: QuotePlace | null;
   }): Observable<DeliveryRouteQuote> {
     return this.http.post<DeliveryRouteQuote>(`${this.baseUrl}/quote`, data);
   }
